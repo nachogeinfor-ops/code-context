@@ -57,3 +57,16 @@ def test_read_returns_text(tmp_path: Path) -> None:
     f.write_text("hello\n", encoding="utf-8")
     src = FilesystemSource()
     assert src.read(f) == "hello\n"
+
+
+def test_skips_dot_git_directory(tmp_path: Path) -> None:
+    repo = tmp_path
+    (repo / ".git").mkdir()
+    (repo / ".git" / "config").write_text("[core]\n\trepo = true\n", encoding="utf-8")
+    (repo / "main.py").write_text("# 1\n# 2\n# 3\n# 4\n# 5\n# 6\n", encoding="utf-8")
+    src = FilesystemSource()
+    files = src.list_files(repo, include_exts=[".py", ".md"], max_bytes=1_000_000)
+    rel = [f.relative_to(repo).as_posix() for f in files]
+    # main.py is in; nothing under .git/ should be in
+    assert "main.py" in rel
+    assert all(not p.startswith(".git/") for p in rel)

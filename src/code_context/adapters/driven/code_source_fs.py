@@ -19,7 +19,7 @@ class FilesystemSource:
             if not path.is_file():
                 continue
             rel = path.relative_to(root).as_posix()
-            if gitignore is not None and gitignore.match_file(rel):
+            if gitignore.match_file(rel):
                 continue
             if path.suffix.lower() not in ext_set:
                 continue
@@ -38,11 +38,12 @@ class FilesystemSource:
         return path.read_text(encoding="utf-8", errors="replace")
 
     @staticmethod
-    def _load_gitignore(root: Path) -> pathspec.PathSpec | None:
+    def _load_gitignore(root: Path) -> pathspec.PathSpec:
+        lines = [".git/"]
         gi = root / ".gitignore"
-        if not gi.exists():
-            return None
-        return pathspec.PathSpec.from_lines("gitwildmatch", gi.read_text().splitlines())
+        if gi.exists():
+            lines.extend(gi.read_text().splitlines())
+        return pathspec.PathSpec.from_lines("gitignore", lines)
 
     @staticmethod
     def _looks_binary(path: Path) -> bool:
