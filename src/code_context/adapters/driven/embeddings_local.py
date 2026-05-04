@@ -39,7 +39,12 @@ class LocalST:
     @property
     def dimension(self) -> int:
         self._ensure_loaded()
-        return int(self._model.get_sentence_embedding_dimension())
+        # sentence-transformers >= 5 renamed the method; fall back to the old name
+        # so we work across both lines without a hard pin.
+        getter = getattr(self._model, "get_embedding_dimension", None) or (
+            self._model.get_sentence_embedding_dimension
+        )
+        return int(getter())
 
     @property
     def model_id(self) -> str:
