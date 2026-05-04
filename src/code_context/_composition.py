@@ -8,14 +8,16 @@ import os
 import sys
 from pathlib import Path
 
+from code_context.adapters.driven.chunker_dispatcher import ChunkerDispatcher
 from code_context.adapters.driven.chunker_line import LineChunker
+from code_context.adapters.driven.chunker_treesitter import TreeSitterChunker
 from code_context.adapters.driven.code_source_fs import FilesystemSource
 from code_context.adapters.driven.embeddings_local import LocalST
 from code_context.adapters.driven.git_source_cli import GitCliSource
 from code_context.adapters.driven.introspector_fs import FilesystemIntrospector
 from code_context.adapters.driven.vector_store_numpy import NumPyParquetStore
 from code_context.config import Config
-from code_context.domain.ports import EmbeddingsProvider
+from code_context.domain.ports import Chunker, EmbeddingsProvider
 from code_context.domain.use_cases.get_summary import GetSummaryUseCase
 from code_context.domain.use_cases.indexer import IndexerUseCase
 from code_context.domain.use_cases.recent_changes import RecentChangesUseCase
@@ -38,13 +40,30 @@ def build_embeddings(cfg: Config) -> EmbeddingsProvider:
     return LocalST(model_name=cfg.embeddings_model or "all-MiniLM-L6-v2")
 
 
+def build_chunker(cfg: Config) -> Chunker:
+    """Build the chunker according to cfg.chunker_strategy.
+
+    "treesitter" (default in v0.2.0+): TreeSitterChunker for Py/JS/TS/Go/Rust,
+    LineChunker for everything else AND for parse errors. "line": legacy
+    behavior — LineChunker only. Anything else logs an error and falls back
+    to LineChunker so composition root never crashes on bad config.
+    """
+    line = LineChunker(chunk_lines=cfg.chunk_lines, overlap=cfg.chunk_overlap)
+    if cfg.chunker_strategy == "line":
+        return line
+    if cfg.chunker_strategy == "treesitter":
+        return ChunkerDispatcher(treesitter=TreeSitterChunker(), line=line)
+    log.error("unknown CC_CHUNKER=%r; falling back to line", cfg.chunker_strategy)
+    return line
+
+
 def build_indexer_and_store(
     cfg: Config,
 ) -> tuple[IndexerUseCase, NumPyParquetStore, EmbeddingsProvider]:
     cfg.repo_cache_subdir().mkdir(parents=True, exist_ok=True)
 
     embeddings = build_embeddings(cfg)
-    chunker = LineChunker(chunk_lines=cfg.chunk_lines, overlap=cfg.chunk_overlap)
+    chunker = build_chunker(cfg)
     code_source = FilesystemSource()
     git_source = GitCliSource()
     store = NumPyParquetStore()
