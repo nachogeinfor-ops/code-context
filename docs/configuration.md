@@ -15,8 +15,9 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_CACHE_DIR` | `platformdirs.user_cache_dir("code-context")` | Override cache location. |
 | `CC_LOG_LEVEL` | `INFO` | Standard Python logging level. |
 | `CC_TOP_K_DEFAULT` | `5` | Default `top_k` for `search_repo`. |
-| `CC_CHUNK_LINES` | `50` | Lines per chunk. |
-| `CC_CHUNK_OVERLAP` | `10` | Overlap between consecutive chunks. |
+| `CC_CHUNK_LINES` | `50` | Lines per chunk (LineChunker only). |
+| `CC_CHUNK_OVERLAP` | `10` | Overlap between consecutive chunks (LineChunker only). |
+| `CC_CHUNKER` | `treesitter` | Chunking strategy: `treesitter` (AST-aware for Py/JS/TS/Go/Rust, line fallback for the rest) or `line` (legacy line-window for everything). |
 
 ## Examples
 
@@ -39,3 +40,11 @@ Index only Python and TypeScript:
 export CC_INCLUDE_EXTENSIONS=.py,.ts
 code-context-server
 ```
+
+## Chunking strategies
+
+Default (`CC_CHUNKER=treesitter`): for files with extensions `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.go`, `.rs`, the chunker uses tree-sitter to cut along function/class/method boundaries. Each chunk is a complete semantic unit. For everything else (markdown, JSON, YAML, C#, Java, …) the chunker falls back to a line-window (50 lines + 10 overlap by default). Tree-sitter parse errors also fall back to line-window so no file is ever lost from the index.
+
+`CC_CHUNKER=line` restores v0.1.x behavior: every file is chunked by line-window. Use this if tree-sitter parsers cause issues on your platform or if you need byte-for-byte reproducibility with a v0.1.x index.
+
+The chunker version is encoded in `metadata.json.chunker_version`. Switching `CC_CHUNKER` triggers an automatic full reindex on next start because `IndexerUseCase.is_stale()` sees the version drift.

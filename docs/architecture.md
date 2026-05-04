@@ -25,7 +25,9 @@
    │  EmbeddingsProvider      │  default: LocalST                 │
    │                          │  optional: OpenAIProvider         │
    │  VectorStore             │  default: NumPyParquetStore       │
-   │  Chunker                 │  default: LineChunker             │
+   │  Chunker                 │  default: ChunkerDispatcher       │
+   │                          │           ├── TreeSitterChunker   │
+   │                          │           └── LineChunker (fb)    │
    │  CodeSource              │  default: FilesystemSource        │
    │  GitSource               │  default: GitCliSource            │
    │  ProjectIntrospector     │  default: FilesystemIntrospector  │
