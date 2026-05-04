@@ -1,3 +1,3 @@
 """code-context: MCP server with local RAG for Claude Code repo context."""
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
