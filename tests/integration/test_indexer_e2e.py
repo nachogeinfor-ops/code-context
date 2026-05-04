@@ -100,8 +100,8 @@ def test_search_returns_storage_chunk_when_querying_storage(repo: Path, cache_di
     search = SearchRepoUseCase(embeddings=embeddings, vector_store=fresh_store)
     results = search.run(query="key value storage", top_k=3)
     assert len(results) > 0  # something matched (deterministic enough)
-    # Normalize separators so the assertion works on Windows too.
-    paths = [r.path.replace("\\", "/") for r in results]
+    # Indexer normalizes paths to POSIX, so a literal substring check works on every OS.
+    paths = [r.path for r in results]
     # We can't pin a specific file due to fake embeddings, but at least
     # one result should come from one of the .py files in src/.
     assert any("src/sample_app" in p for p in paths)

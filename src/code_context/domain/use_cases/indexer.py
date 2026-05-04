@@ -88,7 +88,8 @@ class IndexerUseCase:
             except (OSError, UnicodeDecodeError) as exc:
                 log.warning("indexer: skipping %s (%s)", f, exc)
                 continue
-            for chunk in self.chunker.chunk(content, str(f.relative_to(self.repo_root))):
+            rel = f.relative_to(self.repo_root).as_posix()
+            for chunk in self.chunker.chunk(content, rel):
                 chunks_with_paths.append(chunk)
 
         # Batch-embed.
