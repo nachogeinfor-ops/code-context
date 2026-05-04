@@ -34,25 +34,42 @@ def register(
             Tool(
                 name="search_repo",
                 description=(
-                    "Retrieve code fragments semantically relevant to a natural-language query."
+                    "Semantic search over the indexed codebase. Use this INSTEAD of Grep "
+                    "when the query is conceptual (e.g. 'where do we validate input', "
+                    "'how is caching implemented', 'authentication flow'). Returns ranked "
+                    "code fragments with file path, line range, snippet, score and a "
+                    "one-line `why` excerpt. For exact-string lookup, Grep is still better."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "query": {"type": "string"},
                         "top_k": {"type": "integer", "default": 5},
-                        "scope": {"type": "string"},
+                        "scope": {
+                            "type": "string",
+                            "description": (
+                                "Optional repo-relative path prefix to constrain results."
+                            ),
+                        },
                     },
                     "required": ["query"],
                 },
             ),
             Tool(
                 name="recent_changes",
-                description="Return recent commits/diffs, optionally filtered.",
+                description=(
+                    "Recent git commits with structured fields (sha, ISO date, author, "
+                    "paths, summary). Use INSTEAD of `git log` shell calls — the output "
+                    "is already parsed and filterable by `since` and `paths`. Defaults "
+                    "to the last 7 days when `since` is omitted."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "since": {"type": "string"},
+                        "since": {
+                            "type": "string",
+                            "description": "ISO 8601 cutoff; defaults to 7 days ago.",
+                        },
                         "paths": {"type": "array", "items": {"type": "string"}},
                         "max": {"type": "integer", "default": 20},
                     },
@@ -60,12 +77,21 @@ def register(
             ),
             Tool(
                 name="get_summary",
-                description="Return a structured project or module summary.",
+                description=(
+                    "Structured snapshot of the project or a module: name, purpose "
+                    "(README first paragraph), stack (Python/Node/Rust/Go/Java), "
+                    "entry_points, key_modules, stats (files, loc, languages). Useful "
+                    "at session start for orientation; prefer it over reading "
+                    "README/CLAUDE.md when you need machine-readable fields."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "scope": {"type": "string", "enum": ["project", "module"]},
-                        "path": {"type": "string"},
+                        "path": {
+                            "type": "string",
+                            "description": "Required when scope='module'; repo-relative path.",
+                        },
                     },
                 },
             ),

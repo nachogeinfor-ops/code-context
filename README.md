@@ -40,6 +40,22 @@ export OPENAI_API_KEY=sk-...
 claude mcp add code-context --command code-context-server
 ```
 
+## Making Claude actually use these tools
+
+Claude Code defaults to its built-in tools (`Bash`, `Grep`, `Glob`, `Read`) over MCP servers because it knows them best. To get the value of `code-context`, give Claude an explicit hint by adding a section like this to your project's `CLAUDE.md`:
+
+```markdown
+## Context tools
+
+This repo has the [code-context](https://github.com/nachogeinfor-ops/code-context) MCP server installed. Prefer it over built-in tools:
+
+- **`search_repo(query, top_k?, scope?)`** — for conceptual questions like "where do we handle authentication" or "how is caching implemented". Use this instead of `Grep` whenever the query isn't an exact string match.
+- **`recent_changes(since?, paths?, max?)`** — for "what changed recently" / commit-history questions. Use this instead of shelling out to `git log`.
+- **`get_summary(scope?, path?)`** — for project orientation at session start, or to inspect a specific module.
+```
+
+Without this hint, Claude will work fine — it just won't reach for the MCP tools, which means the index goes unused. The hint is one paragraph; copy-paste it.
+
 ## CLI
 
 `code-context-server` is the MCP binary; you don't run it directly. The companion `code-context` CLI helps administer the index:
