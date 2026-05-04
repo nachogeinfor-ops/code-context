@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from code_context.adapters.driven.chunker_treesitter import TreeSitterChunker
 
 FIXTURES = Path(__file__).resolve().parent.parent.parent / "fixtures" / "chunker_samples"
@@ -56,3 +58,35 @@ def test_empty_content_returns_empty() -> None:
 
 def test_version_starts_with_treesitter() -> None:
     assert TreeSitterChunker().version.startswith("treesitter-")
+
+
+@pytest.mark.parametrize(
+    "lang, ext, expected_first_tokens",
+    [
+        ("javascript", "js", {"function", "class"}),
+        ("typescript", "ts", {"function", "class", "interface", "type"}),
+        ("go", "go", {"func", "type"}),
+        ("rust", "rs", {"pub", "impl"}),  # struct/enum/fn lines start with `pub `
+    ],
+)
+def test_other_languages_chunk(lang: str, ext: str, expected_first_tokens: set[str]) -> None:
+    src = _read(FIXTURES / lang / f"sample.{ext}")
+    chunks = TreeSitterChunker().chunk(src, f"x.{ext}")
+    assert chunks, f"no chunks for {lang}"
+    # First whitespace-stripped token of each snippet should fall into the kind set.
+    first_tokens = {c.snippet.lstrip().split(maxsplit=1)[0] for c in chunks}
+    assert expected_first_tokens & first_tokens, (
+        f"expected one of {expected_first_tokens} in {first_tokens}"
+    )
+
+
+@pytest.mark.parametrize("ext", ["js", "ts", "go", "rs"])
+def test_other_languages_chunk_lines_match_source(ext: str) -> None:
+    lang_by_ext = {"js": "javascript", "ts": "typescript", "go": "go", "rs": "rust"}
+    lang = lang_by_ext[ext]
+    src = _read(FIXTURES / lang / f"sample.{ext}")
+    chunks = TreeSitterChunker().chunk(src, f"x.{ext}")
+    lines = src.splitlines()
+    for c in chunks:
+        snippet = "\n".join(lines[c.line_start - 1 : c.line_end])
+        assert c.snippet == snippet
