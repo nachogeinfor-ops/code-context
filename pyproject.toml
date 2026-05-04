@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "code-context"
+version = "0.1.0"
+description = "MCP server with local RAG for Claude Code repo context"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "code-context contributors" }]
+keywords = ["claude-code", "mcp", "rag", "developer-tools"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  "mcp>=1.0",
+  "numpy>=1.26",
+  "pyarrow>=14",
+  "platformdirs>=4",
+  "pathspec>=0.12",
+  "filelock>=3.13",
+  "sentence-transformers>=2.7",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.30"]
+dev = [
+  "pytest>=7.4",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+code-context = "code_context.cli:main"
+code-context-server = "code_context.server:main"
+
+[project.urls]
+Homepage = "https://github.com/nachogeinfor-ops/code-context"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
