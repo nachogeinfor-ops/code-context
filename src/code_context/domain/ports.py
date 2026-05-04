@@ -4,11 +4,13 @@ Each port is a Protocol (PEP 544 structural typing). Adapters implement them
 duck-style; no inheritance required. Tests mock by writing a class that has
 the same methods.
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Protocol
+from typing import Protocol
 
 import numpy as np
 
@@ -57,9 +59,7 @@ class Chunker(Protocol):
 class CodeSource(Protocol):
     """Lists and reads source files. Default: FilesystemSource."""
 
-    def list_files(
-        self, root: Path, include_exts: list[str], max_bytes: int
-    ) -> list[Path]: ...
+    def list_files(self, root: Path, include_exts: list[str], max_bytes: int) -> list[Path]: ...
 
     def read(self, path: Path) -> str: ...
 

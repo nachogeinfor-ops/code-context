@@ -1,7 +1,9 @@
 """Sanity tests for domain models."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from dataclasses import FrozenInstanceError
+from datetime import UTC, datetime
 
 import numpy as np
 import pytest
@@ -17,7 +19,7 @@ from code_context.domain.models import (
 
 def test_chunk_is_frozen() -> None:
     c = Chunk(path="a.py", line_start=1, line_end=10, content_hash="abc", snippet="x")
-    with pytest.raises((AttributeError, Exception)):  # FrozenInstanceError
+    with pytest.raises(FrozenInstanceError):
         c.path = "b.py"  # type: ignore[misc]
 
 
@@ -34,7 +36,7 @@ def test_search_result_lines_is_tuple() -> None:
 
 
 def test_change_carries_iso_datetime() -> None:
-    d = datetime(2026, 5, 4, tzinfo=timezone.utc)
+    d = datetime(2026, 5, 4, tzinfo=UTC)
     c = Change(sha="abc", date=d, author="me", paths=["a.py"], summary="fix")
     assert c.date == d
 
