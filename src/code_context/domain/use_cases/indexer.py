@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -35,7 +35,6 @@ class IndexerUseCase:
     git_source: GitSource
     include_extensions: list[str]
     max_file_bytes: int = 1_048_576
-    _current_cache: dict | None = field(default=None, init=False, repr=False)
 
     # ---------- public ----------
 
@@ -101,7 +100,7 @@ class IndexerUseCase:
 
         # Reset and add.
         head = self.git_source.head_sha(self.repo_root) or "no-git"
-        new_dir_name = f"index-{head[:12]}-{int(datetime.now(UTC).timestamp())}"
+        new_dir_name = f"index-{head[:12]}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}"
         new_dir = self.cache_dir / new_dir_name
         new_dir.mkdir(parents=True, exist_ok=True)
 
@@ -131,13 +130,10 @@ class IndexerUseCase:
     # ---------- internal ----------
 
     def _read_current(self) -> dict | None:
-        if self._current_cache is not None:
-            return self._current_cache
         cur = self.cache_dir / _CURRENT_FILE
         if not cur.exists():
             return None
-        self._current_cache = json.loads(cur.read_text())
-        return self._current_cache
+        return json.loads(cur.read_text())
 
     def _current_metadata(self) -> dict | None:
         cur = self._read_current()
