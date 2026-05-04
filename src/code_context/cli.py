@@ -63,6 +63,12 @@ def _cmd_query(args: argparse.Namespace) -> int:
     if current is None:
         print("error: no index. run `code-context reindex` first.", file=sys.stderr)
         return 1
+    if indexer.is_stale():
+        print(
+            "warning: index is stale (HEAD/files/model/chunker changed since last reindex). "
+            "Results may be out of date. Run `code-context reindex` to refresh.",
+            file=sys.stderr,
+        )
     store.load(current)
     search, _, _ = build_use_cases(cfg, indexer, store, embeddings)
     results = search.run(query=args.text, top_k=args.k or cfg.top_k_default)
