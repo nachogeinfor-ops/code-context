@@ -1,0 +1,56 @@
+"""Tests for RecentChangesUseCase."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from pathlib import Path
+
+from code_context.domain.models import Change
+from code_context.domain.use_cases.recent_changes import RecentChangesUseCase
+
+
+class FakeGit:
+    def __init__(self, repo: bool, commits: list[Change]) -> None:
+        self._repo = repo
+        self._commits = commits
+        self.calls: list[dict] = []
+
+    def is_repo(self, root: Path) -> bool:
+        return self._repo
+
+    def head_sha(self, root: Path) -> str:
+        return "abc"
+
+    def commits(self, root, since=None, paths=None, max_count=20):
+        self.calls.append({"since": since, "paths": paths, "max_count": max_count})
+        return self._commits
+
+
+def test_returns_commits_when_repo() -> None:
+    c = Change(
+        sha="abc",
+        date=datetime(2026, 5, 4, tzinfo=UTC),
+        author="me",
+        paths=["a.py"],
+        summary="fix",
+    )
+    git = FakeGit(repo=True, commits=[c])
+    uc = RecentChangesUseCase(git_source=git, repo_root=Path("/repo"))
+    out = uc.run()
+    assert len(out) == 1
+    assert out[0].sha == "abc"
+
+
+def test_returns_empty_when_not_repo() -> None:
+    git = FakeGit(repo=False, commits=[])
+    uc = RecentChangesUseCase(git_source=git, repo_root=Path("/repo"))
+    out = uc.run()
+    assert out == []
+
+
+def test_passes_through_args() -> None:
+    git = FakeGit(repo=True, commits=[])
+    uc = RecentChangesUseCase(git_source=git, repo_root=Path("/repo"))
+    since = datetime(2026, 5, 1, tzinfo=UTC)
+    uc.run(since=since, paths=["x.py"], max_count=10)
+    assert git.calls[0] == {"since": since, "paths": ["x.py"], "max_count": 10}
