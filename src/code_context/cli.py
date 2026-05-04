@@ -75,11 +75,14 @@ def _cmd_clear(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
     target = cfg.repo_cache_subdir()
-    if target.exists():
-        shutil.rmtree(target)
-        print(f"cleared {target}")
-    else:
+    if not target.exists():
         print("nothing to clear")
+        return 0
+    if not args.yes:
+        print(f"this will delete {target}. pass --yes to confirm.", file=sys.stderr)
+        return 1
+    shutil.rmtree(target)
+    print(f"cleared {target}")
     return 0
 
 
@@ -95,7 +98,9 @@ def main() -> int:
     q.add_argument("-k", type=int, default=None, help="Override top_k")
     q.set_defaults(func=_cmd_query)
 
-    sub.add_parser("clear", help="Delete the cache for this repo").set_defaults(func=_cmd_clear)
+    c = sub.add_parser("clear", help="Delete the cache for this repo")
+    c.add_argument("--yes", action="store_true", help="Confirm deletion")
+    c.set_defaults(func=_cmd_clear)
 
     args = parser.parse_args()
     return int(args.func(args))
