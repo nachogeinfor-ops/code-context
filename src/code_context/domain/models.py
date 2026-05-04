@@ -4,6 +4,7 @@ These dataclasses are the boundary types of the application. The 3 contract
 return types (SearchResult, Change, ProjectSummary) match docs/tool-protocol.md
 in context-template byte-for-byte at the field level.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
