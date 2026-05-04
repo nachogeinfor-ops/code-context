@@ -1,5 +1,75 @@
 # code-context
 
-> MCP server for [Claude Code](https://docs.claude.com/claude-code) — implements the Tool Protocol from [context-template](https://github.com/nachogeinfor-ops/context-template) with a local RAG engine.
+[![CI](https://github.com/nachogeinfor-ops/code-context/actions/workflows/ci.yml/badge.svg)](https://github.com/nachogeinfor-ops/code-context/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Status: WIP. Full README arrives in a later commit.
+> A Python MCP server with local RAG for [Claude Code](https://docs.claude.com/claude-code). Implements the [`code-context` Tool Protocol](https://github.com/nachogeinfor-ops/context-template/blob/main/docs/tool-protocol.md) defined by [`context-template`](https://github.com/nachogeinfor-ops/context-template).
+
+## What it does
+
+When you point Claude Code at a repo, you give it `CLAUDE.md` for static context. `code-context` adds **dynamic context** via 3 MCP tools:
+
+- **`search_repo(query, top_k?, scope?)`** — semantic search across the codebase using local embeddings.
+- **`recent_changes(since?, paths?, max?)`** — recent git commits, optionally filtered.
+- **`get_summary(scope?, path?)`** — structured project summary (name, stack, key modules, stats).
+
+Architecture: hexagonal (ports & adapters). 6 driven ports with default implementations (sentence-transformers embeddings, NumPy+Parquet vector store, line-based chunker, filesystem code source, git CLI, filesystem introspector). All swappable.
+
+## Install
+
+```bash
+pip install code-context
+# or, if you don't want torch (~2 GB), use the OpenAI embeddings backend:
+pip install code-context[openai]
+```
+
+> Note: the default install pulls `sentence-transformers` which depends on `torch`. Plan for ~2 GB of disk after install. Use the `[openai]` extra to avoid torch.
+
+## Quickstart
+
+```bash
+cd /path/to/your/repo
+claude mcp add code-context --command code-context-server
+# Open Claude Code. The first query will trigger indexing (synchronous, ~1 min on a typical repo).
+```
+
+For OpenAI embeddings:
+```bash
+export CC_EMBEDDINGS=openai
+export OPENAI_API_KEY=sk-...
+claude mcp add code-context --command code-context-server
+```
+
+## CLI
+
+`code-context-server` is the MCP binary; you don't run it directly. The companion `code-context` CLI helps administer the index:
+
+```bash
+code-context status     # print index health (head_sha, indexed_at, n_chunks, …)
+code-context reindex    # force a full reindex now
+code-context query "where do we validate user emails"   # debug, no MCP
+code-context clear --yes  # delete the cache for this repo
+```
+
+## Configuration
+
+Configured via env vars. See [`docs/configuration.md`](docs/configuration.md) for the full list. Most-used:
+
+| Var | Default |
+|---|---|
+| `CC_EMBEDDINGS` | `local` (or `openai`) |
+| `CC_EMBEDDINGS_MODEL` | `all-MiniLM-L6-v2` |
+| `CC_INCLUDE_EXTENSIONS` | `.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.md,.yaml,.yml,.json` |
+| `CC_CACHE_DIR` | platformdirs user cache |
+
+## Architecture
+
+See [`docs/architecture.md`](docs/architecture.md) for the diagram + port contracts.
+
+## Extending
+
+Want to write a new embeddings provider, a different vector store, or a tree-sitter chunker? See [`docs/extending.md`](docs/extending.md).
+
+## License
+
+[MIT](LICENSE).
