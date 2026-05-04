@@ -96,10 +96,12 @@ def test_search_filters_by_scope() -> None:
     assert {r.path for r in out} == {"packages/api/x.py", "packages/api/z.py"}
 
 
-def test_search_requests_2x_top_k_from_store() -> None:
-    """Use case calls store.search with k=top_k*2 to give scope-filter room."""
+def test_search_requests_over_fetch_multiplier_top_k_from_store() -> None:
+    """Use case calls store.search with k=top_k*_OVER_FETCH_MULTIPLIER for scope headroom."""
+    from code_context.domain.use_cases.search_repo import _OVER_FETCH_MULTIPLIER
+
     entries = []
     store = FakeVectorStore(entries)
     uc = SearchRepoUseCase(embeddings=FakeEmbeddings(), vector_store=store)
     uc.run(query="anything", top_k=5)
-    assert store.last_k == 10
+    assert store.last_k == 5 * _OVER_FETCH_MULTIPLIER

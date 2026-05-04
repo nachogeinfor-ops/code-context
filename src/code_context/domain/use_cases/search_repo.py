@@ -12,6 +12,9 @@ _STRUCTURAL_RE = re.compile(
     r"^\s*(def |class |function |func |fn |export |const |interface |type |struct )"
 )
 _WHY_MAX_LEN = 80
+# Pull k*N from the store so a downstream `scope` filter has headroom to
+# still fill `top_k` results. Tuned by intuition; revisit if scope misses.
+_OVER_FETCH_MULTIPLIER = 2
 
 
 @dataclass
@@ -26,8 +29,7 @@ class SearchRepoUseCase:
         scope: str | None = None,
     ) -> list[SearchResult]:
         query_vec = self.embeddings.embed([query])[0]
-        # Pull 2x to give scope-filter room.
-        raw = self.vector_store.search(query_vec, k=top_k * 2)
+        raw = self.vector_store.search(query_vec, k=top_k * _OVER_FETCH_MULTIPLIER)
         if scope:
             raw = [(entry, score) for entry, score in raw if entry.chunk.path.startswith(scope)]
         raw = raw[:top_k]
