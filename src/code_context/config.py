@@ -42,6 +42,7 @@ class Config:
     top_k_default: int
     chunk_lines: int
     chunk_overlap: int
+    chunker_strategy: str  # "treesitter" (default) or "line"
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -85,4 +86,5 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         top_k_default=int(os.environ.get("CC_TOP_K_DEFAULT", "5")),
         chunk_lines=int(os.environ.get("CC_CHUNK_LINES", "50")),
         chunk_overlap=int(os.environ.get("CC_CHUNK_OVERLAP", "10")),
+        chunker_strategy=os.environ.get("CC_CHUNKER", "treesitter"),
     )

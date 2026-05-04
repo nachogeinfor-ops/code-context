@@ -48,3 +48,15 @@ def test_cache_dir_override_via_env(tmp_path: Path) -> None:
     with patch.dict(os.environ, {"CC_CACHE_DIR": str(override)}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
     assert cfg.cache_dir == override
+
+
+def test_chunker_strategy_defaults_to_treesitter(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.chunker_strategy == "treesitter"
+
+
+def test_chunker_strategy_overridden_by_env(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {"CC_CHUNKER": "line"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.chunker_strategy == "line"
