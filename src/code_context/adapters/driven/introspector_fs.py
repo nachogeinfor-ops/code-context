@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import json
-import re
 import tomllib
 from collections import Counter
 from pathlib import Path
 
 from code_context.domain.models import ProjectSummary
-
-_README_PARAGRAPH_RE = re.compile(r"^[^#].+", re.MULTILINE)
 
 
 class FilesystemIntrospector:
