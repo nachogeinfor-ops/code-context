@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from code_context.domain.models import Change
 from code_context.domain.ports import GitSource
 
 log = logging.getLogger(__name__)
+
+_DEFAULT_LOOKBACK_DAYS = 7
 
 
 @dataclass
@@ -27,6 +29,8 @@ class RecentChangesUseCase:
         if not self.git_source.is_repo(self.repo_root):
             log.warning("recent_changes: %s is not a git repo; returning []", self.repo_root)
             return []
+        if since is None:
+            since = datetime.now(UTC) - timedelta(days=_DEFAULT_LOOKBACK_DAYS)
         return self.git_source.commits(
             self.repo_root, since=since, paths=paths, max_count=max_count
         )
