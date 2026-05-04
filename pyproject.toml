@@ -26,6 +26,8 @@ dependencies = [
   "pathspec>=0.12",
   "filelock>=3.13",
   "sentence-transformers>=2.7",
+  "tree-sitter>=0.22",
+  "tree-sitter-language-pack>=0.7",
 ]
 
 [project.optional-dependencies]
