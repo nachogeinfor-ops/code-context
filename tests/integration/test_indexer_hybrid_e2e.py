@@ -7,6 +7,7 @@ the embedding is fake/deterministic.
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import subprocess
 from pathlib import Path
@@ -44,9 +45,11 @@ class _DeterministicFakeEmbeddings:
     def embed(self, texts):
         out = np.zeros((len(texts), 8), dtype=np.float32)
         for i, t in enumerate(texts):
-            h = abs(hash(t))
+            # Use hashlib (stable across Python processes) instead of hash()
+            # which Python randomises per-process via PYTHONHASHSEED.
+            digest = hashlib.sha256(t.encode("utf-8")).digest()[:8]
             for j in range(8):
-                out[i, j] = ((h >> (j * 8)) & 0xFF) / 255.0
+                out[i, j] = digest[j] / 255.0
         return out
 
 
