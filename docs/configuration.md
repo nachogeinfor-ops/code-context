@@ -8,7 +8,7 @@ All configuration is via environment variables. See `src/code_context/config.py`
 |---|---|---|
 | `CC_REPO_ROOT` | `pwd` | Repo to index. |
 | `CC_EMBEDDINGS` | `local` | `local` (sentence-transformers) or `openai`. |
-| `CC_EMBEDDINGS_MODEL` | `BAAI/bge-code-v1.5` (local) / `text-embedding-3-small` (openai) | Override the embedding model. See "Choosing a model" below. |
+| `CC_EMBEDDINGS_MODEL` | `all-MiniLM-L6-v2` (local) / `text-embedding-3-small` (openai) | Override the embedding model. See "Choosing a model" below. |
 | `OPENAI_API_KEY` | — | Required if `CC_EMBEDDINGS=openai`. |
 | `CC_INCLUDE_EXTENSIONS` | `.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.md,.yaml,.yml,.json` | Comma-separated. |
 | `CC_MAX_FILE_BYTES` | `1048576` (1 MB) | Skip files above this size. |
@@ -45,19 +45,22 @@ code-context-server
 
 The local provider supports any sentence-transformers / Hugging Face model. The
 `MODEL_REGISTRY` in `src/code_context/adapters/driven/embeddings_local.py` lists
-the models we have benchmarked / characterised. Models not in the registry still
-work, but you will get a warning at startup and the dimension hints + benchmarks
-in this repo won't recognise them.
+the models we have verified. Models not in the registry still work, but you will
+get a warning at startup.
 
 | Model | Size | Dim | Best for | Notes |
 |---|---|---|---|---|
-| `BAAI/bge-code-v1.5` (default) | ~340 MB | 1024 | Code (functions, identifiers) | English-focused, MIT licensed. |
-| `nomic-ai/nomic-embed-text-v2-moe` | ~550 MB | 768 | Code + docstrings/markdown | Apache-2.0. Bigger but more versatile on prose-heavy repos. |
-| `microsoft/codebert-base` | ~480 MB | 768 | Code (older baseline) | Pre-BERT-family standard. Use only for comparison. |
-| `all-MiniLM-L6-v2` | ~90 MB | 384 | Smallest install | General English. Lower retrieval quality on code. Pin this if disk or first-download time matter. |
+| `all-MiniLM-L6-v2` (default) | ~90 MB | 384 | General-purpose | Smallest install, ships with sentence-transformers natively. |
+| `jinaai/jina-embeddings-v2-base-code` | ~640 MB | 768 | Code (functions, identifiers) | Apache-2.0. Requires `trust_remote_code=True` (not yet wired up — planned for v0.4). |
+| `BAAI/bge-code-v1` | ~8 GB | 1536 | Code (large repos) | Apache-2.0. 2B params, requires `trust_remote_code=True` and a real GPU for usable inference. |
 
-If you put an unknown model in `CC_EMBEDDINGS_MODEL`, it'll work but you'll get a
-warning at startup. Add the model to `MODEL_REGISTRY` (in code) to silence it.
+> **Note (v0.3.3).** v0.3.0–v0.3.2 shipped a default of `BAAI/bge-code-v1.5`
+> which does not exist on Hugging Face — a planning error. v0.3.3 reverts
+> the default to `all-MiniLM-L6-v2` while we re-evaluate code-tuned options
+> for v0.4.
+
+If you put an unknown model in `CC_EMBEDDINGS_MODEL`, it'll work but you'll get
+a warning at startup.
 
 ## Chunking strategies
 

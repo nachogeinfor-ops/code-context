@@ -2,6 +2,14 @@
 
 > Informal MRR comparison of v0.1.x default (`all-MiniLM-L6-v2`) vs v0.3.0 default (`BAAI/bge-code-v1.5`). Seeds the v1.0.0 NDCG@10 eval suite that lands in Sprint 8. Companion to `sprint-1-chunk-quality.md`.
 
+> **v0.3.3 update.** The original Sprint 2 plan picked `BAAI/bge-code-v1.5`
+> as the v0.3.0 default. That identifier does not exist on Hugging Face — a
+> planning error. v0.3.3 reverted to `all-MiniLM-L6-v2`. The benchmark
+> below stays valid as a *methodology* but the second column is no longer
+> the v0.3.x default; we'll repurpose it for a v0.4 code-tuned candidate
+> (likely `jinaai/jina-embeddings-v2-base-code`) once `trust_remote_code`
+> plumbing lands.
+
 ## Setup
 
 - code-context: HEAD of v0.3.0 (this sprint's work).
