@@ -1,5 +1,75 @@
 # Changelog
 
+## v0.7.2 — 2026-05-05
+
+Hotfix for two `get_summary` bugs caught by the v0.7.x end-to-end
+smoke (`scripts/smoke_sprint5.py` driving all 7 MCP tools against
+`WinServiceScheduler`).
+
+### Behavior
+
+- **fix(domain): `GetSummaryUseCase` resolves a relative `path`
+  against `repo_root`.** The MCP tool documents `path` as
+  "repo-relative" but the use case was forwarding it verbatim to
+  the introspector, which then resolved it against the **caller's
+  CWD**. Real failure: the smoke harness invoked
+  `get_summary(scope="module", path="GeinforScheduler")` from the
+  `code-context` source dir and got
+  `FileNotFoundError: [WinError 3] El sistema no puede encontrar la
+  ruta especificada: 'GeinforScheduler'`. Absolute paths still pass
+  through unchanged.
+
+- **fix(adapter): `FilesystemIntrospector` honours `.gitignore` and a
+  baseline denylist of compiled-artifact / vendored-dep dirs.** The
+  introspector used to call `root.rglob("*")` blindly, which on
+  WinServiceScheduler reported **2179 files / 6.5M LOC** and language
+  hits like `dll, log, cache, so, pdb` — because it walked
+  `bin/`, `obj/`, `logs_bal/`, `.claude/worktrees/...` and counted
+  every byte of every .dll as a newline. After the fix the same
+  repo reports **332 files / 57k LOC** and languages
+  `cs, md, razor, json, ps1` — i.e. the actual source.
+  Project-summary wall time on the same repo dropped from
+  ~6.3 s to ~1.1 s (5.5× speedup) by virtue of not opening 5736
+  binaries.
+
+### Tests
+
+- 4 new unit tests on `GetSummaryUseCase` covering relative-vs-
+  absolute path forwarding (incl. the smoke regression).
+- 3 new unit tests on `FilesystemIntrospector`: stats with
+  `.gitignore`, stats without `.gitignore` (denylist still kicks in
+  for `bin/`, `obj/`, `node_modules/`, `__pycache__/`, `dist/`,
+  `.git/`, etc.), and `key_modules` excluding gitignored dirs.
+- 195 total passing (was 189; +6 net = 7 new − 1 obsolete-comment
+  fix, full suite green).
+
+### Smoke results vs v0.7.1
+
+End-to-end timings driving every use case directly via Python
+against the live cache (304-file C# repo, ~2.2k chunks indexed):
+
+| Tool                                    | v0.7.1 | v0.7.2 |
+|---|---|---|
+| `search_repo` (3 queries, avg)          | 12.5 ms | 13.2 ms |
+| `recent_changes`                        | 45 ms   | 39 ms   |
+| `get_summary(scope="project")`          | **6274 ms** | **1148 ms** |
+| `get_summary(scope="module")`           | **CRASH** | 141 ms |
+| `find_definition(ExecuteAsync)`         | 0.4 ms  | 0.4 ms  |
+| `find_references(ExecuteAsync)`         | 2.3 ms  | 2.3 ms  |
+| `get_file_tree(max_depth=3, root)`      | 23 ms   | 19 ms   |
+| `get_file_tree(GeinforScheduler, d=4)`  | 46 ms   | 37 ms   |
+| `explain_diff(HEAD)`                    | 142 ms  | 120 ms  |
+| `explain_diff(HEAD~1)`                  | 112 ms  | 102 ms  |
+
+7/7 tools functional; only `get_summary` paths changed by this
+release.
+
+### Affected versions
+
+v0.6.0–v0.7.1. Anyone calling `get_summary` with `scope="module"`
+hits the FileNotFoundError unless the MCP server's CWD happens to
+be the same as the repo root. Upgrade.
+
 ## v0.7.1 — 2026-05-05
 
 Hotfix. `explain_diff` crashed silently on Windows when the underlying
