@@ -18,6 +18,9 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_CHUNK_LINES` | `50` | Lines per chunk (LineChunker only). |
 | `CC_CHUNK_OVERLAP` | `10` | Overlap between consecutive chunks (LineChunker only). |
 | `CC_CHUNKER` | `treesitter` | Chunking strategy: `treesitter` (AST-aware for Py/JS/TS/Go/Rust/C#, line fallback for the rest) or `line` (legacy line-window for everything). |
+| `CC_KEYWORD_INDEX` | `sqlite` | Keyword index strategy: `sqlite` (FTS5 BM25, default) or `none` (vector-only). |
+| `CC_RERANK` | `off` | Set to `on`/`true`/`1` to activate cross-encoder reranking on the fused top-N candidates. ~80 MB model download on first use. |
+| `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Override the cross-encoder model. Only consulted when `CC_RERANK=on`. |
 
 ## Examples
 
@@ -61,6 +64,58 @@ get a warning at startup.
 
 If you put an unknown model in `CC_EMBEDDINGS_MODEL`, it'll work but you'll get
 a warning at startup.
+
+## Hybrid retrieval
+
+`search_repo` runs three legs in parallel and fuses them:
+
+1. **Vector** (semantic, via `sentence-transformers`): handles conceptual queries
+   like "where do we handle authentication" — terms in the query don't have to
+   match terms in the code.
+2. **Keyword** (BM25, via SQLite FTS5): handles exact-identifier queries like
+   "`format_message`", "`BushidoLogScannerAdapter`" — vector embeddings blur
+   when the query is a single token that appears across many files.
+3. **Reciprocal Rank Fusion**: combines the two rankings without needing to
+   normalise their score scales (cosine in [0,1] vs BM25 unbounded). The
+   canonical RRF constant (`k=60`) is hardcoded; entries that appear in
+   both rankings get summed reciprocal-ranks and rise to the top.
+
+By default, the keyword leg is on (`CC_KEYWORD_INDEX=sqlite`). It uses
+SQLite's FTS5 module — a build-time SQLite feature that ships in the
+official Python builds (Python ≥3.11).
+
+### Reranker (optional)
+
+Enable a cross-encoder reranker that re-scores the top-N fused candidates
+with a more accurate model:
+
+```bash
+export CC_RERANK=on
+```
+
+This downloads ~80 MB on first reindex (`cross-encoder/ms-marco-MiniLM-L-6-v2`)
+and adds ~100-300 ms per query on CPU. Default off because the latency
+trade-off doesn't pay off on every repo; enable it on a per-repo basis if
+you find that hybrid retrieval still misranks queries you care about.
+
+### Disabling the keyword leg
+
+If FTS5 is missing in your Python's SQLite build (very rare on stdlib
+Python ≥3.11), or you want strict vector-only behavior:
+
+```bash
+export CC_KEYWORD_INDEX=none
+```
+
+This wires a no-op keyword adapter; the pipeline degrades to "vector top-K
++ scope filter" with no BM25 contribution.
+
+### Disk overhead
+
+The keyword index persists as `keyword.sqlite` next to `vectors.npy` in
+your cache dir. Size is roughly proportional to the source repo (each
+chunk's snippet text is stored once). For a 50K-file repo, expect
+~50-100 MB of keyword index alongside the vector data.
 
 ## Chunking strategies
 

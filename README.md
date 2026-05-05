@@ -9,7 +9,7 @@
 
 When you point Claude Code at a repo, you give it `CLAUDE.md` for static context. `code-context` adds **dynamic context** via 3 MCP tools:
 
-- **`search_repo(query, top_k?, scope?)`** — semantic search across the codebase using local embeddings.
+- **`search_repo(query, top_k?, scope?)`** — **hybrid retrieval** across the codebase: vector embeddings (semantic) fused with BM25 keyword search (exact identifiers) via Reciprocal Rank Fusion. Optional cross-encoder reranking (off by default — enable with `CC_RERANK=on`).
 - **`recent_changes(since?, paths?, max?)`** — recent git commits, optionally filtered.
 - **`get_summary(scope?, path?)`** — structured project summary (name, stack, key modules, stats).
 
