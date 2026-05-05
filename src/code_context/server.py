@@ -37,6 +37,7 @@ from code_context._composition import (
     make_reload_callback,
     setup_logging,
 )
+from code_context._watcher import RepoWatcher
 from code_context.adapters.driving.mcp_server import register
 from code_context.config import Config, load_config
 from code_context.domain.index_bus import IndexUpdateBus
@@ -92,6 +93,24 @@ async def _run_server(cfg: Config) -> None:
         bg.trigger()  # kick off initial dirty_set + (full or incremental) reindex
         log.info("background indexer started (idle=%.2fs)", cfg.bg_idle_seconds)
 
+    watcher = None
+    if cfg.watch and bg is not None:
+        watcher = RepoWatcher(
+            root=cfg.repo_root,
+            on_change=bg.trigger,
+            debounce_ms=cfg.watch_debounce_ms,
+        )
+        watcher.start()
+        log.info(
+            "repo watcher armed (CC_WATCH=on, debounce=%dms)",
+            cfg.watch_debounce_ms,
+        )
+    elif cfg.watch and bg is None:
+        log.warning(
+            "CC_WATCH=on requires CC_BG_REINDEX=on; watcher not started "
+            "(without the bg thread there's nothing to trigger)"
+        )
+
     server = Server("code-context")
     register(
         server,
@@ -108,6 +127,9 @@ async def _run_server(cfg: Config) -> None:
         async with stdio_server() as (read_stream, write_stream):
             await server.run(read_stream, write_stream, server.create_initialization_options())
     finally:
+        if watcher is not None:
+            log.info("stopping repo watcher")
+            watcher.stop()
         if bg is not None:
             log.info("stopping background indexer")
             bg.stop(timeout=10.0)
