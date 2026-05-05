@@ -14,6 +14,7 @@ from code_context.domain.ports import (
     CodeSource,
     EmbeddingsProvider,
     GitSource,
+    KeywordIndex,
     VectorStore,
 )
 
@@ -30,6 +31,7 @@ class IndexerUseCase:
     repo_root: Path
     embeddings: EmbeddingsProvider
     vector_store: VectorStore
+    keyword_index: KeywordIndex
     chunker: Chunker
     code_source: CodeSource
     git_source: GitSource
@@ -52,6 +54,8 @@ class IndexerUseCase:
         if active.get("embeddings_model") != self.embeddings.model_id:
             return True
         if active.get("chunker_version") != self.chunker.version:
+            return True
+        if active.get("keyword_version") != self.keyword_index.version:
             return True
 
         indexed_at = datetime.fromisoformat(active["indexed_at"])
@@ -108,6 +112,9 @@ class IndexerUseCase:
         self.vector_store.add(all_entries)
         self.vector_store.persist(new_dir)
 
+        self.keyword_index.add(all_entries)
+        self.keyword_index.persist(new_dir)
+
         meta = {
             "version": _VERSION,
             "head_sha": head,
@@ -115,6 +122,7 @@ class IndexerUseCase:
             "embeddings_model": self.embeddings.model_id,
             "embeddings_dimension": self.embeddings.dimension,
             "chunker_version": self.chunker.version,
+            "keyword_version": self.keyword_index.version,
             "n_chunks": len(all_entries),
             "n_files": len(files),
         }

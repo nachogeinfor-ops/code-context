@@ -72,6 +72,28 @@ class FakeVectorStore:
         pass
 
 
+class FakeKeywordIndex:
+    version = "fake-keyword-v0"
+
+    def __init__(self) -> None:
+        self.added: list[IndexEntry] = []
+        self.persisted_to: Path | None = None
+
+    def add(self, entries):
+        self.added.extend(entries)
+
+    def search(self, query: str, k: int):
+        return []
+
+    def persist(self, path: Path):
+        self.persisted_to = path
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "keyword.sqlite").write_bytes(b"keyword")
+
+    def load(self, path: Path):
+        pass
+
+
 class FakeGit:
     def __init__(self, repo: bool, head: str = "abc123") -> None:
         self._repo = repo
@@ -107,12 +129,14 @@ def _build_uc(
     files: dict[Path, str] | None = None,
     repo_present: bool = True,
     head: str = "abc123",
+    keyword_index: FakeKeywordIndex | None = None,
 ):
     return IndexerUseCase(
         cache_dir=cache,
         repo_root=repo,
         embeddings=FakeEmbeddings(),
         vector_store=FakeVectorStore(),
+        keyword_index=keyword_index or FakeKeywordIndex(),
         chunker=FakeChunker(),
         code_source=FakeCodeSource(files or {}),
         git_source=FakeGit(repo=repo_present, head=head),
@@ -196,3 +220,39 @@ def test_no_repo_means_always_stale(cache_dir: Path, repo_root: Path) -> None:
     new_dir = uc.run()
     (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
     assert uc.is_stale() is True  # always stale when not a git repo
+
+
+def test_run_persists_keyword_index_alongside_vector(cache_dir: Path, repo_root: Path) -> None:
+    """Indexer adds entries to the keyword index AND persists keyword.sqlite to the new dir."""
+    f = repo_root / "a.py"
+    f.write_text("def x(): pass\n", encoding="utf-8")
+    keyword = FakeKeywordIndex()
+    uc = _build_uc(cache_dir, repo_root, files={f: "def x(): pass\n"}, keyword_index=keyword)
+    new_dir = uc.run()
+    assert len(keyword.added) >= 1  # at least one chunk added
+    assert keyword.persisted_to == new_dir
+
+
+def test_metadata_includes_keyword_version(cache_dir: Path, repo_root: Path) -> None:
+    f = repo_root / "a.py"
+    f.write_text("def x(): pass\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "def x(): pass\n"})
+    out = uc.run()
+    meta = json.loads((out / "metadata.json").read_text())
+    assert meta["keyword_version"] == "fake-keyword-v0"
+
+
+def test_is_stale_when_keyword_version_changes(cache_dir: Path, repo_root: Path) -> None:
+    """Same staleness contract as model_id and chunker_version."""
+    f = repo_root / "a.py"
+    f.write_text("def x(): pass\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "def x(): pass\n"})
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+    assert uc.is_stale() is False
+
+    class DifferentKeyword(FakeKeywordIndex):
+        version = "fake-keyword-v999"
+
+    uc.keyword_index = DifferentKeyword()
+    assert uc.is_stale() is True

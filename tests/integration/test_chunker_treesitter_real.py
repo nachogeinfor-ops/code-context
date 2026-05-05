@@ -33,6 +33,19 @@ class _FakeEmbeddings:
         return np.zeros((len(texts), 8), dtype=np.float32)
 
 
+class _FakeKeywordIndex:
+    """No-op keyword index — keeps this test focused on chunker behavior."""
+
+    version = "fake-keyword-v0"
+
+    def add(self, entries) -> None: ...
+    def persist(self, path) -> None: ...
+    def load(self, path) -> None: ...
+
+    def search(self, query: str, k: int):
+        return []
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     target = tmp_path / "repo"
@@ -64,6 +77,7 @@ def test_indexer_produces_function_aligned_chunks(repo: Path, cache: Path) -> No
         repo_root=repo,
         embeddings=_FakeEmbeddings(),
         vector_store=store,
+        keyword_index=_FakeKeywordIndex(),
         chunker=chunker,
         code_source=FilesystemSource(),
         git_source=GitCliSource(),
