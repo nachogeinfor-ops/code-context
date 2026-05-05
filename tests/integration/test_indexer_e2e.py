@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +21,7 @@ from code_context.adapters.driven.chunker_line import LineChunker
 from code_context.adapters.driven.code_source_fs import FilesystemSource
 from code_context.adapters.driven.git_source_cli import GitCliSource
 from code_context.adapters.driven.vector_store_numpy import NumPyParquetStore
+from code_context.domain.models import IndexEntry
 from code_context.domain.use_cases.indexer import IndexerUseCase
 from code_context.domain.use_cases.search_repo import SearchRepoUseCase
 
@@ -38,6 +40,19 @@ class FakeEmbeddings:
             for j in range(8):
                 out[i, j] = (sum(ord(c) for c in t[j::8]) % 100) / 100.0
         return out
+
+
+class FakeKeywordIndex:
+    """No-op keyword index — preserves vector-only semantics for this test."""
+
+    version = "fake-keyword-v0"
+
+    def add(self, entries: Iterable[IndexEntry]) -> None: ...
+    def persist(self, path) -> None: ...
+    def load(self, path) -> None: ...
+
+    def search(self, query: str, k: int) -> list[tuple[IndexEntry, float]]:
+        return []
 
 
 @pytest.fixture
@@ -100,7 +115,11 @@ def test_search_returns_storage_chunk_when_querying_storage(repo: Path, cache_di
     # Reload — simulates startup path.
     fresh_store = NumPyParquetStore()
     fresh_store.load(new_dir)
-    search = SearchRepoUseCase(embeddings=embeddings, vector_store=fresh_store)
+    search = SearchRepoUseCase(
+        embeddings=embeddings,
+        vector_store=fresh_store,
+        keyword_index=FakeKeywordIndex(),
+    )
     results = search.run(query="key value storage", top_k=3)
     assert len(results) > 0  # something matched (deterministic enough)
     # Indexer normalizes paths to POSIX, so a literal substring check works on every OS.
