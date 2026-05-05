@@ -77,6 +77,9 @@ class _NullSymbolIndex:
     def add_definitions(self, defs) -> None:
         pass
 
+    def add_references(self, refs) -> None:
+        pass
+
     def find_definition(self, name, language=None, max_count=5):
         return []
 

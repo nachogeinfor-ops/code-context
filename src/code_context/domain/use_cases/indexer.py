@@ -128,6 +128,11 @@ class IndexerUseCase:
         self.keyword_index.persist(new_dir)
 
         self.symbol_index.add_definitions(all_defs)
+        # Feed chunk snippets to the references FTS5 table so find_references
+        # has rows to match against (definitions alone are not enough — a
+        # symbol's call sites live in the chunk text, not in the defs table).
+        ref_rows = [(c.path, c.line_start, c.snippet) for c in chunks_with_paths]
+        self.symbol_index.add_references(ref_rows)
         self.symbol_index.persist(new_dir)
 
         meta = {

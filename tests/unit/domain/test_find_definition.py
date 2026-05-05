@@ -17,6 +17,7 @@ class _FakeSymbolIndex:
         self.calls: list[tuple] = []
 
     def add_definitions(self, defs: Iterable[SymbolDef]) -> None: ...
+    def add_references(self, refs: Iterable[tuple[str, int, str]]) -> None: ...
     def find_references(self, name: str, max_count: int = 50) -> list[SymbolRef]:
         return []
 

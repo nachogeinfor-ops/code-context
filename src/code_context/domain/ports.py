@@ -146,6 +146,15 @@ class SymbolIndex(Protocol):
 
     def add_definitions(self, defs: Iterable[SymbolDef]) -> None: ...
 
+    def add_references(self, refs: Iterable[tuple[str, int, str]]) -> None:
+        """Bulk-insert reference rows: (path, line, snippet) triples.
+
+        Snippet text is full-text-indexed; path and line are stored verbatim.
+        IndexerUseCase feeds chunks here so find_references has rows to match
+        against. Adapters that don't track references (e.g., a null adapter)
+        may no-op.
+        """
+
     def find_definition(
         self,
         name: str,

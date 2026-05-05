@@ -54,6 +54,23 @@ class SymbolIndexSqlite:
         )
         self._conn.commit()
 
+    def add_references(self, refs: Iterable[tuple[str, int, str]]) -> None:
+        """Bulk-insert reference rows into the FTS5 references table.
+
+        Each row is (path, line, snippet). Snippet is FTS5-indexed; path and
+        line are UNINDEXED. IndexerUseCase feeds chunk snippets here so that
+        find_references has rows to MATCH against later.
+        """
+        assert self._conn is not None
+        rows = list(refs)
+        if not rows:
+            return
+        self._conn.executemany(
+            f"INSERT INTO {_REFS_TABLE} (path, line, snippet) VALUES (?, ?, ?)",
+            rows,
+        )
+        self._conn.commit()
+
     def find_definition(
         self,
         name: str,

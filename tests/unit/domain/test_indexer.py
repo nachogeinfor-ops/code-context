@@ -104,6 +104,10 @@ class FakeSymbolIndex:
     def add_definitions(self, defs):
         self.added.extend(defs)
 
+    def add_references(self, refs):
+        # No-op for unit tests — we only assert add_definitions/persist were called.
+        pass
+
     def find_definition(self, name, language=None, max_count=5):
         return []
 
