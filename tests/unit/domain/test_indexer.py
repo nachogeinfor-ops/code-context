@@ -21,7 +21,11 @@ class FakeEmbeddings:
     dimension = 4
     model_id = "fake-v0"
 
+    def __init__(self) -> None:
+        self.calls = 0  # cumulative count of texts embedded; used by Sprint 6 tests
+
     def embed(self, texts):
+        self.calls += len(texts)
         return np.ones((len(texts), 4), dtype=np.float32)
 
 
@@ -60,12 +64,23 @@ class FakeVectorStore:
     def __init__(self) -> None:
         self.entries: list[IndexEntry] = []
         self.persisted_to: Path | None = None
+        self.deleted_paths: list[str] = []
 
     def add(self, entries):
         self.entries.extend(entries)
 
     def search(self, query, k):
         return []
+
+    def delete_by_path(self, path: str) -> int:
+        # Tracks every call, not only effective deletions, so tests can
+        # assert "the indexer asked for this purge" regardless of whether
+        # the fake had data for that path.
+        self.deleted_paths.append(path)
+        keep = [e for e in self.entries if e.chunk.path != path]
+        n = len(self.entries) - len(keep)
+        self.entries = keep
+        return n
 
     def persist(self, path):
         self.persisted_to = path
@@ -83,12 +98,20 @@ class FakeKeywordIndex:
     def __init__(self) -> None:
         self.added: list[IndexEntry] = []
         self.persisted_to: Path | None = None
+        self.deleted_paths: list[str] = []
 
     def add(self, entries):
         self.added.extend(entries)
 
     def search(self, query: str, k: int):
         return []
+
+    def delete_by_path(self, path: str) -> int:
+        self.deleted_paths.append(path)
+        keep = [e for e in self.added if e.chunk.path != path]
+        n = len(self.added) - len(keep)
+        self.added = keep
+        return n
 
     def persist(self, path: Path):
         self.persisted_to = path
@@ -105,6 +128,7 @@ class FakeSymbolIndex:
     def __init__(self) -> None:
         self.added: list = []
         self.persisted_to: Path | None = None
+        self.deleted_paths: list[str] = []
 
     def add_definitions(self, defs):
         self.added.extend(defs)
@@ -118,6 +142,13 @@ class FakeSymbolIndex:
 
     def find_references(self, name, max_count=50):
         return []
+
+    def delete_by_path(self, path: str) -> int:
+        self.deleted_paths.append(path)
+        keep = [d for d in self.added if d.path != path]
+        n = len(self.added) - len(keep)
+        self.added = keep
+        return n
 
     def persist(self, path: Path):
         self.persisted_to = path
@@ -489,3 +520,158 @@ def test_is_stale_is_thin_wrapper_over_dirty_set(cache_dir: Path, repo_root: Pat
     # Dirty: change content.
     uc.code_source = FakeCodeSource({f: "x = 2\n"})
     assert uc.is_stale() is True
+
+
+# ----- Sprint 6: run_incremental() -----
+
+
+def test_run_incremental_falls_back_to_run_when_full_reindex_required(
+    cache_dir: Path, repo_root: Path
+) -> None:
+    """The full-reindex flag is the authoritative override; the file
+    lists are advisory only. Test mimics the no-current-index case."""
+    f = repo_root / "a.py"
+    f.write_text("x = 1\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "x = 1\n"})
+    s = uc.dirty_set()
+    assert s.full_reindex_required is True
+    out = uc.run_incremental(s)
+    # New dir created with full-run artifacts.
+    assert (out / "metadata.json").exists()
+    meta = json.loads((out / "metadata.json").read_text())
+    assert meta["version"] == 2
+    assert "a.py" in meta["file_hashes"]
+
+
+def test_run_incremental_only_re_embeds_dirty_files(cache_dir: Path, repo_root: Path) -> None:
+    """The headline UX win: edits trigger sub-second reindexes because
+    only the changed files get re-embedded, not the whole repo."""
+    f1 = repo_root / "a.py"
+    f1.write_text("a = 1\n", encoding="utf-8")
+    f2 = repo_root / "b.py"
+    f2.write_text("b = 2\n", encoding="utf-8")
+    embeds = FakeEmbeddings()
+    uc = IndexerUseCase(
+        cache_dir=cache_dir,
+        repo_root=repo_root,
+        embeddings=embeds,
+        vector_store=FakeVectorStore(),
+        keyword_index=FakeKeywordIndex(),
+        symbol_index=FakeSymbolIndex(),
+        chunker=FakeChunker(),
+        code_source=FakeCodeSource({f1: "a = 1\n", f2: "b = 2\n"}),
+        git_source=FakeGit(repo=True),
+        include_extensions=[".py"],
+    )
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+    full_run_calls = embeds.calls
+    assert full_run_calls == 2  # 2 chunks total in full run
+
+    # Edit only f1.
+    uc.code_source = FakeCodeSource({f1: "a = 99\n", f2: "b = 2\n"})
+    s = uc.dirty_set()
+    assert len(s.dirty_files) == 1
+
+    new_dir2 = uc.run_incremental(s)
+    delta = embeds.calls - full_run_calls
+    # Only f1's chunks get re-embedded.
+    assert delta == 1
+    assert new_dir2 != new_dir
+    assert (new_dir2 / "metadata.json").exists()
+
+
+def test_run_incremental_purges_deleted_files(cache_dir: Path, repo_root: Path) -> None:
+    f1 = repo_root / "a.py"
+    f1.write_text("a = 1\n", encoding="utf-8")
+    f2 = repo_root / "b.py"
+    f2.write_text("b = 2\n", encoding="utf-8")
+    vector = FakeVectorStore()
+    keyword = FakeKeywordIndex()
+    symbol = FakeSymbolIndex()
+    uc = IndexerUseCase(
+        cache_dir=cache_dir,
+        repo_root=repo_root,
+        embeddings=FakeEmbeddings(),
+        vector_store=vector,
+        keyword_index=keyword,
+        symbol_index=symbol,
+        chunker=FakeChunker(),
+        code_source=FakeCodeSource({f1: "a = 1\n", f2: "b = 2\n"}),
+        git_source=FakeGit(repo=True),
+        include_extensions=[".py"],
+    )
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+
+    # b.py vanishes from source listing.
+    uc.code_source = FakeCodeSource({f1: "a = 1\n"})
+    s = uc.dirty_set()
+    assert "b.py" in s.deleted_files
+
+    uc.run_incremental(s)
+
+    # delete_by_path was called on each store for the deleted file.
+    assert "b.py" in vector.deleted_paths
+    assert "b.py" in keyword.deleted_paths
+    assert "b.py" in symbol.deleted_paths
+
+
+def test_run_incremental_metadata_drops_deleted_file_hashes(
+    cache_dir: Path, repo_root: Path
+) -> None:
+    f1 = repo_root / "a.py"
+    f1.write_text("a = 1\n", encoding="utf-8")
+    f2 = repo_root / "b.py"
+    f2.write_text("b = 2\n", encoding="utf-8")
+    uc = _build_uc(
+        cache_dir,
+        repo_root,
+        files={f1: "a = 1\n", f2: "b = 2\n"},
+    )
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+
+    uc.code_source = FakeCodeSource({f1: "a = 1\n"})
+    s = uc.dirty_set()
+    new_dir2 = uc.run_incremental(s)
+    meta = json.loads((new_dir2 / "metadata.json").read_text())
+    assert "b.py" not in meta["file_hashes"]
+    assert "a.py" in meta["file_hashes"]
+    assert meta["n_files"] == 1
+
+
+def test_run_incremental_metadata_updates_dirty_file_hash(cache_dir: Path, repo_root: Path) -> None:
+    f = repo_root / "a.py"
+    f.write_text("a = 1\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "a = 1\n"})
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+    old_meta = json.loads((new_dir / "metadata.json").read_text())
+    old_hash = old_meta["file_hashes"]["a.py"]
+
+    uc.code_source = FakeCodeSource({f: "a = 99\n"})
+    s = uc.dirty_set()
+    new_dir2 = uc.run_incremental(s)
+    new_meta = json.loads((new_dir2 / "metadata.json").read_text())
+    assert new_meta["file_hashes"]["a.py"] != old_hash
+
+
+def test_run_incremental_no_op_when_nothing_changed(cache_dir: Path, repo_root: Path) -> None:
+    """Calling run_incremental with an empty StaleSet still produces a
+    new dir (so the swap is atomic), and the file_hashes survive intact."""
+    f = repo_root / "a.py"
+    f.write_text("a = 1\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "a = 1\n"})
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+
+    s = uc.dirty_set()
+    assert s.full_reindex_required is False
+    assert s.dirty_files == ()
+    assert s.deleted_files == ()
+
+    new_dir2 = uc.run_incremental(s)
+    assert (new_dir2 / "metadata.json").exists()
+    meta = json.loads((new_dir2 / "metadata.json").read_text())
+    assert "a.py" in meta["file_hashes"]

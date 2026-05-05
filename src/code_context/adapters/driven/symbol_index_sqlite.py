@@ -178,13 +178,23 @@ class SymbolIndexSqlite:
         self._db_path = target
 
     def load(self, path: Path) -> None:
+        """Restore the symbol index from `<path>/symbols.sqlite` into a
+        fresh in-memory connection. Mirrors keyword_index_sqlite.load —
+        Sprint 6 needs mutations after load to stay in RAM so they don't
+        corrupt the active on-disk index AND a subsequent persist() to
+        the same dir doesn't deadlock on SQLite's backup-to-itself."""
         target = path / _FILE
         if not target.exists():
             raise FileNotFoundError(f"symbol index missing at {target}")
         if self._conn is not None:
             self._conn.close()
         # check_same_thread=False — see _open_inmem rationale.
-        self._conn = sqlite3.connect(target, check_same_thread=False)
+        self._conn = sqlite3.connect(":memory:", check_same_thread=False)
+        disk = sqlite3.connect(target, check_same_thread=False)
+        try:
+            disk.backup(self._conn)
+        finally:
+            disk.close()
         self._db_path = target
 
     # ---------- test helpers ----------

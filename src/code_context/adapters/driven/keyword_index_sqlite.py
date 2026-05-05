@@ -142,14 +142,30 @@ class SqliteFTS5Index:
         self._db_path = target
 
     def load(self, path: Path) -> None:
+        """Restore the index from `<path>/keyword.sqlite` into a fresh
+        in-memory connection.
+
+        Pre-Sprint-6 versions opened the on-disk file directly — fast,
+        zero RAM, but mutations (Sprint 6's incremental reindex calls
+        delete_by_path / add after load) wrote directly to the active
+        index file, breaking atomicity, AND a subsequent persist(same_dir)
+        deadlocked on SQLite's backup-to-itself constraint. The fix is
+        to load disk→memory: subsequent mutations stay in RAM and a
+        later persist() does the standard memory→fresh-disk backup. RAM
+        cost on the WinServiceScheduler smoke is ~5 MB; trivial.
+        """
         target = path / _FILE
         if not target.exists():
             raise FileNotFoundError(f"keyword index missing at {target}")
-        # Open the on-disk DB directly (no copy back to memory; avoids RAM bloat).
         if self._conn is not None:
             self._conn.close()
         # check_same_thread=False — see _open_inmem rationale.
-        self._conn = sqlite3.connect(target, check_same_thread=False)
+        self._conn = sqlite3.connect(":memory:", check_same_thread=False)
+        disk = sqlite3.connect(target, check_same_thread=False)
+        try:
+            disk.backup(self._conn)
+        finally:
+            disk.close()
         self._db_path = target
 
 

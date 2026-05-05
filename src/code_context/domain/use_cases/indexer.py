@@ -119,6 +119,119 @@ class IndexerUseCase:
         s = self.dirty_set()
         return s.full_reindex_required or bool(s.dirty_files) or bool(s.deleted_files)
 
+    def run_incremental(self, stale: StaleSet) -> Path:
+        """Re-embed dirty files; purge deleted files; persist a new index dir.
+
+        Caller (composition root) is responsible for the atomic swap of
+        current.json after this returns — same contract as run().
+
+        When `stale.full_reindex_required` is True, falls back to
+        `self.run()` (the file lists are advisory in that mode).
+        Otherwise:
+        1. Loads the active index into the three stores. Mutations stay
+           in-memory (the SQLite adapters' load() copies disk → :memory:
+           specifically so this step is safe).
+        2. Drops every row whose path is in `stale.deleted_files`.
+        3. For each path in `stale.dirty_files`: drops its old rows from
+           every store, then re-chunks + re-embeds + re-extracts symbols
+           from the current content.
+        4. Persists every store to a fresh index dir.
+        5. Stamps metadata: file_hashes copied forward from the prior
+           run, with deletes removed and dirties updated. n_files derives
+           from len(file_hashes) so the count stays honest.
+        """
+        if stale.full_reindex_required:
+            return self.run()
+
+        active = self.current_index_dir()
+        prior = self._current_metadata()
+        if active is None or prior is None:
+            return self.run()
+
+        log.info("indexer-incremental: %s", stale.reason)
+
+        self.vector_store.load(active)
+        self.keyword_index.load(active)
+        self.symbol_index.load(active)
+
+        for path in stale.deleted_files:
+            self.vector_store.delete_by_path(path)
+            self.keyword_index.delete_by_path(path)
+            self.symbol_index.delete_by_path(path)
+
+        new_file_hashes: dict[str, str] = dict(prior.get("file_hashes") or {})
+        for path in stale.deleted_files:
+            new_file_hashes.pop(path, None)
+
+        new_chunks: list = []
+        new_defs: list[SymbolDef] = []
+        for f in stale.dirty_files:
+            rel = f.relative_to(self.repo_root).as_posix()
+            self.vector_store.delete_by_path(rel)
+            self.keyword_index.delete_by_path(rel)
+            self.symbol_index.delete_by_path(rel)
+            try:
+                content = self.code_source.read(f)
+            except (OSError, UnicodeDecodeError) as exc:
+                log.warning("indexer-incremental: skipping %s (%s)", rel, exc)
+                new_file_hashes.pop(rel, None)
+                continue
+            new_file_hashes[rel] = hashlib.sha256(content.encode("utf-8")).hexdigest()
+            for chunk in self.chunker.chunk(content, rel):
+                new_chunks.append(chunk)
+            extractor = getattr(self.chunker, "extract_definitions", None)
+            if extractor is not None:
+                try:
+                    new_defs.extend(extractor(content, rel))
+                except Exception as exc:  # noqa: BLE001 - same policy as run()
+                    log.warning(
+                        "indexer-incremental: symbol extract failed for %s (%s)",
+                        rel,
+                        exc,
+                    )
+
+        new_entries: list[IndexEntry] = []
+        for i in range(0, len(new_chunks), _BATCH_SIZE):
+            batch = new_chunks[i : i + _BATCH_SIZE]
+            vectors = self.embeddings.embed([c.snippet for c in batch])
+            for chunk, vec in zip(batch, vectors, strict=True):
+                new_entries.append(IndexEntry(chunk=chunk, vector=vec))
+
+        self.vector_store.add(new_entries)
+        self.keyword_index.add(new_entries)
+        self.symbol_index.add_definitions(new_defs)
+        ref_rows = [(c.path, c.line_start, c.snippet) for c in new_chunks]
+        self.symbol_index.add_references(ref_rows)
+
+        head = self.git_source.head_sha(self.repo_root) or "no-git"
+        new_dir_name = f"index-{head[:12]}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}"
+        new_dir = self.cache_dir / new_dir_name
+        new_dir.mkdir(parents=True, exist_ok=True)
+
+        self.vector_store.persist(new_dir)
+        self.keyword_index.persist(new_dir)
+        self.symbol_index.persist(new_dir)
+
+        meta = {
+            "version": _VERSION,
+            "head_sha": head,
+            "indexed_at": datetime.now(UTC).isoformat(),
+            "embeddings_model": self.embeddings.model_id,
+            "embeddings_dimension": self.embeddings.dimension,
+            "chunker_version": self.chunker.version,
+            "keyword_version": self.keyword_index.version,
+            "symbol_version": self.symbol_index.version,
+            # n_chunks here only counts what changed in this run; the
+            # store's true total is opaque from the use case's vantage
+            # point. Sprint 7 can wire a richer accounting if needed.
+            "n_chunks_added": len(new_entries),
+            "n_files": len(new_file_hashes),
+            "file_hashes": new_file_hashes,
+        }
+        (new_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
+
+        return new_dir
+
     def run(self) -> Path:
         """Full reindex. Returns the new index directory path.
 
