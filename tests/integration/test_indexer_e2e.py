@@ -8,6 +8,7 @@ git repo).
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -27,7 +28,9 @@ FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "tiny_repo"
 
 class FakeEmbeddings:
     dimension = 8
-    model_id = "fake-determ-v0"
+
+    def __init__(self, model_id: str = "fake-determ-v0") -> None:
+        self.model_id = model_id
 
     def embed(self, texts):
         out = np.zeros((len(texts), 8), dtype=np.float32)
@@ -105,3 +108,26 @@ def test_search_returns_storage_chunk_when_querying_storage(repo: Path, cache_di
     # We can't pin a specific file due to fake embeddings, but at least
     # one result should come from one of the .py files in src/.
     assert any("src/sample_app" in p for p in paths)
+
+
+def test_changing_embeddings_model_invalidates_cache(repo: Path, cache_dir: Path) -> None:
+    """is_stale() returns True when embeddings.model_id changes."""
+    embeddings_a = FakeEmbeddings(model_id="local:bge-code")
+    indexer = IndexerUseCase(
+        cache_dir=cache_dir,
+        repo_root=repo,
+        embeddings=embeddings_a,
+        vector_store=NumPyParquetStore(),
+        chunker=LineChunker(chunk_lines=20, overlap=5),
+        code_source=FilesystemSource(),
+        git_source=GitCliSource(),
+        include_extensions=[".py"],
+        max_file_bytes=1_000_000,
+    )
+    new_dir = indexer.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+    assert indexer.is_stale() is False
+
+    # Swap to a different model id — this is what bumping CC_EMBEDDINGS_MODEL does.
+    indexer.embeddings = FakeEmbeddings(model_id="local:minilm")
+    assert indexer.is_stale() is True
