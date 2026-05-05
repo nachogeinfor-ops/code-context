@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -114,3 +115,26 @@ class DiffChunk:
     snippet: str
     kind: str  # "function" | "class" | "method" | ... | "fragment"
     change: str  # "added" | "modified" | "deleted"
+
+
+@dataclass(frozen=True, slots=True)
+class StaleSet:
+    """Per-file staleness verdict driving incremental reindex (Sprint 6).
+
+    `full_reindex_required` is the authoritative "blow it all away" flag —
+    set on first run (no current index), or when a global invalidator
+    changed (embeddings model id, chunker version, keyword/symbol index
+    versions, metadata schema upgrade). When True, the file lists are
+    advisory only; callers should ignore them and run a full reindex.
+
+    Otherwise, `dirty_files` are absolute paths that need re-chunking +
+    re-embedding (content hash drift); `deleted_files` are repo-relative
+    paths that vanished since last index and whose rows must be purged
+    from every store. An all-empty StaleSet with full_reindex_required=
+    False is the steady-state "no work" signal.
+    """
+
+    full_reindex_required: bool
+    reason: str  # human-readable summary for logs / `code-context status`
+    dirty_files: tuple[Path, ...] = ()
+    deleted_files: tuple[str, ...] = ()

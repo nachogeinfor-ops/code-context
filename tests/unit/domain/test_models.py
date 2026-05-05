@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -14,6 +15,7 @@ from code_context.domain.models import (
     IndexEntry,
     ProjectSummary,
     SearchResult,
+    StaleSet,
 )
 
 
@@ -45,3 +47,42 @@ def test_project_summary_defaults() -> None:
     s = ProjectSummary(name="x", purpose="y", stack=["py"], entry_points=["main.py"])
     assert s.key_modules == []
     assert s.stats == {}
+
+
+def test_stale_set_defaults_to_empty_tuples() -> None:
+    """StaleSet (Sprint 6) — per-file dirty/deleted verdict for incremental
+    reindex. All-empty + full_reindex_required=False is the steady-state
+    'no work' signal; require_full=True is the 'blow it all away' verdict."""
+    s = StaleSet(full_reindex_required=False, reason="no changes")
+    assert s.dirty_files == ()
+    assert s.deleted_files == ()
+    assert s.full_reindex_required is False
+    assert s.reason == "no changes"
+
+
+def test_stale_set_carries_dirty_and_deleted_lists() -> None:
+    s = StaleSet(
+        dirty_files=(Path("a.py"), Path("src/b.py")),
+        deleted_files=("c.py",),
+        full_reindex_required=False,
+        reason="2 dirty, 1 deleted",
+    )
+    assert s.dirty_files == (Path("a.py"), Path("src/b.py"))
+    assert s.deleted_files == ("c.py",)
+    assert s.full_reindex_required is False
+    assert s.reason == "2 dirty, 1 deleted"
+
+
+def test_stale_set_full_reindex_signal() -> None:
+    s = StaleSet(full_reindex_required=True, reason="embeddings_model changed")
+    assert s.full_reindex_required is True
+    # Caller is allowed to send empty file lists alongside True — the flag
+    # alone is the authoritative invalidator.
+    assert s.dirty_files == ()
+    assert s.deleted_files == ()
+
+
+def test_stale_set_is_frozen() -> None:
+    s = StaleSet(full_reindex_required=False, reason="x")
+    with pytest.raises(FrozenInstanceError):
+        s.full_reindex_required = True  # type: ignore[misc]
