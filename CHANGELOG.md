@@ -1,5 +1,78 @@
 # Changelog
 
+## v0.5.0 — 2026-05-05
+
+Symbol tools ship. Two new MCP tools (`find_definition`, `find_references`)
+cover the most common questions a Claude Code session asks of a repo
+that previously bypassed the MCP server entirely: "where is X defined?"
+and "who calls X?". The Tool Protocol contract bumps from **v1** to
+**v1.1** (additive, no breaking changes); upstream
+[`context-template` v0.2.0](https://github.com/nachogeinfor-ops/context-template/releases/tag/v0.2.0)
+is the matching reference.
+
+Cache auto-invalidates because the staleness check gained a 6th
+dimension (`symbol_version`); first v0.5.0 run on an existing cache
+rebuilds.
+
+### Behavior
+
+- feat(domain): two new frozen+slots dataclasses `SymbolDef` and
+  `SymbolRef` matching the v1.1 contract field-for-field.
+- feat(domain): new `SymbolIndex` Protocol port. Default adapter is
+  `SymbolIndexSqlite` (SQLite + FTS5, persists to `symbols.sqlite`
+  next to `vectors.npy` and `keyword.sqlite`).
+- feat(adapter): `TreeSitterChunker.extract_definitions(content, path)`
+  walks the AST and emits one `SymbolDef` per captured function /
+  class / method / constructor / interface / struct / record / enum /
+  type alias, across Py / JS / TS / Go / Rust / C#.
+- feat(adapter): `SymbolIndexSqlite` with two storage layers — a
+  classic indexed table for definitions (fast O(log n) `name`
+  lookup) and an FTS5 virtual table for references (BM25 + snippet
+  text). `find_references` post-filters with a word-boundary regex
+  so `log` doesn't match `logger` or `log_format`.
+- feat(domain): `FindDefinitionUseCase` and `FindReferencesUseCase`
+  are thin delegations to `SymbolIndex` (mirrors the
+  `RecentChangesUseCase` / `GetSummaryUseCase` pattern).
+- feat(domain): `IndexerUseCase` populates the symbol index alongside
+  the vector + keyword indexes; metadata gains `symbol_version`;
+  6th staleness check.
+- feat(driving): MCP server registers `find_definition` and
+  `find_references` with prescriptive descriptions ("Use INSTEAD of
+  grep when…").
+- feat(config): `CC_SYMBOL_INDEX` env var (default `sqlite`, `none`
+  disables — useful if FTS5 is unavailable on your platform).
+- test(contract): EXPECTED_TOOLS now lists 5 tools; live upstream
+  contract test passes against
+  `context-template/docs/tool-protocol.md` v1.1.
+- test(integration): `tests/integration/test_symbol_index_real.py`
+  pins find_definition for `format_message` (function) and `Storage`
+  (class) against tiny_repo, plus find_references for `format_message`
+  finding main.py call site.
+- docs: README "What it does" lists 5 tools; CLAUDE.md hint section
+  grows two bullets pointing at the new tools. New "Symbol tools"
+  section in `docs/configuration.md` documenting the dual-table
+  layout and the disable escape hatch.
+- benchmarks: `benchmarks/sprint-4-symbol-tools.md` — methodology +
+  5-prompt manual smoke template (definition, references,
+  interface implementation, DI call sites, out-of-scope language
+  fallback).
+
+### Tests
+
+- 162 passing total (added 35 across unit + integration: SymbolDef +
+  SymbolRef models, SymbolIndex Protocol additions, extract_definitions
+  for 6 languages, SymbolIndexSqlite adapter (10), use case delegations
+  (6), indexer wiring (3), config (2), contract (2), e2e (5)).
+
+### Tool Protocol contract bump
+
+This release is the **reference implementation** of Tool Protocol v1.1.
+Upstream `context-template` shipped v0.2.0 first so the contract test
+(`tests/contract/test_contract.py`) could fetch the live
+`tool-protocol.md` and validate the 5-tool set. Servers built for
+v1 remain compatible — the bump is additive, so a server lacking the
+new tools simply doesn't expose them.
+
 ## v0.4.1 — 2026-05-05
 
 Hotfix. v0.3.2 added C# to the tree-sitter chunker (`_EXT_TO_LANG[".cs"]
