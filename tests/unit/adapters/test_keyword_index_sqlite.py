@@ -66,3 +66,32 @@ def test_special_chars_in_query_dont_crash() -> None:
 
 def test_version_format() -> None:
     assert SqliteFTS5Index().version.startswith("sqlite-fts5-")
+
+
+def test_search_works_from_non_main_thread() -> None:
+    """Regression for the v0.6.1 SQLite threading bug.
+
+    The MCP server runs query handlers via asyncio.to_thread(), so the
+    SQLite connection (created on the main thread during build_indexer_and_store)
+    must be usable from worker threads. Without check_same_thread=False
+    this test raises sqlite3.ProgrammingError.
+    """
+    import threading
+
+    idx = SqliteFTS5Index()
+    idx.add([_entry("a.py", "def foo(): ...")])
+
+    captured: list = []
+    error: list = []
+
+    def query_from_worker() -> None:
+        try:
+            captured.append(idx.search("foo", k=1))
+        except Exception as exc:
+            error.append(exc)
+
+    t = threading.Thread(target=query_from_worker)
+    t.start()
+    t.join(timeout=5)
+    assert not error, f"cross-thread query raised: {error[0]!r}"
+    assert captured and captured[0] and captured[0][0][0].chunk.path == "a.py"

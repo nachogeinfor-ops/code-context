@@ -139,7 +139,7 @@ class SymbolIndexSqlite:
         # Commit any open implicit transaction first — backup() blocks on
         # uncommitted writes in the source connection (Windows specifically).
         self._conn.commit()
-        disk = sqlite3.connect(target)
+        disk = sqlite3.connect(target, check_same_thread=False)
         try:
             self._conn.backup(disk)
         finally:
@@ -155,7 +155,8 @@ class SymbolIndexSqlite:
             raise FileNotFoundError(f"symbol index missing at {target}")
         if self._conn is not None:
             self._conn.close()
-        self._conn = sqlite3.connect(target)
+        # check_same_thread=False — see _open_inmem rationale.
+        self._conn = sqlite3.connect(target, check_same_thread=False)
         self._db_path = target
 
     # ---------- test helpers ----------
@@ -178,7 +179,15 @@ class SymbolIndexSqlite:
     # ---------- internal ----------
 
     def _open_inmem(self) -> None:
-        self._conn = sqlite3.connect(":memory:")
+        # check_same_thread=False: the MCP server runs query handlers via
+        # asyncio.to_thread, which uses a thread pool. Without this flag, a
+        # connection opened on the main thread cannot be used from worker
+        # threads (sqlite3.ProgrammingError). SQLite's library is built in
+        # serialized threading mode by default, so a single connection is
+        # safe across threads as long as we don't have concurrent writes —
+        # which we don't (writes happen at indexer.run() time, queries are
+        # read-only). Mirrors the same fix in keyword_index_sqlite.py.
+        self._conn = sqlite3.connect(":memory:", check_same_thread=False)
         self._init_schema()
 
     def _init_schema(self) -> None:

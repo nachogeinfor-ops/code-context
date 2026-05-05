@@ -104,3 +104,33 @@ def test_find_references_unknown_returns_empty() -> None:
 
 def test_version_format() -> None:
     assert SymbolIndexSqlite().version.startswith("symbols-sqlite-")
+
+
+def test_find_definition_works_from_non_main_thread() -> None:
+    """Regression for the v0.6.1 SQLite threading bug.
+
+    The MCP server runs query handlers via asyncio.to_thread(), so the
+    SQLite connection (created on the main thread during build_indexer_and_store)
+    must be usable from worker threads. Without check_same_thread=False
+    this test raises sqlite3.ProgrammingError ("SQLite objects created in
+    a thread can only be used in that same thread").
+    """
+    import threading
+
+    idx = SymbolIndexSqlite()
+    idx.add_definitions([SymbolDef("foo", "a.py", (1, 5), "function", "python")])
+
+    captured: list = []
+    error: list = []
+
+    def query_from_worker() -> None:
+        try:
+            captured.append(idx.find_definition("foo"))
+        except Exception as exc:
+            error.append(exc)
+
+    t = threading.Thread(target=query_from_worker)
+    t.start()
+    t.join(timeout=5)
+    assert not error, f"cross-thread query raised: {error[0]!r}"
+    assert captured and len(captured[0]) == 1 and captured[0][0].name == "foo"
