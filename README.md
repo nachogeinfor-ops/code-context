@@ -1,9 +1,14 @@
 # code-context
 
+[![PyPI](https://img.shields.io/pypi/v/code-context.svg)](https://pypi.org/project/code-context/)
 [![CI](https://github.com/nachogeinfor-ops/code-context/actions/workflows/ci.yml/badge.svg)](https://github.com/nachogeinfor-ops/code-context/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/pypi/pyversions/code-context.svg)](https://pypi.org/project/code-context/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> A Python MCP server with local RAG for [Claude Code](https://docs.claude.com/claude-code). Implements the [`code-context` Tool Protocol](https://github.com/nachogeinfor-ops/context-template/blob/main/docs/tool-protocol.md) defined by [`context-template`](https://github.com/nachogeinfor-ops/context-template).
+> **Status: stable (v1.0.0).** A Python MCP server with local RAG
+> for [Claude Code](https://docs.claude.com/claude-code).
+> Implements the [`code-context` Tool Protocol](https://github.com/nachogeinfor-ops/context-template/blob/main/docs/tool-protocol.md)
+> v1.2 defined by [`context-template`](https://github.com/nachogeinfor-ops/context-template).
 
 ## What it does
 
@@ -107,13 +112,20 @@ Configured via env vars. See [`docs/configuration.md`](docs/configuration.md) fo
 | `CC_CHUNKER` | `treesitter` (AST-aware for Py/JS/TS/Go/Rust/C#, line fallback) — set `line` for v0.1.x behavior |
 | `CC_CACHE_DIR` | platformdirs user cache |
 
-## Architecture
+## Documentation
 
-See [`docs/architecture.md`](docs/architecture.md) for the diagram + port contracts.
+- **[Public API (v1)](docs/v1-api.md)** — what's stable; what's not. Read this before depending on `code-context` from another project.
+- **[Configuration](docs/configuration.md)** — every env var with examples (chunker strategies, hybrid search, symbol index, background reindex, watch mode, …).
+- **[Architecture](docs/architecture.md)** — hexagonal diagram, port contracts, indexing lifecycle, Sprint 7 background-thread + bus.
+- **[Eval suite](benchmarks/eval/README.md)** — NDCG@10 / MRR / latency baselines per retrieval mode.
+- **[Releasing](docs/release.md)** — Trusted Publisher setup, per-release checklist.
+- **[Extending](docs/extending.md)** — write your own embeddings provider, vector store, or chunker.
 
-## Extending
+## Status
 
-Want to write a new embeddings provider, a different vector store, or a tree-sitter chunker? See [`docs/extending.md`](docs/extending.md).
+**v1.0.0 — stable.** Public surface frozen; v1.x will only add. See
+[`docs/v1-api.md`](docs/v1-api.md) for the commitment scope and
+[`CHANGELOG.md`](CHANGELOG.md) for what shipped in each version.
 
 ## License
 
