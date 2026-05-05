@@ -23,8 +23,16 @@ log = logging.getLogger(__name__)
 _FILE = "keyword.sqlite"
 _FTS_TABLE = "chunks_fts"
 
-# FTS5 special tokens that need escaping or stripping in queries.
-_FTS_SPECIAL_RE = re.compile(r"[\"\*]|\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
+# FTS5 has a small set of reserved tokens (AND/OR/NOT/NEAR) AND treats
+# punctuation in queries as syntax (a `.` is a column separator, a `-`
+# starts an exclusion clause, `:` is column-qualified term). The default
+# unicode61 tokenizer handles punctuation INSIDE indexed text fine, but
+# in the QUERY the parser sees punctuation before tokenization. Strip
+# everything that isn't a word char / whitespace; the resulting token
+# list still matches the indexed tokens because the tokenizer would
+# have split them at the same boundaries on the way in.
+_FTS_KEEP_RE = re.compile(r"[^\w\s]", flags=re.UNICODE)
+_FTS_BOOLEAN_RE = re.compile(r"\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
 
 
 class SqliteFTS5Index:
@@ -170,6 +178,29 @@ class SqliteFTS5Index:
 
 
 def _sanitise(query: str) -> str:
-    """Strip FTS5 syntax to avoid query-injection 'AND' / quotes etc."""
-    cleaned = _FTS_SPECIAL_RE.sub(" ", query)
-    return " ".join(cleaned.split())
+    """Strip FTS5 syntax and convert the query into an OR-of-tokens.
+
+    Caught by Sprint 8's eval suite: 3/35 queries with periods or
+    hyphens silently returned [] from the sanitiser-as-was; a deeper
+    issue surfaced after that fix — FTS5 combines bare tokens with
+    implicit AND, so long natural-language queries with 5+ tokens
+    rarely matched anything (e.g. "how is settings.json loaded"
+    requires every doc to contain "how", "is", "settings", "json",
+    "loaded"). BM25 ranking is what we actually want: match any doc
+    with any token, rank by overlap density. So we explicitly join
+    the tokens with ` OR `.
+
+    Steps:
+    1. Drop every non-word, non-whitespace char (FTS5 reads `.` `-`
+       `:` `*` `"` `(` `)` as syntax even though indexed text accepts
+       them via unicode61 tokenization).
+    2. Drop the boolean operators (AND/OR/NOT/NEAR) — users writing
+       English shouldn't trigger them; we'll add our own OR back.
+    3. Tokenize on whitespace, drop empties, join with ` OR `.
+
+    Single-token queries pass through unchanged ("foo" stays "foo").
+    """
+    cleaned = _FTS_KEEP_RE.sub(" ", query)
+    cleaned = _FTS_BOOLEAN_RE.sub(" ", cleaned)
+    tokens = cleaned.split()
+    return " OR ".join(tokens)

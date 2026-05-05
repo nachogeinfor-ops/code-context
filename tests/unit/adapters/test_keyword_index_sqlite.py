@@ -64,6 +64,30 @@ def test_special_chars_in_query_dont_crash() -> None:
         idx.search(q, k=3)
 
 
+def test_punctuation_in_query_does_not_silently_return_empty() -> None:
+    """Bug caught by Sprint 8 eval: queries with periods, hyphens, or
+    version strings used to fail FTS5 parsing and return [] without
+    raising. The sanitiser must strip non-alphanumeric punctuation
+    so the BM25 leg always sees a clean token list, even at the cost
+    of dropping the punctuation itself."""
+    idx = SqliteFTS5Index()
+    idx.add(
+        [
+            _entry("a.py", "settings.json loader implementation"),
+            _entry("b.py", "double-click handler in tasks page"),
+            _entry("c.py", "regression test for v1.11.0 bushido logs"),
+        ]
+    )
+    # Each of these used to crash with "syntax error near '.'" or
+    # "no such column: click" and return [].
+    out1 = idx.search("how is settings.json loaded", k=5)
+    assert any(e.chunk.path == "a.py" for e, _ in out1)
+    out2 = idx.search("tasks page double-click handling", k=5)
+    assert any(e.chunk.path == "b.py" for e, _ in out2)
+    out3 = idx.search("bushido logs v1.11.0 debug", k=5)
+    assert any(e.chunk.path == "c.py" for e, _ in out3)
+
+
 def test_version_format() -> None:
     assert SqliteFTS5Index().version.startswith("sqlite-fts5-")
 

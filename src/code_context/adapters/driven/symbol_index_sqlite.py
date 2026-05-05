@@ -23,8 +23,12 @@ _FILE = "symbols.sqlite"
 _DEFS_TABLE = "symbol_defs"
 _REFS_TABLE = "symbol_refs_fts"
 
-# FTS5 reserved tokens — same set as in keyword_index_sqlite.py.
-_FTS_SPECIAL_RE = re.compile(r"[\"\*]|\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
+# FTS5 query sanitisation — same logic as keyword_index_sqlite.py.
+# Strip punctuation (FTS5 parses `.`, `-`, `:`, etc. as syntax even
+# though the unicode61 tokenizer accepts them in indexed text), and
+# strip the boolean operators.
+_FTS_KEEP_RE = re.compile(r"[^\w\s]", flags=re.UNICODE)
+_FTS_BOOLEAN_RE = re.compile(r"\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
 
 
 class SymbolIndexSqlite:
@@ -252,6 +256,16 @@ class SymbolIndexSqlite:
 
 
 def _sanitise(query: str) -> str:
-    """Strip FTS5 syntax to avoid query-injection."""
-    cleaned = _FTS_SPECIAL_RE.sub(" ", query)
-    return " ".join(cleaned.split())
+    """Strip FTS5 syntax and convert the query into an OR-of-tokens.
+
+    See keyword_index_sqlite._sanitise for the full rationale.
+    SymbolIndex's find_references semantically already wants OR-style
+    matching (we MATCH on the symbol's name as a single identifier;
+    if the caller passes a multi-word query like "list bat files"
+    we want any doc with any of those tokens, then per-line filtering
+    inside find_references trims to actual hits).
+    """
+    cleaned = _FTS_KEEP_RE.sub(" ", query)
+    cleaned = _FTS_BOOLEAN_RE.sub(" ", cleaned)
+    tokens = cleaned.split()
+    return " OR ".join(tokens)
