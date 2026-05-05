@@ -14,13 +14,18 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
-# Models we have benchmarked / characterised. Unregistered models still work,
-# but staleness checks, dimension hints, and benchmark dashboards won't
-# recognise them.
+# MODEL_REGISTRY enumerates models we have verified and characterised. Models
+# missing from here still work, but staleness, dimension hints, and benchmarks
+# won't recognise them and the adapter will warn at construction time.
+#
+# v0.3.3 trimmed this list to verified entries only. v0.3.0-v0.3.2 listed
+# `BAAI/bge-code-v1.5` which never existed on Hugging Face — a planning error
+# corrected here. Other code-tuned candidates (`jinaai/jina-embeddings-v2-base-code`,
+# `BAAI/bge-code-v1`) work via `CC_EMBEDDINGS_MODEL` override but are not yet
+# pre-characterised here because their embedding dims have not been independently
+# verified. v0.4 will re-introduce a verified code-tuned default after benchmark
+# validation and a CI check that pings the HF API for each registered name.
 MODEL_REGISTRY: dict[str, dict[str, int | str]] = {
-    "BAAI/bge-code-v1.5": {"dimension": 1024, "kind": "code"},
-    "nomic-ai/nomic-embed-text-v2-moe": {"dimension": 768, "kind": "code+text"},
-    "microsoft/codebert-base": {"dimension": 768, "kind": "code"},
     "sentence-transformers/all-MiniLM-L6-v2": {"dimension": 384, "kind": "general"},
     "all-MiniLM-L6-v2": {"dimension": 384, "kind": "general"},  # short alias
 }
@@ -52,7 +57,7 @@ def _lib_version() -> str:
 
 
 class LocalST:
-    def __init__(self, model_name: str = "BAAI/bge-code-v1.5") -> None:
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         if model_name not in MODEL_REGISTRY:
             log.warning(
                 "embeddings model %r not in MODEL_REGISTRY; staleness, "

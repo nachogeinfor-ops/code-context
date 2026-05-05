@@ -37,7 +37,7 @@ def build_embeddings(cfg: Config) -> EmbeddingsProvider:
             model=cfg.embeddings_model or "text-embedding-3-small",
             api_key=cfg.openai_api_key,
         )
-    return LocalST(model_name=cfg.embeddings_model or "BAAI/bge-code-v1.5")
+    return LocalST(model_name=cfg.embeddings_model or "all-MiniLM-L6-v2")
 
 
 def build_chunker(cfg: Config) -> Chunker:
