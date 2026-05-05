@@ -111,3 +111,32 @@ def test_key_modules_excludes_gitignored_dirs(tmp_path: Path) -> None:
     assert "Application" in paths
     assert "bin" not in paths
     assert "obj" not in paths
+
+
+def test_key_modules_filters_dir_only_in_gitignore_not_denylist(tmp_path: Path) -> None:
+    """Tighter cover than the previous test: bin/ and obj/ are also in the
+    denylist, so the previous test couldn't tell which filter caught them.
+    Use a custom name that is ONLY in .gitignore — proves the gitignore
+    filter is wired into _key_modules, not just the denylist."""
+    repo = tmp_path
+    (repo / ".gitignore").write_text("vendored-deps/\n", encoding="utf-8")
+    (repo / "src").mkdir()
+    (repo / "vendored-deps").mkdir()
+    summary = FilesystemIntrospector().summary(repo)
+    paths = [m["path"] for m in summary.key_modules]
+    assert "src" in paths
+    assert "vendored-deps" not in paths
+
+
+def test_stats_filters_dir_only_in_gitignore_not_denylist(tmp_path: Path) -> None:
+    """Counterpart to the key_modules test for _stats — exercises the
+    gitignore.match_file branch inside _stats, with a name that is NOT
+    in the hardcoded denylist."""
+    repo = tmp_path
+    (repo / ".gitignore").write_text("vendored-deps/\n", encoding="utf-8")
+    (repo / "src.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "vendored-deps").mkdir()
+    (repo / "vendored-deps" / "lib.py").write_text("y = 2\n" * 1000, encoding="utf-8")
+    summary = FilesystemIntrospector().summary(repo)
+    assert summary.stats["files"] == 1  # only src.py
+    assert summary.stats["loc"] < 5

@@ -56,9 +56,10 @@ def test_absolute_module_path_is_passed_through_untouched() -> None:
     assert intro.calls == [(Path("/repo"), "module", abs_path)]
 
 
-def test_relative_path_with_project_scope_is_ignored() -> None:
-    """When scope='project' the path argument is irrelevant; the use case
-    should not silently rewrite it (the introspector will ignore it)."""
+def test_relative_path_with_project_scope_still_resolves() -> None:
+    """Resolution happens even for scope='project' (the use case is
+    scope-agnostic — simpler logic, same observable outcome since the
+    introspector ignores `path` whenever scope != 'module')."""
     s = ProjectSummary(name="proj", purpose="p", stack=[], entry_points=[])
     intro = FakeIntrospector(s)
     uc = GetSummaryUseCase(introspector=intro, repo_root=Path("/repo"))

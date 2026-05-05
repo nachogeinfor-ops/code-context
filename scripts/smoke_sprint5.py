@@ -18,9 +18,10 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 
 def _now_ms() -> float:
@@ -240,9 +241,7 @@ def main() -> int:
     )
 
     # 4. find_definition
-    out, ms, err = _measure(
-        lambda: find_definition.run(name=probe_symbol, max_count=5)
-    )
+    out, ms, err = _measure(lambda: find_definition.run(name=probe_symbol, max_count=5))
     runs.append(
         {
             "tool": "find_definition",
@@ -254,9 +253,7 @@ def main() -> int:
     )
 
     # 5. find_references
-    out, ms, err = _measure(
-        lambda: find_references.run(name=probe_symbol, max_count=20)
-    )
+    out, ms, err = _measure(lambda: find_references.run(name=probe_symbol, max_count=20))
     runs.append(
         {
             "tool": "find_references",
@@ -280,9 +277,7 @@ def main() -> int:
     )
 
     # 6b. get_file_tree (subdir, deeper)
-    out, ms, err = _measure(
-        lambda: get_file_tree.run(path=subdir, max_depth=4)
-    )
+    out, ms, err = _measure(lambda: get_file_tree.run(path=subdir, max_depth=4))
     runs.append(
         {
             "tool": "get_file_tree",
