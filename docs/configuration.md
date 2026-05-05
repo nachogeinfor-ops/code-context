@@ -261,3 +261,94 @@ again mid-reindex, the next reindex picks it up. Reads are racy by
 design (the indexer doesn't acquire fs-level locks); the
 filesystem-level reindex lock (`<cache>/.lock`, 5-min timeout)
 prevents two concurrent reindexes from corrupting each other.
+
+## Background reindex + live mode (v0.9.0+)
+
+Sprint 7 hides reindex work behind a daemon thread. Foreground
+startup is sub-second on a previously-indexed repo; reindexes run
+asynchronously and are picked up by the next query without the user
+noticing.
+
+### Startup shape
+
+- **Foreground**: build the runtime, fast-load whatever index is on
+  disk, register the 7 MCP tools, run stdio. ~1 s on a previously-
+  indexed repo. <100 ms on a cold repo (the foreground has nothing to
+  load yet).
+- **Background**: a daemon thread (`BackgroundIndexer`) runs
+  `dirty_set()` + `run_incremental()` (or full reindex) and publishes
+  swap events to an in-process `IndexUpdateBus`. SearchRepoUseCase
+  consults the bus on each query and reloads its store handles when
+  the generation advances.
+
+If you don't have an existing index AND `CC_BG_REINDEX=off`, the
+server falls back to a synchronous reindex at startup (the v0.7
+behavior). The default is on.
+
+### Env vars
+
+- **`CC_BG_REINDEX=on`** (default) — start the background indexer.
+  Set to `off` to fall back to v0.7-style synchronous startup.
+- **`CC_BG_IDLE_SECONDS=1.0`** (default) — coalesce window for trigger
+  storms. The bg thread sleeps this long after each reindex so a
+  burst of triggers (5 saves in 200 ms) collapses to one or two
+  reindexes, not five.
+- **`CC_WATCH=off`** (default) — opt-in file-system watcher (see
+  below).
+- **`CC_WATCH_DEBOUNCE_MS=1000`** — watcher's debounce window for
+  rapid save events. Same idea: collapse 5 quick saves into one
+  trigger.
+
+### Live mode (`CC_WATCH=on`)
+
+Requires `pip install code-context[watch]` (adds `watchdog>=4`).
+Setting `CC_WATCH=on` without the extra is a no-op with a warning
+log — not a crash.
+
+When enabled, every filesystem event under `repo_root` (created /
+modified / deleted / moved) feeds into a debounce window
+(`CC_WATCH_DEBOUNCE_MS`, default 1 s). When the window expires
+without further events, the watcher fires a single
+`BackgroundIndexer.trigger()`. The bg thread then runs the same
+`dirty_set` + `run_incremental` flow. Net result: edits are
+reflected in the live index within ~1.5 s of save, without manual
+`code-context reindex`.
+
+```bash
+pip install code-context[watch]
+export CC_WATCH=on
+export CC_WATCH_DEBOUNCE_MS=500   # snappier feedback at the cost of more wakeups
+claude mcp add code-context --command code-context-server
+```
+
+Watch mode is conservative by default: 1 s debounce avoids hammering
+the index during noisy operations like `git checkout` or large
+refactors. Bump it down to 200-500 ms for editor-style save patterns,
+or up to 5 s if you want the bg work to wait for "code is settled."
+
+### Threading model
+
+- **Search use cases run on worker threads** (`asyncio.to_thread`
+  inside the MCP adapter). Their `vector_store` / `keyword_index`
+  references are shared across threads but only mutated during
+  reload, which happens on the requesting thread under the
+  `SearchRepoUseCase`'s int-compare gate.
+- **BackgroundIndexer is a daemon thread**: stops when the process
+  exits even if `bg.stop()` is missed. Errors during reindex are
+  logged at ERROR with full traceback; the worker keeps running so
+  the next trigger has a chance.
+- **RepoWatcher is also threaded** (watchdog spins its own observer
+  + debounce-timer threads). Stops cleanly on `watcher.stop()` —
+  which the server calls on shutdown.
+
+### Fault behavior
+
+- Bg reindex fails → log + retry on next trigger. Foreground keeps
+  serving stale results (better than 500-ing the user's query).
+- Reload from a freshly-published index dir fails (file missing,
+  partial copy, etc.) → log a warning; SearchRepoUseCase does NOT
+  advance `_last_seen_generation`, so the next bus tick retries.
+- Watcher misses an event (rare; happens on network shares or with
+  certain editors that rename-on-save into a non-watched dir) →
+  the next event in scope catches up. Worst case, a stale chunk
+  lingers until the next save or manual reindex.

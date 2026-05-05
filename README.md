@@ -34,10 +34,27 @@ pip install code-context[openai]
 ```bash
 cd /path/to/your/repo
 claude mcp add code-context --command code-context-server
-# Open Claude Code. The first query will trigger indexing (synchronous, ~1 min on a typical repo).
-# Subsequent edits trigger sub-10 s incremental reindex from v0.8.0 onwards
-# (only changed files are re-embedded; deleted files are purged).
+# Open Claude Code. From v0.9.0 the server starts in <1 s on a previously-indexed
+# repo; the first reindex (and any subsequent ones) run on a background thread,
+# so queries are never blocked. Cold start: queries return [] until the first
+# bg reindex completes (~30-60 s on a typical repo with all-MiniLM on CPU).
+# Edit-cycle reindex is sub-10 s thanks to v0.8.0's dirty_set tracking.
 ```
+
+### Live mode (optional)
+
+If you want every save in the repo to flow into the index without
+manual `code-context reindex`:
+
+```bash
+pip install code-context[watch]   # adds watchdog
+export CC_WATCH=on
+claude mcp add code-context --command code-context-server
+```
+
+Edits are debounced for ~1 s (configurable via
+`CC_WATCH_DEBOUNCE_MS`) and then trigger a background reindex.
+Default off — opt-in.
 
 For OpenAI embeddings:
 ```bash
