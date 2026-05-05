@@ -50,6 +50,11 @@ class FakeCodeSource:
     def read(self, path):
         return self._files[path]
 
+    def walk_tree(self, root, max_depth=4, include_hidden=False, subpath=None):
+        from code_context.domain.models import FileTreeNode
+
+        return FileTreeNode(path=".", kind="dir")
+
 
 class FakeVectorStore:
     def __init__(self) -> None:
@@ -135,6 +140,9 @@ class FakeGit:
         return self._head if self._repo else ""
 
     def commits(self, root, since=None, paths=None, max_count=20):
+        return []
+
+    def diff_files(self, root, ref):
         return []
 
 

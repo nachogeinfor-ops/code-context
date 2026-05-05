@@ -70,3 +70,58 @@ def test_skips_dot_git_directory(tmp_path: Path) -> None:
     # main.py is in; nothing under .git/ should be in
     assert "main.py" in rel
     assert all(not p.startswith(".git/") for p in rel)
+
+
+def test_walk_tree_returns_hierarchical_node(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("print('a')")
+    (tmp_path / "src" / "b.py").write_text("print('b')")
+    (tmp_path / "README.md").write_text("# repo")
+    src = FilesystemSource()
+    tree = src.walk_tree(tmp_path)
+    assert tree.kind == "dir"
+    children_paths = {c.path for c in tree.children}
+    assert "README.md" in children_paths
+    assert "src" in children_paths
+    src_node = next(c for c in tree.children if c.path == "src")
+    assert src_node.kind == "dir"
+    src_files = {c.path for c in src_node.children}
+    assert src_files == {"src/a.py", "src/b.py"}
+
+
+def test_walk_tree_respects_gitignore(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("ignored.txt\n")
+    (tmp_path / "ignored.txt").write_text("hidden")
+    (tmp_path / "kept.txt").write_text("visible")
+    tree = FilesystemSource().walk_tree(tmp_path)
+    paths = {c.path for c in tree.children}
+    assert "kept.txt" in paths
+    assert "ignored.txt" not in paths
+
+
+def test_walk_tree_caps_at_max_depth(tmp_path: Path) -> None:
+    deep = tmp_path / "a" / "b" / "c" / "d"
+    deep.mkdir(parents=True)
+    (deep / "leaf.py").write_text("")
+    tree = FilesystemSource().walk_tree(tmp_path, max_depth=2)
+    # depth 0 = root, depth 1 = a, depth 2 = b. c is depth 3, capped.
+    a = next(c for c in tree.children if c.path == "a")
+    b = next(c for c in a.children if c.path == "a/b")
+    # b is at depth 2 — its children should be empty (cap reached).
+    assert b.children == ()
+
+
+def test_walk_tree_skips_hidden_by_default(tmp_path: Path) -> None:
+    (tmp_path / ".hidden").write_text("x")
+    (tmp_path / "visible.py").write_text("y")
+    tree = FilesystemSource().walk_tree(tmp_path)
+    paths = {c.path for c in tree.children}
+    assert ".hidden" not in paths
+    assert "visible.py" in paths
+
+
+def test_walk_tree_includes_hidden_when_requested(tmp_path: Path) -> None:
+    (tmp_path / ".hidden").write_text("x")
+    tree = FilesystemSource().walk_tree(tmp_path, include_hidden=True)
+    paths = {c.path for c in tree.children}
+    assert ".hidden" in paths

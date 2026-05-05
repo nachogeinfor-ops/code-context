@@ -25,6 +25,9 @@ class FakeGit:
         self.calls.append({"since": since, "paths": paths, "max_count": max_count})
         return self._commits
 
+    def diff_files(self, root, ref):
+        return []
+
 
 def test_returns_commits_when_repo() -> None:
     c = Change(

@@ -53,3 +53,29 @@ def test_commits_parses_format(tmp_path: Path) -> None:
 
 def test_commits_returns_empty_when_not_repo(tmp_path: Path) -> None:
     assert GitCliSource().commits(tmp_path) == []
+
+
+def test_diff_files_returns_hunks_for_committed_change(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    (tmp_path / "a.py").write_text("line 1\nline 2\nline 3\n")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"], cwd=tmp_path, check=True, capture_output=True
+    )
+    # Modify the file.
+    (tmp_path / "a.py").write_text("line 1\nline 2 modified\nline 3\nline 4\n")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "second"], cwd=tmp_path, check=True, capture_output=True)
+
+    src = GitCliSource()
+    files = src.diff_files(tmp_path, "HEAD")
+    assert files
+    paths = [f.path for f in files]
+    assert "a.py" in paths
+
+
+def test_diff_files_returns_empty_for_non_repo(tmp_path: Path) -> None:
+    src = GitCliSource()
+    assert src.diff_files(tmp_path, "HEAD") == []

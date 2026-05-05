@@ -85,3 +85,32 @@ class SymbolRef:
     path: str
     line: int
     snippet: str
+
+
+@dataclass(frozen=True, slots=True)
+class FileTreeNode:
+    """Result of get_file_tree. Matches tool-protocol.md FileTreeNode (v1.2)."""
+
+    path: str
+    kind: str  # "file" | "dir"
+    children: tuple[FileTreeNode, ...] = ()
+    size: int | None = None  # bytes; None for dirs
+
+
+@dataclass(frozen=True, slots=True)
+class DiffFile:
+    """Per-file diff hunks returned by GitSource.diff_files (v1.2 internal type)."""
+
+    path: str
+    hunks: tuple[tuple[int, int], ...]  # list of (start_line, end_line) in the new file
+
+
+@dataclass(frozen=True, slots=True)
+class DiffChunk:
+    """Result of explain_diff. Matches tool-protocol.md DiffChunk (v1.2)."""
+
+    path: str
+    lines: tuple[int, int]
+    snippet: str
+    kind: str  # "function" | "class" | "method" | ... | "fragment"
+    change: str  # "added" | "modified" | "deleted"

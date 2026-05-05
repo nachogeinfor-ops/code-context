@@ -17,6 +17,8 @@ import numpy as np
 from code_context.domain.models import (
     Change,
     Chunk,
+    DiffFile,
+    FileTreeNode,
     IndexEntry,
     ProjectSummary,
     SymbolDef,
@@ -70,6 +72,17 @@ class CodeSource(Protocol):
 
     def read(self, path: Path) -> str: ...
 
+    def walk_tree(
+        self,
+        root: Path,
+        max_depth: int = 4,
+        include_hidden: bool = False,
+        subpath: Path | None = None,
+    ) -> FileTreeNode:
+        """Walk the filesystem rooted at `root` (or `root/subpath` if given)
+        and return a hierarchical FileTreeNode. Honors .gitignore. Skips
+        binary files. Caps recursion at `max_depth`."""
+
 
 class GitSource(Protocol):
     """Reads git state. Default: GitCliSource."""
@@ -86,6 +99,13 @@ class GitSource(Protocol):
         paths: list[str] | None = None,
         max_count: int = 20,
     ) -> list[Change]: ...
+
+    def diff_files(self, root: Path, ref: str) -> list[DiffFile]:
+        """Return per-file diff hunks for the commit at `ref` (or worktree
+        diff against HEAD if ref=='HEAD' is given the current behavior).
+        Each DiffFile.hunks is a tuple of (start_line, end_line) ranges in
+        the *new* version of the file (post-commit). Empty list if not a
+        repo."""
 
 
 class ProjectIntrospector(Protocol):
