@@ -106,6 +106,45 @@ def test_version_format() -> None:
     assert SymbolIndexSqlite().version.startswith("symbols-sqlite-")
 
 
+def test_find_references_emits_per_line_not_per_chunk() -> None:
+    """Regression for the v0.6.2 bug.
+
+    Before v0.6.2, find_references emitted one SymbolRef per CHUNK that
+    matched the symbol. With chunks of 50+ lines (line-chunked C# code,
+    for example), a single 'who calls X' query returned ~100KB of output
+    and blew past Claude Code's MCP tool token budget. The contract says
+    SymbolRef.snippet is "the matching line, trimmed" — so each emitted
+    ref should be a single line, with the actual line number where the
+    symbol appears (not the chunk's start line).
+    """
+    idx = SymbolIndexSqlite()
+    # A single chunk containing 4 lines; 2 of them mention 'foo'.
+    multi_line_chunk = (
+        "def helper():\n    foo()  # first call\n    bar()  # unrelated\n    foo()  # second call\n"
+    )
+    idx.populate_references_for_test([("a.py", 10, multi_line_chunk)])
+    out = idx.find_references("foo", max_count=10)
+    # Two refs — one per line containing foo, NOT one big chunk.
+    assert len(out) == 2
+    # Line numbers are the actual lines (chunk starts at 10, foo on offsets 1 and 3).
+    assert {r.line for r in out} == {11, 13}
+    # Snippets are trimmed lines, not the whole chunk.
+    snippets = sorted(r.snippet for r in out)
+    assert snippets == ["foo()  # first call", "foo()  # second call"]
+    # Sanity: no snippet contains a newline (would indicate chunk leakage).
+    assert all("\n" not in r.snippet for r in out)
+
+
+def test_find_references_caps_snippet_length() -> None:
+    """Trimmed snippet capped at 200 chars to keep MCP output budget sane."""
+    idx = SymbolIndexSqlite()
+    long_line = "foo(" + "x" * 500 + ")"
+    idx.populate_references_for_test([("a.py", 1, long_line)])
+    out = idx.find_references("foo", max_count=1)
+    assert len(out) == 1
+    assert len(out[0].snippet) <= 200
+
+
 def test_find_definition_works_from_non_main_thread() -> None:
     """Regression for the v0.6.1 SQLite threading bug.
 

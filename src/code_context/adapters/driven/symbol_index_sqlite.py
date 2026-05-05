@@ -102,13 +102,22 @@ class SymbolIndexSqlite:
         ]
 
     def find_references(self, name: str, max_count: int = 50) -> list[SymbolRef]:
-        """FTS5 MATCH for the symbol, then post-filter via word-boundary regex.
+        """FTS5 MATCH for the symbol, then expand each chunk to per-line hits.
 
-        FTS5's unicode61 tokenizer treats `log` and `logger` as different
-        tokens already, so MATCH 'log' won't match 'logger'. But it WILL
-        match `log_format` (split on underscore) which is a different gotcha.
-        The post-filter via `\\bname\\b` regex catches both cases — only rows
-        where the literal `name` appears as a standalone word are kept.
+        FTS5 stores chunk-level rows (path, chunk_start_line, full_chunk_snippet);
+        we want one SymbolRef per LINE that contains the symbol — that's the
+        contract from tool-protocol.md ("snippet: the matching line, trimmed").
+        Two reasons we do it this way:
+
+        1. **Contract**: SymbolRef.snippet is "the matching line, trimmed", not
+           "the chunk that contains the matching line". Returning chunks blew
+           past Claude Code's MCP-tool token budget on the very first smoke
+           (a single find_references call returned ~100KB of output).
+        2. **Word boundary**: FTS5's unicode61 tokenizer treats `log` and
+           `logger` as different tokens, so MATCH 'log' won't match 'logger'.
+           But it WILL match `log_format` (split on underscore). The
+           per-line `\\bname\\b` filter catches that and skips lines where
+           `name` only appears as part of a longer identifier.
         """
         assert self._conn is not None
         sanitised = _sanitise(name)
@@ -118,18 +127,27 @@ class SymbolIndexSqlite:
             cur = self._conn.execute(
                 f"SELECT path, line, snippet FROM {_REFS_TABLE} "
                 f"WHERE {_REFS_TABLE} MATCH ? LIMIT ?",
-                (sanitised, max_count * 4),  # over-fetch; post-filter trims.
+                (sanitised, max_count * 4),  # over-fetch; per-line expand trims.
             )
         except sqlite3.OperationalError as exc:
             log.warning("symbol refs query failed (%s) for %r → []", exc, name)
             return []
         word_re = re.compile(rf"\b{re.escape(name)}\b")
         out: list[SymbolRef] = []
-        for path, line, snippet in cur.fetchall():
-            if word_re.search(snippet):
-                out.append(SymbolRef(path=path, line=int(line), snippet=snippet))
+        seen: set[tuple[str, int]] = set()
+        for path, chunk_start_line, chunk_snippet in cur.fetchall():
+            for offset, line_text in enumerate(chunk_snippet.splitlines() or [chunk_snippet]):
+                if not word_re.search(line_text):
+                    continue
+                actual_line = int(chunk_start_line) + offset
+                key = (path, actual_line)
+                if key in seen:
+                    continue  # Same line emitted by overlapping chunks.
+                seen.add(key)
+                trimmed = line_text.strip()[:200]
+                out.append(SymbolRef(path=path, line=actual_line, snippet=trimmed))
                 if len(out) >= max_count:
-                    break
+                    return out
         return out
 
     def persist(self, path: Path) -> None:
