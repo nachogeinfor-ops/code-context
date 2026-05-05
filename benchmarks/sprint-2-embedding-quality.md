@@ -7,8 +7,8 @@
 - code-context: HEAD of v0.3.0 (this sprint's work).
 - Chunker: `CC_CHUNKER=line` (LineChunker(50, 10)) — kept fixed across both runs to **isolate the embedding effect**. Tree-sitter would help bge-code-v1.5 disproportionately because it's trained on code, so we hold it out to keep this measurement clean.
 - Embedding comparison:
-  - **v0.1.x baseline**: `CC_EMBEDDINGS_MODEL=all-MiniLM-L6-v2` (general-purpose, 22 MB, 384-dim).
-  - **v0.3.0 default**: `CC_EMBEDDINGS_MODEL=BAAI/bge-code-v1.5` (code-tuned, ~340 MB, 1536-dim).
+  - **v0.1.x baseline**: `CC_EMBEDDINGS_MODEL=all-MiniLM-L6-v2` (general-purpose, ~90 MB, 384-dim).
+  - **v0.3.0 default**: `CC_EMBEDDINGS_MODEL=BAAI/bge-code-v1.5` (code-tuned, ~340 MB, 1024-dim).
 - Repo: WinServiceScheduler (~51 files, mostly C#, some Python helpers, a README and a few JSON/YAML config files). Same primary smoke repo used in Sprint 1.
 
 ## Methodology
