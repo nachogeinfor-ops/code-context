@@ -14,6 +14,18 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
+# Models we have benchmarked / characterised. Unregistered models still work,
+# but staleness checks, dimension hints, and benchmark dashboards won't
+# recognise them.
+MODEL_REGISTRY: dict[str, dict[str, int | str]] = {
+    "BAAI/bge-code-v1.5": {"dimension": 1024, "kind": "code"},
+    "nomic-ai/nomic-embed-text-v2-moe": {"dimension": 768, "kind": "code+text"},
+    "microsoft/codebert-base": {"dimension": 768, "kind": "code"},
+    "sentence-transformers/all-MiniLM-L6-v2": {"dimension": 384, "kind": "general"},
+    "all-MiniLM-L6-v2": {"dimension": 384, "kind": "general"},  # short alias
+}
+
+
 def _load_model(model_name: str) -> Any:  # pragma: no cover - integration-tested
     """Lazy import + load. Patched in unit tests."""
     from sentence_transformers import SentenceTransformer
@@ -32,7 +44,13 @@ def _lib_version() -> str:
 
 
 class LocalST:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+    def __init__(self, model_name: str = "BAAI/bge-code-v1.5") -> None:
+        if model_name not in MODEL_REGISTRY:
+            log.warning(
+                "embeddings model %r not in MODEL_REGISTRY; staleness, "
+                "dimension hints, and benchmarks won't recognise it",
+                model_name,
+            )
         self.model_name = model_name
         self._model: Any = None
 

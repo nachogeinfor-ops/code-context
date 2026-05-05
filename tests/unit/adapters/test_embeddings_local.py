@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -64,3 +65,9 @@ def test_embed_empty_list_returns_empty_array() -> None:
     ):
         out = adapter.embed([])
         assert out.shape == (0, 4)
+
+
+def test_unknown_model_emits_warning_log(caplog) -> None:
+    with caplog.at_level(logging.WARNING, logger="code_context.adapters.driven.embeddings_local"):
+        LocalST(model_name="some/random-experimental-model")
+    assert any("not in MODEL_REGISTRY" in r.message for r in caplog.records)
