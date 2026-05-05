@@ -1,5 +1,74 @@
 # Changelog
 
+## v0.4.0 — 2026-05-05
+
+Hybrid retrieval ships. `search_repo` now runs vector + BM25 keyword
+search in parallel, fuses them via Reciprocal Rank Fusion (RRF), and
+optionally reranks the fused top-N with a cross-encoder. Two new
+driven ports (`KeywordIndex`, `Reranker`) keep the architecture
+hexagonal; default adapters are `SqliteFTS5Index` (stdlib SQLite +
+FTS5 + BM25) and `CrossEncoderReranker` (sentence-transformers).
+
+Cache auto-invalidates because the `IndexerUseCase` staleness check
+gained a 5th dimension (`keyword_version`); first v0.4.0 run on an
+existing cache rebuilds.
+
+### Behavior
+
+- feat(domain): two new Protocol ports `KeywordIndex` and `Reranker`
+  in `domain/ports.py`.
+- feat(adapter): `SqliteFTS5Index` — BM25 keyword index using
+  SQLite's FTS5 module. In-memory by default; persists to
+  `keyword.sqlite` next to `vectors.npy`. Sanitises FTS5 reserved
+  tokens (`AND`, `OR`, `NOT`, `NEAR`, `"`, `*`) to prevent
+  query-syntax errors from user input.
+- feat(adapter): `CrossEncoderReranker` (optional, off by default)
+  — lazy-loaded cross-encoder that re-scores `(query, snippet)`
+  pairs for the fused top-N. Default model
+  `cross-encoder/ms-marco-MiniLM-L-6-v2` (~80 MB).
+- feat(domain): `SearchRepoUseCase` rewritten to hybrid pipeline:
+  embed → vector top-N + keyword top-N → RRF fusion (k=60) → optional
+  scope filter → optional rerank → top_k. Over-fetch multiplier
+  bumped from 2 to 3 to give RRF a wider pool.
+- feat(domain): `IndexerUseCase` indexes the keyword store alongside
+  the vector store; metadata gains `keyword_version`; staleness check
+  fires on keyword-version drift.
+- feat(config): three new env vars `CC_KEYWORD_INDEX` (default
+  `sqlite`, `none` disables), `CC_RERANK` (default `off`), and
+  `CC_RERANK_MODEL` (override the cross-encoder).
+- fix(composition): `ensure_index` also loads the keyword index from
+  disk on fresh startup; rebuilds with backfill if the cache predates
+  Sprint 3.
+- test(integration): hybrid pipeline against `tiny_repo` pins the
+  v0.4.0 promise — searching for `format_message` surfaces utils.py
+  (the definition file) within top-3, even with noise-only
+  embeddings, because the keyword leg's BM25 ranking forces it up.
+- docs: README "What it does" mentions hybrid retrieval; new
+  `docs/configuration.md` "Hybrid retrieval" section explains the
+  three-leg pipeline, reranker opt-in, vector-only escape hatch, and
+  disk overhead.
+- benchmarks: `benchmarks/sprint-3-hybrid-quality.md` — methodology
+  + scaffold for a 3-config MRR + p50/p95 latency comparison
+  (vector-only vs hybrid vs hybrid+rerank). Tables to be filled by
+  the maintainer during smoke.
+
+### Tests
+
+- 124 passing total (added 22 across unit + integration: keyword
+  index 6, reranker 5, hybrid use case 2, indexer keyword 3, config
+  5, hybrid e2e 1).
+
+### Known limitations
+
+- Sprint 2's promise of code-tuned embeddings as default did not
+  ship — v0.3.3 reverted the default to `all-MiniLM-L6-v2` after
+  the originally planned `BAAI/bge-code-v1.5` was found not to exist
+  on Hugging Face. v0.4.0 keeps that default; a verified code-tuned
+  model with `trust_remote_code` plumbing is planned for v0.5+.
+- `CC_RRF_K` env var (to tune the RRF k-constant) is not yet
+  exposed; the hardcoded value is 60 (canonical). If the smoke
+  benchmark shows a different value would help, expose in v0.5.
+
 ## v0.3.3 — 2026-05-05
 
 Hotfix. v0.3.0–v0.3.2 shipped a default `CC_EMBEDDINGS_MODEL = "BAAI/bge-code-v1.5"`
