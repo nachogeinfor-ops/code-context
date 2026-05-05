@@ -15,15 +15,42 @@ from code_context.adapters.driven.code_source_fs import FilesystemSource
 from code_context.adapters.driven.embeddings_local import LocalST
 from code_context.adapters.driven.git_source_cli import GitCliSource
 from code_context.adapters.driven.introspector_fs import FilesystemIntrospector
+from code_context.adapters.driven.keyword_index_sqlite import SqliteFTS5Index
+from code_context.adapters.driven.reranker_crossencoder import CrossEncoderReranker
 from code_context.adapters.driven.vector_store_numpy import NumPyParquetStore
 from code_context.config import Config
-from code_context.domain.ports import Chunker, EmbeddingsProvider
+from code_context.domain.ports import Chunker, EmbeddingsProvider, KeywordIndex, Reranker
 from code_context.domain.use_cases.get_summary import GetSummaryUseCase
 from code_context.domain.use_cases.indexer import IndexerUseCase
 from code_context.domain.use_cases.recent_changes import RecentChangesUseCase
 from code_context.domain.use_cases.search_repo import SearchRepoUseCase
 
 log = logging.getLogger("code_context")
+
+
+class _NullKeywordIndex:
+    """No-op keyword index for users who set CC_KEYWORD_INDEX=none.
+
+    Implements the KeywordIndex Protocol with search returning []. Lets the
+    hybrid pipeline degrade gracefully to vector-only without special-casing
+    in SearchRepoUseCase.
+    """
+
+    @property
+    def version(self) -> str:
+        return "null-v1"
+
+    def add(self, entries) -> None:
+        pass
+
+    def search(self, query: str, k: int):
+        return []
+
+    def persist(self, path) -> None:
+        pass
+
+    def load(self, path) -> None:
+        pass
 
 
 def build_embeddings(cfg: Config) -> EmbeddingsProvider:
@@ -57,9 +84,29 @@ def build_chunker(cfg: Config) -> Chunker:
     return line
 
 
+def build_keyword_index(cfg: Config) -> KeywordIndex:
+    if cfg.keyword_strategy == "none":
+        return _NullKeywordIndex()
+    if cfg.keyword_strategy == "sqlite":
+        return SqliteFTS5Index()
+    log.error(
+        "unknown CC_KEYWORD_INDEX=%r; falling back to sqlite",
+        cfg.keyword_strategy,
+    )
+    return SqliteFTS5Index()
+
+
+def build_reranker(cfg: Config) -> Reranker | None:
+    if not cfg.rerank:
+        return None
+    return CrossEncoderReranker(
+        model_name=cfg.rerank_model or "cross-encoder/ms-marco-MiniLM-L-6-v2",
+    )
+
+
 def build_indexer_and_store(
     cfg: Config,
-) -> tuple[IndexerUseCase, NumPyParquetStore, EmbeddingsProvider]:
+) -> tuple[IndexerUseCase, NumPyParquetStore, EmbeddingsProvider, KeywordIndex]:
     cfg.repo_cache_subdir().mkdir(parents=True, exist_ok=True)
 
     embeddings = build_embeddings(cfg)
@@ -67,18 +114,20 @@ def build_indexer_and_store(
     code_source = FilesystemSource()
     git_source = GitCliSource()
     store = NumPyParquetStore()
+    keyword_index = build_keyword_index(cfg)
     indexer = IndexerUseCase(
         cache_dir=cfg.repo_cache_subdir(),
         repo_root=cfg.repo_root,
         embeddings=embeddings,
         vector_store=store,
+        keyword_index=keyword_index,
         chunker=chunker,
         code_source=code_source,
         git_source=git_source,
         include_extensions=cfg.include_extensions,
         max_file_bytes=cfg.max_file_bytes,
     )
-    return indexer, store, embeddings
+    return indexer, store, embeddings, keyword_index
 
 
 def build_use_cases(
@@ -86,11 +135,18 @@ def build_use_cases(
     indexer: IndexerUseCase,
     store: NumPyParquetStore,
     embeddings: EmbeddingsProvider,
+    keyword_index: KeywordIndex,
 ) -> tuple[SearchRepoUseCase, RecentChangesUseCase, GetSummaryUseCase]:
     git_source = GitCliSource()
     introspector = FilesystemIntrospector()
+    reranker = build_reranker(cfg)
     return (
-        SearchRepoUseCase(embeddings=embeddings, vector_store=store),
+        SearchRepoUseCase(
+            embeddings=embeddings,
+            vector_store=store,
+            keyword_index=keyword_index,
+            reranker=reranker,
+        ),
         RecentChangesUseCase(git_source=git_source, repo_root=cfg.repo_root),
         GetSummaryUseCase(introspector=introspector, repo_root=cfg.repo_root),
     )

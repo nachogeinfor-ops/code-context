@@ -22,9 +22,9 @@ log = logging.getLogger("code_context")
 
 
 async def _run_server(cfg: Config) -> None:
-    indexer, store, embeddings = build_indexer_and_store(cfg)
+    indexer, store, embeddings, keyword_index = build_indexer_and_store(cfg)
     ensure_index(cfg, indexer, store)
-    search, recent, summary = build_use_cases(cfg, indexer, store, embeddings)
+    search, recent, summary = build_use_cases(cfg, indexer, store, embeddings, keyword_index)
 
     server = Server("code-context")
     register(server, search_repo=search, recent_changes=recent, get_summary=summary)

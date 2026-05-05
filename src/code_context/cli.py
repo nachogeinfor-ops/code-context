@@ -22,7 +22,7 @@ log = logging.getLogger("code_context")
 def _cmd_reindex(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
-    indexer, _, _ = build_indexer_and_store(cfg)
+    indexer, _, _, _ = build_indexer_and_store(cfg)
     log.info("reindexing %s", cfg.repo_root)
     new_dir = safe_reindex(cfg, indexer)
     print(f"reindexed -> {new_dir}")
@@ -32,7 +32,7 @@ def _cmd_reindex(args: argparse.Namespace) -> int:
 def _cmd_status(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
-    indexer, _, _ = build_indexer_and_store(cfg)
+    indexer, _, _, _ = build_indexer_and_store(cfg)
     current = indexer.current_index_dir()
     print(f"repo_root:  {cfg.repo_root}")
     print(f"cache_dir:  {cfg.repo_cache_subdir()}")
@@ -58,7 +58,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
 def _cmd_query(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
-    indexer, store, embeddings = build_indexer_and_store(cfg)
+    indexer, store, embeddings, keyword_index = build_indexer_and_store(cfg)
     current = indexer.current_index_dir()
     if current is None:
         print("error: no index. run `code-context reindex` first.", file=sys.stderr)
@@ -70,7 +70,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     store.load(current)
-    search, _, _ = build_use_cases(cfg, indexer, store, embeddings)
+    search, _, _ = build_use_cases(cfg, indexer, store, embeddings, keyword_index)
     results = search.run(query=args.text, top_k=args.k or cfg.top_k_default)
     for r in results:
         print(f"{r.score:.3f} {r.path}:{r.lines[0]}-{r.lines[1]}  ({r.why})")

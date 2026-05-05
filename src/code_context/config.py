@@ -43,6 +43,9 @@ class Config:
     chunk_lines: int
     chunk_overlap: int
     chunker_strategy: str  # "treesitter" (default) or "line"
+    keyword_strategy: str  # "sqlite" (default) or "none"
+    rerank: bool
+    rerank_model: str | None
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -87,4 +90,7 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         chunk_lines=int(os.environ.get("CC_CHUNK_LINES", "50")),
         chunk_overlap=int(os.environ.get("CC_CHUNK_OVERLAP", "10")),
         chunker_strategy=os.environ.get("CC_CHUNKER", "treesitter"),
+        keyword_strategy=os.environ.get("CC_KEYWORD_INDEX", "sqlite"),
+        rerank=os.environ.get("CC_RERANK", "off").lower() in ("on", "true", "1"),
+        rerank_model=os.environ.get("CC_RERANK_MODEL"),
     )

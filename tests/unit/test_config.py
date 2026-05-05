@@ -69,3 +69,43 @@ def test_default_embeddings_model_is_minilm(tmp_path: Path) -> None:
     with patch.dict(os.environ, {}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
     assert cfg.embeddings_model == "all-MiniLM-L6-v2"
+
+
+def test_keyword_strategy_defaults_to_sqlite(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.keyword_strategy == "sqlite"
+
+
+def test_keyword_strategy_overridden_by_env(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {"CC_KEYWORD_INDEX": "none"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.keyword_strategy == "none"
+
+
+def test_rerank_default_is_off(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.rerank is False
+    assert cfg.rerank_model is None
+
+
+def test_rerank_on_via_env(tmp_path: Path) -> None:
+    with patch.dict(
+        os.environ,
+        {"CC_RERANK": "on", "CC_RERANK_MODEL": "cross-encoder/ms-marco-MiniLM-L-6-v2"},
+        clear=True,
+    ):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.rerank is True
+    assert cfg.rerank_model == "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+
+def test_rerank_accepts_truthy_aliases(tmp_path: Path) -> None:
+    """on/true/1 all enable rerank; off/false/0 leave it disabled."""
+    for v in ("on", "true", "1"):
+        with patch.dict(os.environ, {"CC_RERANK": v}, clear=True):
+            assert load_config(default_repo_root=tmp_path).rerank is True
+    for v in ("off", "false", "0", ""):
+        with patch.dict(os.environ, {"CC_RERANK": v}, clear=True):
+            assert load_config(default_repo_root=tmp_path).rerank is False
