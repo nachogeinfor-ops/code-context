@@ -189,4 +189,75 @@ Default (`CC_CHUNKER=treesitter`): for files with extensions `.py`, `.js`, `.jsx
 
 `CC_CHUNKER=line` restores v0.1.x behavior: every file is chunked by line-window. Use this if tree-sitter parsers cause issues on your platform or if you need byte-for-byte reproducibility with a v0.1.x index.
 
-The chunker version is encoded in `metadata.json.chunker_version`. Switching `CC_CHUNKER` triggers an automatic full reindex on next start because `IndexerUseCase.is_stale()` sees the version drift.
+The chunker version is encoded in `metadata.json.chunker_version`. Switching `CC_CHUNKER` triggers an automatic full reindex on next start because `IndexerUseCase.dirty_set()` sees the version drift.
+
+## Index lifecycle (v0.8.0+)
+
+Sprint 6 replaced the all-or-nothing reindex with an **incremental
+reindex** path. The MCP server / CLI on startup asks the indexer for a
+`StaleSet` — a verdict that tells it whether any work needs doing and,
+if so, exactly which files. Three outcomes:
+
+- **Clean**: no current index drift; existing index is loaded
+  directly. Sub-second on a previously-indexed repo.
+- **Full reindex required**: a global invalidator changed (no current
+  index, no git repo, embeddings model id, chunker version, keyword
+  or symbol store version, metadata schema version v1 → v2). Every
+  file is re-chunked + re-embedded; same cost as a v0.7.x cold start.
+- **Incremental**: per-file SHA-256 against `metadata.file_hashes`
+  detected drift in N files (and possibly some deletions). Only those
+  N files are re-chunked + re-embedded; deleted files have their rows
+  purged from the vector store, keyword index, and symbol index.
+  Typical edit-cycle reindex on a 300-file repo: under 10 s vs 1-3
+  min in v0.7.x.
+
+### Metadata schema bump (v1 → v2)
+
+`metadata.json` gains a `file_hashes: {repo_relative_path: sha256_hex}`
+map and a `version: 2` marker. Backwards-compatible: the indexer
+detects v1 metadata (no `file_hashes` field) and forces a full reindex
+on the first v0.8.0 startup, which is exactly what's needed to
+populate the baseline. No user action required, no env var to set.
+
+### Status output
+
+```
+$ code-context status
+...
+dirty:      2
+deleted:    0
+full_reindex_required: False
+reason:     2 dirty, 0 deleted
+```
+
+`reason` echoes the full English description if the verdict is
+`full_reindex_required` (e.g. `embeddings_model changed`,
+`metadata schema upgrade (v1 → v2)`).
+
+### Forcing a full reindex
+
+```bash
+code-context reindex --force
+```
+
+Bypasses `dirty_set()` and rebuilds from scratch. Useful when you
+suspect cache corruption or want to test the cold-start path.
+
+### What dirty_set does NOT detect
+
+- Renames are surfaced as `(deleted, added)` pairs since the new path
+  has no prior hash. Same number of embed calls as a fresh add.
+- Pure mtime changes (`touch foo.py`) without content drift do **not**
+  trigger reindex — content SHA is the source of truth, not mtime.
+- Files outside `CC_INCLUDE_EXTENSIONS` are never tracked, so adding
+  them to the repo doesn't show up in `dirty_set` until the include
+  list grows.
+
+### Race conditions
+
+A file modified between `dirty_set()` and `run_incremental()` will be
+hashed and reindexed at its current content. If the file is modified
+again mid-reindex, the next reindex picks it up. Reads are racy by
+design (the indexer doesn't acquire fs-level locks); the
+filesystem-level reindex lock (`<cache>/.lock`, 5-min timeout)
+prevents two concurrent reindexes from corrupting each other.

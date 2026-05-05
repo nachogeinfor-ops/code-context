@@ -35,6 +35,8 @@ pip install code-context[openai]
 cd /path/to/your/repo
 claude mcp add code-context --command code-context-server
 # Open Claude Code. The first query will trigger indexing (synchronous, ~1 min on a typical repo).
+# Subsequent edits trigger sub-10 s incremental reindex from v0.8.0 onwards
+# (only changed files are re-embedded; deleted files are purged).
 ```
 
 For OpenAI embeddings:
@@ -69,10 +71,11 @@ Without this hint, Claude will work fine — it just won't reach for the MCP too
 `code-context-server` is the MCP binary; you don't run it directly. The companion `code-context` CLI helps administer the index:
 
 ```bash
-code-context status     # print index health (head_sha, indexed_at, n_chunks, …)
-code-context reindex    # force a full reindex now
+code-context status              # print index health + dirty/deleted counts
+code-context reindex             # incremental by default (only changed files)
+code-context reindex --force     # full reindex (post-model-upgrade or cache reset)
 code-context query "where do we validate user emails"   # debug, no MCP
-code-context clear --yes  # delete the cache for this repo
+code-context clear --yes         # delete the cache for this repo
 ```
 
 ## Configuration
