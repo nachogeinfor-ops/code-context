@@ -17,6 +17,7 @@ _DEFAULT_EXTENSIONS = [
     ".tsx",
     ".go",
     ".rs",
+    ".cs",
     ".java",
     ".c",
     ".cpp",

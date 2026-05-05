@@ -109,3 +109,26 @@ def test_rerank_accepts_truthy_aliases(tmp_path: Path) -> None:
     for v in ("off", "false", "0", ""):
         with patch.dict(os.environ, {"CC_RERANK": v}, clear=True):
             assert load_config(default_repo_root=tmp_path).rerank is False
+
+
+def test_all_treesitter_extensions_are_in_default_includes(tmp_path: Path) -> None:
+    """Regression test for the v0.4.1 hotfix.
+
+    v0.3.2 added .cs to the tree-sitter chunker's _EXT_TO_LANG, but forgot
+    to also add it to config.py's _DEFAULT_EXTENSIONS. Result: C#-heavy
+    repos indexed as if they had no source files (only docs/configs were
+    chunked). This test pins the invariant that every extension known to
+    the chunker is also part of the default include list, so the next
+    language addition can't silently re-introduce the bug.
+    """
+    from code_context.adapters.driven.chunker_treesitter import _EXT_TO_LANG
+
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    missing = [ext for ext in _EXT_TO_LANG if ext not in cfg.include_extensions]
+    assert not missing, (
+        f"Tree-sitter chunker handles {missing} but they are not in "
+        f"_DEFAULT_EXTENSIONS — every supported language must be indexable "
+        f"out of the box. Add the extension(s) to _DEFAULT_EXTENSIONS in "
+        f"src/code_context/config.py."
+    )
