@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.1 — 2026-05-05
+
+Hot patch immediately after v0.3.0 to fix CI lint. No runtime behavior
+change vs v0.3.0 — the only diff is collapsing the `default_model`
+ternary in `config.py` onto one line so `ruff format --check` passes.
+
+- style(config): collapse `default_model = "..." if embeddings == "local" else "..."`
+  ternary onto one line. v0.3.0 had it split for human readability;
+  ruff format prefers single-line because the line fits within the
+  100-char budget.
+
+If you installed v0.3.0 you can stay on it — the runtime behavior is
+identical. v0.3.1 just unblocks CI for future releases.
+
 ## v0.3.0 — 2026-05-05
 
 Code-trained embeddings ship as the new default. The cache auto-invalidates
