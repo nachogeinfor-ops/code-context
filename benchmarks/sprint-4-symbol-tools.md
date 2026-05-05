@@ -54,17 +54,42 @@ something a developer would actually type.
 | 4 | "Who calls `services.AddGeinforConfiguration`?" | `find_references` | Likely `Program.cs` plus any extension-method tests. |
 | 5 | "Where is `ConvertTo-Bat` defined in the install scripts?" | `find_definition` (or grep fallback if `.ps1` isn't tree-sitter chunked) | Either `find_definition` returns nothing (PowerShell isn't a supported language) and Claude falls back to `Grep` correctly — that's still the right behavior. |
 
-## Results — v0.5.0 manual smoke
-
-Fill this in after running the prompts above:
+## Results — v0.6.1 manual smoke (partial — 2026-05-05)
 
 | # | Prompt | Tool invoked | Result quality | Notes |
 |---|---|---|---|---|
-| 1 | Where is BushidoLogScannerAdapter defined? | _TBD_ | _TBD_ | _TBD_ |
+| 1 | Where is BushidoLogScannerAdapter defined? | ✓ `find_definition(name="BushidoLogScannerAdapter", language="csharp")` | ✓ Top-1 = `GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogScannerAdapter.cs:16-465` (class) + 37-47 (constructor) | First-try success after 2 hotfixes — see lessons below |
 | 2 | Find every caller of format_message | _TBD_ | _TBD_ | _TBD_ |
 | 3 | Where is IConfigurationAdapter implemented? | _TBD_ | _TBD_ | _TBD_ |
 | 4 | Who calls services.AddGeinforConfiguration? | _TBD_ | _TBD_ | _TBD_ |
 | 5 | Where is ConvertTo-Bat defined in the install scripts? | _TBD_ | _TBD_ | _TBD_ |
+
+### Lessons from prompt #1's path to green
+
+The first attempt (v0.5.0 + no `CLAUDE.md`) bypassed the MCP entirely
+— Claude went straight to `Search`/`Grep`. The second attempt (with
+`CLAUDE.md` §8 listing all 5 tools prescriptively) DID invoke
+`find_definition`, but the MCP server raised `sqlite3.ProgrammingError`
+because the SQLite connection was created on the main thread and queries
+ran in `asyncio.to_thread` worker threads. Claude printed
+"MCP tool hit a SQLite threading error. Falling back to Grep." and
+silently degraded.
+
+Two prerequisites had to be fixed before prompt #1 could pass:
+
+1. **Discoverability** — without `CLAUDE.md` §8, Claude defaults to
+   built-in `Grep`/`Search` even when the MCP server is `connected`.
+   The fix is purely template (the prescriptive language we've been
+   honing since v0.1.x's "Making Claude actually use these tools"
+   section).
+2. **SQLite threading** (v0.6.1) — `check_same_thread=False` on every
+   `sqlite3.connect()` so a single connection works across the asyncio
+   thread pool. Integration tests didn't catch this because they run
+   in the test thread; v0.6.1 added explicit `threading.Thread`
+   regression tests.
+
+The combination of those two fixes is what made prompt #1's clean
+result possible.
 
 **Tool invocation rate**: _TBD_ / 5 (target ≥4 for v0.5.0 ship).
 
