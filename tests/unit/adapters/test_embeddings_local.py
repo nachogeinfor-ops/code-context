@@ -71,3 +71,23 @@ def test_unknown_model_emits_warning_log(caplog) -> None:
     with caplog.at_level(logging.WARNING, logger="code_context.adapters.driven.embeddings_local"):
         LocalST(model_name="some/random-experimental-model")
     assert any("not in MODEL_REGISTRY" in r.message for r in caplog.records)
+
+
+def test_embed_truncates_long_snippets() -> None:
+    fake_model = MagicMock()
+    fake_model.get_embedding_dimension.return_value = 4
+    captured: list[list[str]] = []
+
+    def fake_encode(texts, **kw):
+        captured.append(list(texts))
+        return np.zeros((len(texts), 4), dtype=np.float32)
+
+    fake_model.encode.side_effect = fake_encode
+    with patch(
+        "code_context.adapters.driven.embeddings_local._load_model",
+        return_value=fake_model,
+    ):
+        adapter = LocalST(model_name="BAAI/bge-code-v1.5")
+        long_text = "x" * 5000
+        adapter.embed([long_text])
+    assert len(captured[0][0]) <= 2048  # truncated

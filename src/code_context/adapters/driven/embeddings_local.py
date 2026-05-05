@@ -26,6 +26,14 @@ MODEL_REGISTRY: dict[str, dict[str, int | str]] = {
 }
 
 
+# Whole-function chunks from tree-sitter can run 5K+ chars and overflow the
+# 512-token context of BERT-family encoders. We embed the truncated head; the
+# full snippet is preserved in the chunk for the search response payload, so
+# users still see the complete code. 2048 chars ~= 512 tokens for code-heavy
+# text.
+_MAX_EMBED_CHARS = 2048
+
+
 def _load_model(model_name: str) -> Any:  # pragma: no cover - integration-tested
     """Lazy import + load. Patched in unit tests."""
     from sentence_transformers import SentenceTransformer
@@ -72,7 +80,8 @@ class LocalST:
         self._ensure_loaded()
         if not texts:
             return np.empty((0, self.dimension), dtype=np.float32)
-        out = self._model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+        truncated = [t[:_MAX_EMBED_CHARS] for t in texts]
+        out = self._model.encode(truncated, convert_to_numpy=True, show_progress_bar=False)
         return out.astype(np.float32, copy=False)
 
     def _ensure_loaded(self) -> None:
