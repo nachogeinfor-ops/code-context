@@ -1,0 +1,93 @@
+"""BackgroundIndexer — runs reindex on a worker thread, posts to the bus.
+
+Single-threaded coordinator. External code calls `.trigger()` to ask
+for a reindex; the thread coalesces multiple triggers into one job
+(an `Event` is set/cleared, not a queue), so a 5-event burst from a
+file watcher saving in rapid succession produces ONE reindex, not
+five. On completion, the configured `swap` callback runs first
+(typically `_atomic_swap_current` from the composition root) and
+then `bus.publish_swap(new_dir)` notifies any subscriber.
+
+Errors in the indexer are caught and logged at ERROR level; the
+worker keeps running so the next trigger has a chance. This matches
+the philosophy of "background reindex must never crash the MCP
+server."
+
+The thread is daemonic so it doesn't block process exit if `.stop()`
+is missed (e.g., a hard SIGINT before the main loop's finally
+block). `.stop()` itself sets a flag and joins with a 5 s timeout
+by default; longer for the ~1 s default `idle_seconds`.
+"""
+
+from __future__ import annotations
+
+import logging
+import threading
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from code_context.domain.index_bus import IndexUpdateBus
+
+log = logging.getLogger(__name__)
+
+
+class BackgroundIndexer(threading.Thread):
+    def __init__(
+        self,
+        *,
+        indexer: Any,  # IndexerUseCase, untyped to avoid circular import
+        swap: Callable[[Path], None],
+        bus: IndexUpdateBus,
+        idle_seconds: float = 1.0,
+    ) -> None:
+        super().__init__(name="code-context-bg-indexer", daemon=True)
+        self._indexer = indexer
+        self._swap = swap
+        self._bus = bus
+        self._idle = idle_seconds
+        self._wake = threading.Event()
+        self._stop_event = threading.Event()
+
+    def trigger(self) -> None:
+        """Ask the worker thread to run a reindex.
+
+        Idempotent within an idle window: 5 rapid triggers coalesce
+        into one job because the Event is sticky until consumed.
+        """
+        self._wake.set()
+
+    def stop(self, timeout: float = 5.0) -> None:
+        """Signal the worker to exit and join up to `timeout` seconds."""
+        self._stop_event.set()
+        self._wake.set()  # break out of `wait()`
+        self.join(timeout=timeout)
+
+    def run(self) -> None:
+        while not self._stop_event.is_set():
+            self._wake.wait()
+            self._wake.clear()
+            if self._stop_event.is_set():
+                return
+            try:
+                self._reindex_once()
+            except Exception:  # noqa: BLE001 - bg failure must not kill the thread
+                log.exception("background reindex failed; will retry on next trigger")
+            # Idle so rapid triggers coalesce; stop_event lets `.stop()`
+            # break out without waiting the full window.
+            self._stop_event.wait(self._idle)
+
+    def _reindex_once(self) -> None:
+        stale = self._indexer.dirty_set()
+        no_work = (
+            not stale.full_reindex_required and not stale.dirty_files and not stale.deleted_files
+        )
+        if no_work:
+            return
+        if stale.full_reindex_required:
+            new_dir = self._indexer.run()
+        else:
+            new_dir = self._indexer.run_incremental(stale)
+        self._swap(new_dir)
+        self._bus.publish_swap(str(new_dir))
+        log.info("background reindex complete (%s) -> %s", stale.reason, new_dir)
