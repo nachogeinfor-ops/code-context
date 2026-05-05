@@ -182,16 +182,36 @@ def safe_reindex(cfg: Config, indexer: IndexerUseCase) -> Path:
         ) from exc
 
 
-def ensure_index(cfg: Config, indexer: IndexerUseCase, store: NumPyParquetStore) -> None:
+def ensure_index(
+    cfg: Config,
+    indexer: IndexerUseCase,
+    store: NumPyParquetStore,
+    keyword_index: KeywordIndex,
+) -> None:
     if not indexer.is_stale():
         current = indexer.current_index_dir()
         if current is not None:
             log.info("loading existing index from %s", current)
             store.load(current)
+            try:
+                keyword_index.load(current)
+            except FileNotFoundError:
+                # Pre-Sprint-3 indexes don't have keyword.sqlite. Trigger a
+                # rebuild so the keyword leg becomes populated. is_stale()
+                # would have caught this if the prior run had stamped a
+                # keyword_version, but old metadata predates that field.
+                log.info(
+                    "keyword index missing in %s; reindexing to backfill",
+                    current,
+                )
+                new_dir = safe_reindex(cfg, indexer)
+                store.load(new_dir)
+                keyword_index.load(new_dir)
             return
     log.info("index missing or stale; reindexing synchronously")
     new_dir = safe_reindex(cfg, indexer)
     store.load(new_dir)
+    keyword_index.load(new_dir)
 
 
 def setup_logging(cfg: Config) -> None:
