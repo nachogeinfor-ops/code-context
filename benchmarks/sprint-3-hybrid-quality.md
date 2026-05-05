@@ -6,6 +6,53 @@
 > `sprint-2-embedding-quality.md`. Seeds the v1.0.0 NDCG@10 + p95 SLO
 > eval suite that lands in Sprint 8.
 
+## Partial smoke — v0.4.1 hotfix verification (2026-05-05)
+
+After the v0.4.1 hotfix (`.cs` added to `_DEFAULT_EXTENSIONS`), the maintainer
+ran two ad-hoc queries against `WinServiceScheduler` (304 files, 2219 chunks,
+v0.4.0 hybrid configuration). The full 10-query × 3-config grid below is
+still pending; what follows is the first concrete evidence that hybrid
+retrieval works end-to-end on a real C#-heavy repo.
+
+**Query 1 — pure identifier search.** Maps to the "exact-symbol" use case
+that hybrid was designed for. The top-1 score (`0.033 ≈ 2/61`) corresponds
+to RRF having received the same chunk at rank 0 from BOTH the vector leg
+AND the keyword leg. That doubled contribution is exactly the win the
+sprint promised.
+
+| # | Query | Top-1 path | Top-2 path | Top-3 path | Expected (definition) in top-3? |
+|---|---|---|---|---|---|
+| A | `BushidoLogScannerAdapter` | `GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogScannerAdapter.cs:37-47` (`public BushidoLogScannerAdapter()` ctor) — score **0.033** | `GeinforScheduler.Tests/Unit/Infrastructure/BushidoLogs/BushidoLogScannerAdapterTests.cs:36-43` (`[Fact]`) — score **0.032** | `GeinforScheduler.Tests/.../BushidoLogScannerAdapterTests.cs:15-207` (`public class BushidoLogScannerAdapterTests`) — score **0.030** | ✅ top-1 = the file with the constructor |
+
+**Query 2 — semi-conceptual.** The query string `where do we register services`
+contains one literal token (`services`) plus three discourse words. The
+keyword leg matches `services` densely; the vector leg is supposed to
+soften the literalness. The top-3 returns the right code file
+(`ServiceCollectionExtensions.cs`) at ranks 2 and 3 alongside a `.md` plan
+that quotes the same code. All three results print at score `0.016 ≈ 1/63`,
+which means each was contributed by ONLY ONE leg (no overlap between vector
+and keyword top-9 pools) — RRF still finds the right files but doesn't get
+the doubled-confidence top-1 it does on Query A.
+
+| # | Query | Top-1 path | Top-2 path | Top-3 path | Real DI-registration code in top-3? |
+|---|---|---|---|---|---|
+| B | `where do we register services` | `plans/2026-04-20-cleanup-and-refactor.md:1081-1130` (`services.AddGeinforConfiguration(...)` quote in plan) — score **0.016** | `GeinforScheduler/Infrastructure/ServiceCollectionExtensions.cs:41-51` (`public static IServiceCollection AddGeinforConfiguration()`) — score **0.016** | `GeinforScheduler/Infrastructure/ServiceCollectionExtensions.cs:24-34` (`public static IServiceCollection AddGeinforLogging()`) — score **0.016** | ✅ ranks 2 and 3 are the real `.cs` extension methods |
+
+**Reading the contrast.** Query A demonstrates hybrid working at full
+strength (both legs agree → top-1 score is twice the single-leg score).
+Query B demonstrates the *expected* limitation of MiniLM-L6-v2 on
+semi-conceptual code search: the vector leg can't separate "the file
+that registers DI services" from "a markdown plan that documents the
+same code". The fix is a code-tuned embedding (planned for v0.6+);
+RRF + BM25 will compose with it for free.
+
+This partial result is enough to **declare Sprint 3 functionally
+correct on real data**. The full 3-config grid below still needs to
+be filled to land the formal MRR / p50 / p95 numbers and to decide
+whether `CC_RERANK=on` is worth promoting to default in v0.5+.
+
+---
+
 ## Setup
 
 - code-context: HEAD of v0.4.0 (this sprint's work).
