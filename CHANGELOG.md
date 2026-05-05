@@ -2,7 +2,31 @@
 
 ## v1.0.0 — 2026-05-05
 
-**First stable release.** Available on PyPI: `pip install code-context`.
+**First stable release.** Available on PyPI: `pip install code-context-mcp`.
+
+### Naming note
+
+The PyPI distribution is **`code-context-mcp`**. The unhyphenated
+`code-context` name was claimed in November 2023 by an unrelated,
+abandoned project ("Agent Management System framework" by Team
+Dotagent — a single release, no project URLs, no activity since).
+We chose `code-context-mcp` — same project, namespace-suffixed
+with what it is — over reclaiming the squat (would take weeks
+through PyPI's abandoned-name process and isn't viable for
+shipping today).
+
+What stays the same:
+
+- **GitHub repo**: `nachogeinfor-ops/code-context` (canonical).
+- **Python module**: `from code_context import ...`.
+- **CLI binaries**: `code-context` (admin) and
+  `code-context-server` (MCP transport).
+- **`CC_*` env vars**: every name unchanged.
+
+What changes:
+
+- `pip install code-context-mcp` (was: `pip install code-context`,
+  which resolves to the squat — don't install that one).
 
 The v0.x line shipped the engineering — tree-sitter chunker, hybrid
 retrieval, symbol tools, tree/diff tools, incremental reindex,
@@ -45,8 +69,21 @@ Internal modules (`code_context.adapters.*`, `code_context.domain.*`,
 - **Eval suite** under `benchmarks/eval/`: 35 hand-curated queries
   against `WinServiceScheduler`; `runner.py` produces per-query
   CSV plus NDCG@10 / MRR / hit@1 / hit@10 / latency p50/p95.
-  Three configs (vector-only, hybrid, hybrid+rerank) measured;
-  the regression baseline lives in `benchmarks/eval/results/`.
+  Three configs measured against v1.0.0:
+  - vector_only: NDCG@10 **0.4384**, MRR 0.3596, p50 23 ms.
+  - hybrid: NDCG@10 0.4172, MRR 0.3420, p50 282 ms.
+  - hybrid_rerank: NDCG@10 **0.4641**, MRR **0.3924**, p50 6.3 s.
+  Per-query CSVs in `benchmarks/eval/results/v1.0.0_*.csv`;
+  full analysis in `benchmarks/eval/README.md`.
+- **fix(adapter): FTS5 sanitiser handles punctuation.** Caught by
+  the eval suite's first run: 3/35 queries with `.` / `-` / `:`
+  in them silently raised `OperationalError` inside FTS5 and
+  returned [] from the keyword leg (e.g. "how is settings.json
+  loaded"). The sanitiser now strips non-word characters before
+  the FTS5 parser sees them. AND-of-tokens semantics preserved
+  (an OR-of-tokens variant was tried and reverted — over-recall
+  dropped hybrid NDCG@10 to 0.31). Regression test in
+  `tests/unit/adapters/test_keyword_index_sqlite.py`.
 
 ### v0.x highlights (recap)
 
@@ -62,8 +99,9 @@ Internal modules (`code_context.adapters.*`, `code_context.domain.*`,
 
 ### Tests
 
-254 tests across unit + integration + contract suites. CI runs
-ruff lint + ruff format + pytest on every push to `main`.
+255 tests across unit + integration + contract suites (+1
+regression test for the FTS5 punctuation fix over v0.9.0). CI
+runs ruff lint + ruff format + pytest on every push to `main`.
 
 ### Stability commitment
 

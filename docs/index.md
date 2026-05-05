@@ -4,7 +4,7 @@
 
 ## Get started
 
-- **[Quickstart](../README.md#quickstart)** — `pip install code-context`, then `claude mcp add code-context --command code-context-server`. Two commands, ~30 seconds.
+- **[Quickstart](../README.md#quickstart)** — `pip install code-context-mcp`, then `claude mcp add code-context --command code-context-server`. Two commands, ~30 seconds.
 - **[Making Claude actually use these tools](../README.md#making-claude-actually-use-these-tools)** — copy-paste paragraph for your project's `CLAUDE.md` so Claude reaches for the MCP tools instead of `Bash`.
 - **[Configuration](configuration.md)** — every `CC_*` env var with examples (chunker strategies, hybrid search toggles, watch mode, …).
 

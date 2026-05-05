@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: release
-      url: https://pypi.org/p/code-context
+      url: https://pypi.org/p/code-context-mcp
     permissions:
       id-token: write   # OIDC for PyPI Trusted Publisher
     steps:

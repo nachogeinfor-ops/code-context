@@ -9,16 +9,23 @@ based on an OIDC token, not a long-lived API key. Zero secrets to
 manage; rotate-by-not-rotating.
 
 1. **Have a PyPI account.** Either the org's `nachogeinfor-ops`
-   account or a personal account that owns the `code-context`
+   account or a personal account that owns the `code-context-mcp`
    project name. The first manual upload of a brand-new project
    name has to come from a logged-in account; from then on, the
    GitHub Actions workflow takes over.
+
+   The unhyphenated `code-context` PyPI name is squatted by an
+   abandoned 2023 project; we publish under `code-context-mcp`
+   instead. The Python module, CLI binaries, and GitHub repo are
+   all still `code-context` / `code_context`. See
+   [`v1-api.md`](v1-api.md#names-at-a-glance) for the full naming
+   table.
 
 2. **Register the Trusted Publisher** at
    https://pypi.org/manage/account/publishing/ (you must be logged
    in to the same account that owns / will own the project). Fill
    in:
-   - **PyPI Project Name**: `code-context`
+   - **PyPI Project Name**: `code-context-mcp`
    - **Owner**: `nachogeinfor-ops`
    - **Repository name**: `code-context`
    - **Workflow filename**: `release.yml`
@@ -58,8 +65,8 @@ rotate.
    The `build` job produces `code_context-X.Y.Z-py3-none-any.whl`
    and `code_context-X.Y.Z.tar.gz`; the `publish` job uploads them
    to PyPI.
-8. Verify https://pypi.org/project/code-context/ shows the new
-   version (refresh after a few seconds).
+8. Verify https://pypi.org/project/code-context-mcp/ shows the
+   new version (refresh after a few seconds).
 9. Create the GitHub release:
    ```bash
    gh release create vX.Y.Z --title "vX.Y.Z" --notes-from-tag
@@ -99,7 +106,7 @@ If a published version turns out to have a critical bug:
 2. On PyPI's project page, mark the bad version as "yanked" with
    a reason. Yanking is preferred over deletion because it leaves
    the version reachable for anyone pinning it but stops new
-   `pip install code-context` from picking it up.
+   `pip install code-context-mcp` from picking it up.
 3. Add a CHANGELOG note under the yanked version explaining what
    was broken and which version supersedes it.
 

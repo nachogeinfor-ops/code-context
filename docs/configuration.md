@@ -301,7 +301,7 @@ behavior). The default is on.
 
 ### Live mode (`CC_WATCH=on`)
 
-Requires `pip install code-context[watch]` (adds `watchdog>=4`).
+Requires `pip install code-context-mcp[watch]` (adds `watchdog>=4`).
 Setting `CC_WATCH=on` without the extra is a no-op with a warning
 log — not a crash.
 
@@ -315,7 +315,7 @@ reflected in the live index within ~1.5 s of save, without manual
 `code-context reindex`.
 
 ```bash
-pip install code-context[watch]
+pip install code-context-mcp[watch]
 export CC_WATCH=on
 export CC_WATCH_DEBOUNCE_MS=500   # snappier feedback at the cost of more wakeups
 claude mcp add code-context --command code-context-server

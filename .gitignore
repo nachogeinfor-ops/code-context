@@ -22,3 +22,10 @@ Thumbs.db
 
 # code-context cache (when in-repo override is used)
 .code-context/
+
+# Eval suite per-run output (reproducible; baseline numbers live in
+# benchmarks/eval/README.md, not in committed CSVs).
+benchmarks/eval/results/
+
+# Local build artifacts from `python -m build`
+dist_test/

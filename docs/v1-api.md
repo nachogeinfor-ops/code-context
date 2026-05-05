@@ -5,6 +5,24 @@ keeping backwards-compatible. Anything **not** listed here is
 internal and may change in any 1.x patch / minor release without
 notice.
 
+## Names at a glance
+
+| What | Name | Stable since |
+|---|---|---|
+| PyPI distribution | `code-context-mcp` | v1.0.0 |
+| Python module / imports | `code_context` | v0.1 |
+| Admin CLI binary | `code-context` | v0.1 |
+| MCP server binary | `code-context-server` | v0.1 |
+| GitHub repository | `nachogeinfor-ops/code-context` | v0.1 |
+
+The PyPI name and the GitHub repo name diverge for one reason:
+the unhyphenated `code-context` PyPI name was squatted in 2023 by
+an unrelated abandoned project. The Python / CLI / repo names are
+the canonical "code-context" identity; the PyPI distribution is
+suffixed with `-mcp` to claim a clean namespace. See
+[`../CHANGELOG.md`](../CHANGELOG.md) under v1.0.0 for the full
+backstory.
+
 ## Stability commitment
 
 - Adding a new MCP tool, env var, CLI subcommand, or optional
@@ -80,7 +98,8 @@ binaries there.
 
 ## Python imports
 
-Stable:
+Stable (note: module name is `code_context`, distribution name is
+`code-context-mcp`):
 
 ```python
 from code_context import __version__

@@ -1,8 +1,8 @@
 # code-context
 
-[![PyPI](https://img.shields.io/pypi/v/code-context.svg)](https://pypi.org/project/code-context/)
+[![PyPI](https://img.shields.io/pypi/v/code-context-mcp.svg)](https://pypi.org/project/code-context-mcp/)
 [![CI](https://github.com/nachogeinfor-ops/code-context/actions/workflows/ci.yml/badge.svg)](https://github.com/nachogeinfor-ops/code-context/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/pypi/pyversions/code-context.svg)](https://pypi.org/project/code-context/)
+[![Python](https://img.shields.io/pypi/pyversions/code-context-mcp.svg)](https://pypi.org/project/code-context-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Status: stable (v1.0.0).** A Python MCP server with local RAG
@@ -27,10 +27,12 @@ Architecture: hexagonal (ports & adapters). 9 driven ports with default implemen
 ## Install
 
 ```bash
-pip install code-context
+pip install code-context-mcp
 # or, if you don't want torch (~2 GB), use the OpenAI embeddings backend:
-pip install code-context[openai]
+pip install code-context-mcp[openai]
 ```
+
+> The PyPI distribution is **`code-context-mcp`** (the unhyphenated `code-context` name was squatted by an unrelated, abandoned project from 2023; see CHANGELOG for context). The Python module is still `code_context` and the CLI binaries are still `code-context` and `code-context-server`, so quickstart commands and `from code_context import ...` are unchanged.
 
 > Note: the default install pulls `sentence-transformers` + the `all-MiniLM-L6-v2` model on first run. Plan for ~2 GB of disk after first reindex (torch ≈ 2 GB, model ≈ 90 MB). Use the `[openai]` extra to avoid torch entirely.
 
@@ -52,7 +54,7 @@ If you want every save in the repo to flow into the index without
 manual `code-context reindex`:
 
 ```bash
-pip install code-context[watch]   # adds watchdog
+pip install code-context-mcp[watch]   # adds watchdog
 export CC_WATCH=on
 claude mcp add code-context --command code-context-server
 ```
