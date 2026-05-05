@@ -1,5 +1,78 @@
 # Changelog
 
+## v1.0.0 — 2026-05-05
+
+**First stable release.** Available on PyPI: `pip install code-context`.
+
+The v0.x line shipped the engineering — tree-sitter chunker, hybrid
+retrieval, symbol tools, tree/diff tools, incremental reindex,
+background reindex with optional live mode. v1.0.0 freezes the
+public surface, ships an NDCG@10 / MRR / latency eval suite as the
+regression net for v1.x, and adds a Trusted Publisher GitHub
+Actions workflow so future tags publish themselves to PyPI without
+secrets.
+
+### What's stable in v1
+
+Everything in [`docs/v1-api.md`](docs/v1-api.md) is covered by
+backwards-compatibility for the entire v1.x line:
+
+- **7 MCP tools** (Tool Protocol v1.2): `search_repo`,
+  `recent_changes`, `get_summary`, `find_definition`,
+  `find_references`, `get_file_tree`, `explain_diff`.
+- **19 `CC_*` env vars** with documented defaults and
+  stable-since versions.
+- **CLI**: `status`, `reindex [--force]`, `query`, `clear`.
+- **Public Python imports**: `code_context.__version__`,
+  `code_context.config.{Config, load_config}`.
+- **Cache layout**: `<cache>/<repo-hash>/index-<sha>-<ts>/{vectors.npy,
+  chunks.parquet, keyword.sqlite, symbols.sqlite, metadata.json}`
+  with `metadata.json` schema v2.
+
+Internal modules (`code_context.adapters.*`, `code_context.domain.*`,
+`code_context._composition`, `code_context._background`,
+`code_context._watcher`) explicitly stay free to evolve in v1.x.
+
+### Behavior changes since v0.9.0
+
+- **PyPI distribution**: `release.yml` GitHub Actions workflow
+  builds wheel + sdist on every `v*` tag and uploads via OIDC
+  Trusted Publisher. No secrets stored.
+- **`pyproject.toml` polish**: `Development Status` bumped to
+  `5 - Production/Stable`; OS classifiers (Linux, macOS, Windows);
+  Python 3.11 / 3.12 / 3.13 classifiers; topic tags; multiple
+  project URLs (Documentation, Issues, Changelog, Tool Protocol).
+- **Eval suite** under `benchmarks/eval/`: 35 hand-curated queries
+  against `WinServiceScheduler`; `runner.py` produces per-query
+  CSV plus NDCG@10 / MRR / hit@1 / hit@10 / latency p50/p95.
+  Three configs (vector-only, hybrid, hybrid+rerank) measured;
+  the regression baseline lives in `benchmarks/eval/results/`.
+
+### v0.x highlights (recap)
+
+| Sprint | Version | Theme |
+|---|---|---|
+| 1 | v0.2.0 | Tree-sitter AST chunker for 5 languages + line fallback |
+| 2 | v0.3.0 | Code-trained embeddings + retrieval benchmark scaffold |
+| 3 | v0.4.0 | Hybrid retrieval: vector + BM25 (FTS5) + RRF + optional cross-encoder rerank |
+| 4 | v0.5.0 | `find_definition` / `find_references` (Tool Protocol v1.1) |
+| 5 | v0.6.0 / v0.7.x | `get_file_tree` / `explain_diff` (Tool Protocol v1.2) + UTF-8 git fix + introspector hardening |
+| 6 | v0.8.0 | Incremental reindex (per-file SHA tracking) — 38× edit-cycle speedup |
+| 7 | v0.9.0 | Background reindex thread + optional live mode (`CC_WATCH=on`) — foreground startup ~457 ms warm |
+
+### Tests
+
+254 tests across unit + integration + contract suites. CI runs
+ruff lint + ruff format + pytest on every push to `main`.
+
+### Stability commitment
+
+v1.x will only **add** to the public API listed in
+[`docs/v1-api.md`](docs/v1-api.md). Adding a new MCP tool, env var,
+or CLI subcommand is a minor bump (v1.X.0). Removing or renaming
+any of them is a major bump (v2.0.0). Internal adapters / use cases
+/ ports may evolve freely in 1.x.
+
 ## v0.9.0 — 2026-05-05
 
 Sprint 7 ships. **Background reindex + optional live mode.** The
