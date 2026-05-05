@@ -60,3 +60,9 @@ def test_chunker_strategy_overridden_by_env(tmp_path: Path) -> None:
     with patch.dict(os.environ, {"CC_CHUNKER": "line"}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
     assert cfg.chunker_strategy == "line"
+
+
+def test_default_embeddings_model_is_bge_code(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.embeddings_model == "BAAI/bge-code-v1.5"

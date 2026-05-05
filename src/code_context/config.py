@@ -54,7 +54,9 @@ def load_config(default_repo_root: Path | None = None) -> Config:
     repo_root = Path(os.environ.get("CC_REPO_ROOT") or default_repo_root or Path.cwd())
     embeddings = os.environ.get("CC_EMBEDDINGS", "local")
 
-    default_model = "all-MiniLM-L6-v2" if embeddings == "local" else "text-embedding-3-small"
+    default_model = (
+        "BAAI/bge-code-v1.5" if embeddings == "local" else "text-embedding-3-small"
+    )
     model = os.environ.get("CC_EMBEDDINGS_MODEL", default_model)
 
     cache_override = os.environ.get("CC_CACHE_DIR")
