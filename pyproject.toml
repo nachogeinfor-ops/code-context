@@ -12,11 +12,18 @@ requires-python = ">=3.11"
 authors = [{ name = "code-context contributors" }]
 keywords = ["claude-code", "mcp", "rag", "developer-tools"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Text Processing :: Indexing",
 ]
 dependencies = [
   "mcp>=1.0",
@@ -46,6 +53,10 @@ code-context-server = "code_context.server:main"
 
 [project.urls]
 Homepage = "https://github.com/nachogeinfor-ops/code-context"
+Documentation = "https://github.com/nachogeinfor-ops/code-context#readme"
+Issues = "https://github.com/nachogeinfor-ops/code-context/issues"
+Changelog = "https://github.com/nachogeinfor-ops/code-context/blob/main/CHANGELOG.md"
+"Tool Protocol" = "https://github.com/nachogeinfor-ops/context-template/blob/main/docs/tool-protocol.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
