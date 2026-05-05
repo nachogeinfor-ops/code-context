@@ -1,5 +1,90 @@
 # Changelog
 
+## v0.7.0 — 2026-05-05
+
+Sprint 5 ships. Two more MCP tools that close the remaining "Claude
+bypassed the MCP" gaps from previous smoke history:
+
+- **`get_file_tree(path?, max_depth?, include_hidden?)`** — repo-relative
+  directory tree, gitignore-aware. Replaces `Bash: ls -R` / `Bash: tree`
+  for orientation prompts.
+- **`explain_diff(ref, max_chunks?)`** — AST-aligned chunks affected by
+  the diff at `ref` (full SHA, `HEAD`, `HEAD~N`, branch name). Replaces
+  `Bash: git show <sha>` for "what does this commit do" questions; the
+  chunker resolves whole functions / classes that were touched, not raw
+  line additions.
+
+The Tool Protocol contract bumps from **v1.1** to **v1.2** (additive,
+no breaking changes); upstream
+[`context-template` v0.3.0](https://github.com/nachogeinfor-ops/context-template/releases/tag/v0.3.0)
+is the matching reference. Servers built for v1 / v1.1 remain
+compatible — the bump is additive, so a server lacking the new tools
+simply doesn't expose them.
+
+After Sprint 5, the MCP server exposes **7 tools**: the original 3
+(`search_repo`, `recent_changes`, `get_summary`) + Sprint 4's 2
+(`find_definition`, `find_references`) + this sprint's 2.
+
+### Behavior
+
+- feat(domain): three new frozen+slots dataclasses — `FileTreeNode`
+  (path, kind, children, size), `DiffFile` (path, hunks; internal type
+  returned by `GitSource.diff_files`), and `DiffChunk` (path, lines,
+  snippet, kind, change). All field-for-field compatible with the
+  v1.2 contract.
+- feat(domain): `CodeSource` Protocol grows `walk_tree(root, max_depth,
+  include_hidden, subpath)` returning `FileTreeNode`. `GitSource`
+  Protocol grows `diff_files(root, ref)` returning `list[DiffFile]`.
+  Both additive — existing implementers (`FilesystemSource`,
+  `GitCliSource`) gain the new methods; existing call sites unaffected.
+- feat(adapter): `FilesystemSource.walk_tree` reuses the existing
+  `_load_gitignore` logic; honors `max_depth` (root depth 0; cap empties
+  dir children); skips hidden names (dot-prefix) by default; sorts
+  children dirs-first then alphabetical; refuses to walk outside the
+  root.
+- feat(adapter): `GitCliSource.diff_files` shells out to `git diff
+  <ref>^! --unified=0` to get hunks; falls back to `git diff --root`
+  for the initial commit. Parses unified-diff hunk headers to extract
+  `(new_start, new_end)` ranges. Returns `[]` for non-repo or
+  git-failure.
+- feat(domain): `GetFileTreeUseCase` and `ExplainDiffUseCase` — thin
+  delegates over the ports, mirroring the
+  `RecentChangesUseCase` / `GetSummaryUseCase` pattern.
+- feat(driving): MCP server registers the 2 new tools with prescriptive
+  descriptions ("Use INSTEAD of `Bash: ls -R`/`Bash: git show`").
+  `_serialize_tree_node` recursively flattens `FileTreeNode` to JSON
+  for the wire format.
+- test(contract): `EXPECTED_TOOLS` now declares 7 tools. Two new
+  param-shape tests pin `get_file_tree(path?, max_depth?,
+  include_hidden?)` and `explain_diff(ref, max_chunks?)`. The contract
+  test fetches live `tool-protocol.md` from upstream `context-template`
+  v0.3.0.
+- test(integration): 5 new tests against real fs + real git — tree
+  shape, subpath filter, max_depth cap, real-commit diff produces a
+  DiffChunk pointing at the modified function, non-repo returns [].
+- docs: README "What it does" lists 7 tools; CLAUDE.md hint section
+  grows two bullets pointing at the new tools. New "Tree and diff
+  tools" section in `docs/configuration.md` explaining the
+  no-config-toggles design.
+- benchmarks: `benchmarks/sprint-5-tree-and-diff-tools.md` —
+  methodology + 5-prompt manual smoke template (project structure,
+  subdir, last commit, commit-summarization, ambiguous "where are
+  config files"). Tables to be filled by the maintainer during smoke.
+
+### Tests
+
+- 188 passing total (added 19 across unit + integration: models +
+  use cases + adapter walk_tree (5) + adapter diff_files (2) + use
+  case mocks (5) + contract param-shape (2) + integration real
+  fs/git (5)).
+
+### Tool Protocol contract bump
+
+This release is the **reference implementation** of Tool Protocol
+v1.2. Upstream `context-template` shipped v0.3.0 first so the
+contract test (`tests/contract/test_contract.py`) could fetch the
+live `tool-protocol.md` and validate the 7-tool set.
+
 ## v0.6.2 — 2026-05-05
 
 Hotfix. `find_references` was emitting one `SymbolRef` per matching
