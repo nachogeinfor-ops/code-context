@@ -1,4 +1,22 @@
-"""code-context-server entry: composition root + MCP stdio runner."""
+"""code-context-server entry: composition root + MCP stdio runner.
+
+Sprint 7 changes the startup shape:
+
+- **Foreground**: build the runtime, fast-load whatever index exists
+  on disk (no synchronous reindex), register MCP tools, run stdio.
+  Total time on a previously-indexed repo: ~1 s (model load + npy +
+  2× sqlite-to-memory). On a cache-cold repo: <100 ms (the foreground
+  has nothing to load yet; first queries return empty until bg
+  finishes).
+- **Background**: a BackgroundIndexer daemon thread runs dirty_set +
+  run_incremental (or full reindex) and publishes swap events to the
+  IndexUpdateBus. SearchRepoUseCase reloads its store handles on the
+  next query after each swap, transparently.
+
+The user pays the cold-reindex cost only on first install (or after
+a model upgrade); ongoing edit cycles are sub-10 s and run while
+Claude is asking other questions.
+"""
 
 from __future__ import annotations
 
@@ -9,21 +27,48 @@ import sys
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
+from code_context._background import BackgroundIndexer
 from code_context._composition import (
+    atomic_swap_current,
     build_indexer_and_store,
     build_use_cases,
     ensure_index,
+    fast_load_existing_index,
+    make_reload_callback,
     setup_logging,
 )
 from code_context.adapters.driving.mcp_server import register
 from code_context.config import Config, load_config
+from code_context.domain.index_bus import IndexUpdateBus
 
 log = logging.getLogger("code_context")
 
 
 async def _run_server(cfg: Config) -> None:
     indexer, store, embeddings, keyword_index, symbol_index = build_indexer_and_store(cfg)
-    ensure_index(cfg, indexer, store, keyword_index, symbol_index)
+    bus = IndexUpdateBus()
+
+    # Foreground: load whatever index exists right now. No reindex. If the
+    # cache is empty, queries return [] until the bg thread finishes the
+    # first reindex; SearchRepoUseCase's bus-driven reload makes that
+    # transition transparent.
+    loaded = fast_load_existing_index(indexer, store, keyword_index, symbol_index)
+    if loaded:
+        log.info("loaded existing index from %s", indexer.current_index_dir())
+    elif not cfg.bg_reindex:
+        # Background reindex disabled (CC_BG_REINDEX=off) AND no index on
+        # disk. Fall back to the v0.7-style synchronous reindex so the
+        # server is functional after startup.
+        log.info("no existing index and bg_reindex=off; running synchronous reindex")
+        ensure_index(cfg, indexer, store, keyword_index, symbol_index)
+    else:
+        log.info(
+            "no existing index — first queries will return [] until the "
+            "background reindex finishes (~%d s on a typical repo)",
+            60,
+        )
+
+    reload_cb = make_reload_callback(indexer, store, keyword_index, symbol_index)
     search, recent, summary, find_def, find_ref, file_tree, explain_diff = build_use_cases(
         cfg,
         indexer,
@@ -31,7 +76,21 @@ async def _run_server(cfg: Config) -> None:
         embeddings,
         keyword_index,
         symbol_index,
+        bus=bus,
+        reload_callback=reload_cb,
     )
+
+    bg = None
+    if cfg.bg_reindex:
+        bg = BackgroundIndexer(
+            indexer=indexer,
+            swap=lambda new_dir: atomic_swap_current(cfg, new_dir),
+            bus=bus,
+            idle_seconds=cfg.bg_idle_seconds,
+        )
+        bg.start()
+        bg.trigger()  # kick off initial dirty_set + (full or incremental) reindex
+        log.info("background indexer started (idle=%.2fs)", cfg.bg_idle_seconds)
 
     server = Server("code-context")
     register(
@@ -45,8 +104,13 @@ async def _run_server(cfg: Config) -> None:
         explain_diff=explain_diff,
     )
 
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+    finally:
+        if bg is not None:
+            log.info("stopping background indexer")
+            bg.stop(timeout=10.0)
 
 
 def main() -> int:

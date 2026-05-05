@@ -49,6 +49,14 @@ class Config:
     rerank_model: str | None
     symbol_index_strategy: str  # "sqlite" (default) or "none"
     trust_remote_code: bool  # Off by default. Required for some HF models that ship custom Python.
+    # Sprint 7 — background reindex thread (default ON). Coalesce window
+    # for trigger storms.
+    bg_reindex: bool = True
+    bg_idle_seconds: float = 1.0
+    # Sprint 7 — optional file-system watcher (off by default; needs
+    # the [watch] extra installed).
+    watch: bool = False
+    watch_debounce_ms: int = 1000
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -99,4 +107,8 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         symbol_index_strategy=os.environ.get("CC_SYMBOL_INDEX", "sqlite"),
         trust_remote_code=os.environ.get("CC_TRUST_REMOTE_CODE", "off").lower()
         in ("on", "true", "1"),
+        bg_reindex=os.environ.get("CC_BG_REINDEX", "on").lower() in ("on", "true", "1"),
+        bg_idle_seconds=float(os.environ.get("CC_BG_IDLE_SECONDS", "1.0")),
+        watch=os.environ.get("CC_WATCH", "off").lower() in ("on", "true", "1"),
+        watch_debounce_ms=int(os.environ.get("CC_WATCH_DEBOUNCE_MS", "1000")),
     )

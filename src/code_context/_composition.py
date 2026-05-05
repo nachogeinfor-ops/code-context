@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from code_context.adapters.driven.chunker_dispatcher import ChunkerDispatcher
@@ -20,6 +21,7 @@ from code_context.adapters.driven.reranker_crossencoder import CrossEncoderReran
 from code_context.adapters.driven.symbol_index_sqlite import SymbolIndexSqlite
 from code_context.adapters.driven.vector_store_numpy import NumPyParquetStore
 from code_context.config import Config
+from code_context.domain.index_bus import IndexUpdateBus
 from code_context.domain.models import StaleSet
 from code_context.domain.ports import (
     Chunker,
@@ -209,6 +211,8 @@ def build_use_cases(
     embeddings: EmbeddingsProvider,
     keyword_index: KeywordIndex,
     symbol_index: SymbolIndex,
+    bus: IndexUpdateBus | None = None,
+    reload_callback: Callable[[], None] | None = None,
 ) -> tuple[
     SearchRepoUseCase,
     RecentChangesUseCase,
@@ -229,6 +233,8 @@ def build_use_cases(
             vector_store=store,
             keyword_index=keyword_index,
             reranker=reranker,
+            bus=bus,
+            reload_callback=reload_callback,
         ),
         RecentChangesUseCase(git_source=git_source, repo_root=cfg.repo_root),
         GetSummaryUseCase(introspector=introspector, repo_root=cfg.repo_root),
@@ -242,6 +248,80 @@ def build_use_cases(
             repo_root=cfg.repo_root,
         ),
     )
+
+
+def make_reload_callback(
+    indexer: IndexerUseCase,
+    store: NumPyParquetStore,
+    keyword_index: KeywordIndex,
+    symbol_index: SymbolIndex,
+) -> Callable[[], None]:
+    """Build the closure that SearchRepoUseCase fires on bus drift.
+
+    Reloads all 3 stores from whatever current.json says is active.
+    No-op if there's no current index yet (cold-start case where
+    the bg indexer hasn't published its first swap). Returns None
+    so the use case's reload-on-tick path remains side-effects-only.
+    """
+
+    def _reload() -> None:
+        active = indexer.current_index_dir()
+        if active is None or not active.exists():
+            return
+        store.load(active)
+        try:
+            keyword_index.load(active)
+            symbol_index.load(active)
+        except FileNotFoundError:
+            # Reindex was published but one of the stores' files isn't
+            # there yet (race between persist + swap); next bus tick
+            # will reload again.
+            log.warning(
+                "reload: keyword/symbol index missing in %s; will retry next swap",
+                active,
+            )
+
+    return _reload
+
+
+def fast_load_existing_index(
+    indexer: IndexerUseCase,
+    store: NumPyParquetStore,
+    keyword_index: KeywordIndex,
+    symbol_index: SymbolIndex,
+) -> bool:
+    """Sprint 7: load whatever's already on disk WITHOUT triggering a
+    reindex. Returns True if all 3 stores loaded successfully, False
+    if the cache is empty / partial — caller should fall back to
+    `ensure_index` (synchronous reindex) or rely on the bg indexer to
+    populate fresh.
+    """
+    active = indexer.current_index_dir()
+    if active is None or not active.exists():
+        return False
+    try:
+        store.load(active)
+        keyword_index.load(active)
+        symbol_index.load(active)
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def atomic_swap_current(cfg: Config, new_dir: Path) -> None:
+    """Update current.json to point at `new_dir.name`, atomically.
+
+    The bg indexer's swap callback. Mirrors the inline swap in
+    safe_reindex(); split out so the BackgroundIndexer can use it
+    directly without re-acquiring the file lock (the bg thread already
+    holds the lock during its run_incremental call when invoked via
+    safe_reindex; but when we wire it directly to the bg thread we
+    need a thinner helper that just updates current.json).
+    """
+    current_path = cfg.repo_cache_subdir() / "current.json"
+    tmp = current_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"active": new_dir.name, "version": 1}))
+    os.replace(tmp, current_path)
 
 
 def _lock_path(cfg: Config) -> Path:
