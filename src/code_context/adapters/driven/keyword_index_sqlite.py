@@ -178,29 +178,29 @@ class SqliteFTS5Index:
 
 
 def _sanitise(query: str) -> str:
-    """Strip FTS5 syntax and convert the query into an OR-of-tokens.
+    """Strip FTS5 syntax so user input never reaches the query parser
+    as anything other than bare whitespace-separated tokens.
 
     Caught by Sprint 8's eval suite: 3/35 queries with periods or
-    hyphens silently returned [] from the sanitiser-as-was; a deeper
-    issue surfaced after that fix — FTS5 combines bare tokens with
-    implicit AND, so long natural-language queries with 5+ tokens
-    rarely matched anything (e.g. "how is settings.json loaded"
-    requires every doc to contain "how", "is", "settings", "json",
-    "loaded"). BM25 ranking is what we actually want: match any doc
-    with any token, rank by overlap density. So we explicitly join
-    the tokens with ` OR `.
+    hyphens silently returned [] from the sanitiser-as-was — `.`,
+    `-`, `:` are FTS5 query syntax even though they're tokenized
+    away in indexed text by unicode61.
 
     Steps:
-    1. Drop every non-word, non-whitespace char (FTS5 reads `.` `-`
-       `:` `*` `"` `(` `)` as syntax even though indexed text accepts
-       them via unicode61 tokenization).
-    2. Drop the boolean operators (AND/OR/NOT/NEAR) — users writing
-       English shouldn't trigger them; we'll add our own OR back.
-    3. Tokenize on whitespace, drop empties, join with ` OR `.
+    1. Drop every non-word, non-whitespace char.
+    2. Drop the boolean operators (AND/OR/NOT/NEAR) so e.g.
+       "tracking changes and merges" doesn't accidentally parse as
+       `tracking changes AND merges`.
+    3. Collapse whitespace.
 
-    Single-token queries pass through unchanged ("foo" stays "foo").
+    The result is space-joined; FTS5 combines bare tokens with
+    implicit AND. We deliberately keep AND semantics: short queries
+    (1-3 tokens) get tight, high-precision matches; long
+    natural-language queries (5+ tokens) effectively return [] from
+    the keyword leg, leaving the vector leg to drive the result.
+    Sprint 8 eval confirmed that ORing tokens makes long-query
+    BM25 too noisy and hurts NDCG@10 by ~0.13.
     """
     cleaned = _FTS_KEEP_RE.sub(" ", query)
     cleaned = _FTS_BOOLEAN_RE.sub(" ", cleaned)
-    tokens = cleaned.split()
-    return " OR ".join(tokens)
+    return " ".join(cleaned.split())

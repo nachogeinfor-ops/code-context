@@ -256,16 +256,9 @@ class SymbolIndexSqlite:
 
 
 def _sanitise(query: str) -> str:
-    """Strip FTS5 syntax and convert the query into an OR-of-tokens.
-
-    See keyword_index_sqlite._sanitise for the full rationale.
-    SymbolIndex's find_references semantically already wants OR-style
-    matching (we MATCH on the symbol's name as a single identifier;
-    if the caller passes a multi-word query like "list bat files"
-    we want any doc with any of those tokens, then per-line filtering
-    inside find_references trims to actual hits).
-    """
+    """Strip FTS5 syntax so user input is bare tokens only. See
+    keyword_index_sqlite._sanitise for the rationale (Sprint 8 fix
+    for the punctuation-crashes-FTS5-parser bug)."""
     cleaned = _FTS_KEEP_RE.sub(" ", query)
     cleaned = _FTS_BOOLEAN_RE.sub(" ", cleaned)
-    tokens = cleaned.split()
-    return " OR ".join(tokens)
+    return " ".join(cleaned.split())
