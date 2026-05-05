@@ -1,5 +1,108 @@
 # Changelog
 
+## v0.8.0 — 2026-05-05
+
+Sprint 6 ships. **Incremental reindex** replaces the all-or-nothing
+"stale → full reindex" path with a per-file dirty-set verdict; only
+the files whose content SHA actually changed get re-embedded.
+On `WinServiceScheduler` (305 source files, 2220 chunks),
+edit-cycle reindex drops from ~3.7 minutes to **5.9 seconds**
+(38× speedup). Delete-only reindex: **2.6 seconds** (84×).
+
+### Behavior
+
+- **`StaleSet` domain model** — per-file dirty / deleted lists +
+  `full_reindex_required` flag + human-readable `reason` for logs
+  and `code-context status`. Frozen+slots, default empty tuples.
+- **`IndexerUseCase.dirty_set()`** — replaces `is_stale()`'s opaque
+  bool with the richer `StaleSet` verdict. Detects four invalidation
+  classes: no current index, no git repo, metadata schema upgrade
+  (v1 → v2), global version drift (embeddings model id, chunker,
+  keyword index, symbol index), per-file SHA-256 mismatch, vanished
+  paths. `is_stale()` is retained as a thin wrapper so existing
+  callers (CLI's stale-warning, composition root, MCP server) keep
+  working.
+- **`IndexerUseCase.run_incremental(stale)`** — loads the active
+  index, drops every row whose path is in `stale.deleted_files`,
+  re-chunks + re-embeds + re-extracts symbols only for the dirty
+  files, persists to a fresh index dir. Composition still owns the
+  atomic `current.json` swap. Falls back to `run()` when
+  `full_reindex_required`.
+- **Per-store `delete_by_path(path: str) -> int`** — new primitive
+  on `VectorStore`, `KeywordIndex`, `SymbolIndex`. NumPy store
+  rebuilds via boolean masking (and resets to None on empty so
+  search short-circuits cleanly). SQLite-backed keyword/symbol
+  stores run a parameterised DELETE; symbol store purges from BOTH
+  `symbol_defs` AND `symbol_refs_fts` and returns the combined
+  rowcount.
+- **`ensure_index` routing** — composition root computes the
+  StaleSet once at startup and threads it through `safe_reindex`.
+  Steady state: load only. Drift: full or incremental. Pre-Sprint-3
+  / pre-Sprint-4 self-heal path is preserved (a missing
+  keyword.sqlite or symbols.sqlite triggers a full reindex).
+- **CLI**: `code-context reindex` is now incremental by default and
+  prints the mode + reason
+  (`reindexed (incremental: 2 dirty, 0 deleted) -> ...`). Use
+  `--force` for the legacy "always full" behavior.
+  `code-context status` grows three rows: `dirty`, `deleted`,
+  `full_reindex_required`, plus the `reason` string.
+
+### Schema upgrade (auto, backwards-compatible)
+
+`metadata.json` schema bumps to **v2** (additive only:
+`file_hashes` map and `version: 2`). Pre-Sprint-6 caches (v1
+metadata) are detected by `dirty_set()` and trigger a one-time
+full reindex on the first v0.8.0 startup, populating the
+`file_hashes` baseline. No user action required.
+
+### Refactor: SQLite store load() now disk → :memory:
+
+`SqliteFTS5Index.load()` and `SymbolIndexSqlite.load()` previously
+opened the on-disk file directly. Sprint 6's incremental flow
+calls `delete_by_path` / `add` after `load`, then `persist(new_dir)`
+where `new_dir` shares its file with the just-loaded index. The
+direct-on-disk approach (a) wrote mutations to the active index
+file, breaking atomicity, and (b) deadlocked SQLite's backup-to-
+itself constraint when persist tried to copy the same file into
+itself (probed live: the call hangs forever). The fix loads disk
+content into a fresh `:memory:` connection via `disk.backup(mem)`;
+mutations stay in RAM until persist writes them to a fresh disk
+file. RAM cost on real caches: ~5–10 MB. Trivial.
+
+### Tests
+
+- 9 new `StaleSet` model tests (frozen, slots, defaults, signal
+  semantics).
+- 8 new adapter tests for `delete_by_path` (~3 per store).
+- 10 new `IndexerUseCase` tests for `dirty_set` (no index, no repo,
+  clean state, modified file, deleted file, model drift, chunker
+  drift, v1 schema migration, run() stamps file_hashes, is_stale
+  wrapper).
+- 6 new `run_incremental` unit tests + 2 integration tests against
+  the tiny_repo fixture (real fs + real git): asserts the embed
+  call delta vs full-run baseline, asserts purge propagates to all
+  3 stores.
+- **227 tests passing total** (was 195 in v0.7.2; +32 net).
+
+### Smoke against WinServiceScheduler (`scripts/bench_sprint6.py`)
+
+| Phase | Wall ms | Speedup vs full |
+|---|--:|--:|
+| Cold start full (305 files, 2220 chunks) | 222 302 | 1× |
+| No-op incremental (forced) | 4 337 | 51× |
+| **Edit one file** (`GlobalUsings.cs`) | **5 924** | **38×** |
+| Add one file | 4 378 | 51× |
+| Delete one file | 2 648 | 84× |
+
+Sprint acceptance criteria all green; transcripts in
+[`benchmarks/sprint-6-incremental-reindex.md`](benchmarks/sprint-6-incremental-reindex.md).
+
+### Affected versions
+
+v0.6.x–v0.7.2. The first reindex after upgrading is full (one-time
+cost — the v1 metadata has no `file_hashes` baseline). Every
+subsequent edit-cycle reindex pays only for the dirty files.
+
 ## v0.7.2 — 2026-05-05
 
 Hotfix for two `get_summary` bugs caught by the v0.7.x end-to-end
