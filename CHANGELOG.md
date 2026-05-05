@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.6.1 — 2026-05-05
+
+Hotfix. The MCP server runs query handlers via `asyncio.to_thread()` so
+each `find_definition` / `find_references` / `search_repo` call lands in
+a worker thread, NOT the main thread that built the SQLite connection.
+Python's stdlib `sqlite3` enforces single-thread connection ownership by
+default (`check_same_thread=True`), so v0.5.0 / v0.6.0 in MCP mode raised
+`sqlite3.ProgrammingError` on every symbol/keyword query and Claude
+Code surfaced "MCP tool hit a SQLite threading error. Falling back to
+Grep." Reproduced live against `WinServiceScheduler` smoke.
+
+The integration tests didn't catch this because they run in the test
+thread (no thread crossing). Fixed by passing `check_same_thread=False`
+on every `sqlite3.connect()` call in both adapters; SQLite's library
+is built in serialized threading mode by default, so a single
+connection is safe across threads as long as we don't have concurrent
+writes (we don't — index writes happen at indexer.run() time, queries
+are read-only).
+
+- fix(adapter): `check_same_thread=False` on all `sqlite3.connect()`
+  calls in `keyword_index_sqlite.py` and `symbol_index_sqlite.py`
+  (in-memory init, persist backup, on-disk load — 6 sites total).
+- test(adapter): `test_search_works_from_non_main_thread` and
+  `test_find_definition_works_from_non_main_thread` exercise the
+  thread-crossing path explicitly via `threading.Thread`. Without the
+  fix, both raise `sqlite3.ProgrammingError`.
+
+Affected users (v0.4.0 through v0.6.0 with the MCP server connected
+to Claude Code): every symbol/keyword query failed silently and
+Claude fell back to its built-in Search/Grep. Fixed by upgrading.
+
 ## v0.6.0 — 2026-05-05
 
 Closes the v0.3.0 lesson (fabricated HF model identifier) and lays
