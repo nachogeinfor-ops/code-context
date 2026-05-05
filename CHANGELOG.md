@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.6.0 — 2026-05-05
+
+Closes the v0.3.0 lesson (fabricated HF model identifier) and lays
+groundwork for code-tuned embeddings as a future default. Three small
+changes:
+
+### Behavior
+
+- ci(contract): new `hf-guard` job runs `pytest -m network` against
+  `tests/contract/test_hf_models.py` — pings `huggingface.co/api/models/
+  <id>` for every entry in `MODEL_REGISTRY`. Catches "fabricated
+  identifier" bugs (the v0.3.0 class) on every push instead of only at
+  smoke time. Skipped on offline runs (the marker isolates network
+  tests).
+- feat(config): `CC_TRUST_REMOTE_CODE` env var (default `off`). When
+  `on`, `LocalST` passes `trust_remote_code=True` to
+  `SentenceTransformer`, allowing models that ship custom Python (e.g.
+  `jinaai/jina-embeddings-v2-base-code`'s JinaBert architecture). Off
+  by default for safety — set explicitly only for models you've vetted.
+- feat(adapter): `MODEL_REGISTRY` adds `jinaai/jina-embeddings-v2-base-code`
+  (768-dim, ~640 MB, Apache-2.0). Opt-in code-tuned alternative; not
+  the default. Requires `CC_TRUST_REMOTE_CODE=true`. Recommended code
+  embedding for users willing to opt in to the trust-remote-code
+  warning.
+- docs(configuration): "Choosing a model" section rewritten with the
+  new entry. New "Note on trust_remote_code" callout explaining the
+  security trade-off.
+
+### Tests
+
+- 165 passing total (added 3: 2 config tests for the new env var, 1
+  adapter test for the trust_remote_code plumbing). The HF guard test
+  is conditionally executed under `pytest -m network` and is not part
+  of the default count.
+
+### Migration
+
+No action required — `all-MiniLM-L6-v2` remains the default. To
+opt into the code-tuned model:
+
+```bash
+export CC_TRUST_REMOTE_CODE=true
+export CC_EMBEDDINGS_MODEL=jinaai/jina-embeddings-v2-base-code
+code-context clear --yes
+code-context reindex
+```
+
+Cache auto-invalidates because `model_id` changes when
+`embeddings_model` changes.
+
 ## v0.5.0 — 2026-05-05
 
 Symbol tools ship. Two new MCP tools (`find_definition`, `find_references`)
