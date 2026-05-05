@@ -54,6 +54,9 @@ class FakeKeywordIndex:
     def search(self, query: str, k: int) -> list[tuple[IndexEntry, float]]:
         return []
 
+    def delete_by_path(self, path: str) -> int:
+        return 0
+
 
 class FakeSymbolIndex:
     """No-op symbol index — keeps this test focused on the vector path."""
@@ -70,6 +73,9 @@ class FakeSymbolIndex:
 
     def find_references(self, name, max_count=50):
         return []
+
+    def delete_by_path(self, path: str) -> int:
+        return 0
 
 
 @pytest.fixture
@@ -148,6 +154,99 @@ def test_search_returns_storage_chunk_when_querying_storage(repo: Path, cache_di
     # We can't pin a specific file due to fake embeddings, but at least
     # one result should come from one of the .py files in src/.
     assert any("src/sample_app" in p for p in paths)
+
+
+class CountingFakeEmbeddings(FakeEmbeddings):
+    """FakeEmbeddings that counts how many texts it embedded — Sprint 6 uses
+    this to assert run_incremental does FEWER embeds than the initial run."""
+
+    def __init__(self, model_id: str = "fake-determ-v0") -> None:
+        super().__init__(model_id=model_id)
+        self.calls = 0
+
+    def embed(self, texts):
+        self.calls += len(texts)
+        return super().embed(texts)
+
+
+def _build_real_indexer(repo: Path, cache_dir: Path, embeddings) -> IndexerUseCase:
+    """Same wiring used by every integration test in this module."""
+    return IndexerUseCase(
+        cache_dir=cache_dir,
+        repo_root=repo,
+        embeddings=embeddings,
+        vector_store=NumPyParquetStore(),
+        keyword_index=FakeKeywordIndex(),
+        symbol_index=FakeSymbolIndex(),
+        chunker=LineChunker(chunk_lines=20, overlap=5),
+        code_source=FilesystemSource(),
+        git_source=GitCliSource(),
+        include_extensions=[".py", ".md"],
+        max_file_bytes=1_000_000,
+    )
+
+
+def test_incremental_reindex_only_re_embeds_dirty_files(repo: Path, cache_dir: Path) -> None:
+    """End-to-end Sprint 6 contract: a one-file edit triggers a reindex
+    that re-embeds only that file's chunks, not the whole repo."""
+    embeddings = CountingFakeEmbeddings()
+    indexer = _build_real_indexer(repo, cache_dir, embeddings)
+
+    # Full run: every chunk gets embedded.
+    new1 = indexer.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new1.name, "version": 1}))
+    full_calls = embeddings.calls
+    assert full_calls > 0
+
+    # Modify exactly one file in the tiny_repo fixture. utils.py exists and
+    # has multiple chunks (LineChunker(20, 5) splits sample_app's files).
+    target_file = repo / "src" / "sample_app" / "utils.py"
+    assert target_file.is_file()
+    original = target_file.read_text(encoding="utf-8")
+    target_file.write_text("# header bump\n" + original, encoding="utf-8")
+
+    s = indexer.dirty_set()
+    assert s.full_reindex_required is False
+    assert any("utils.py" in str(p) for p in s.dirty_files)
+    assert s.deleted_files == ()
+
+    new2 = indexer.run_incremental(s)
+    delta = embeddings.calls - full_calls
+    # Strict inequality: incremental must do fewer embeds than the full run.
+    assert delta > 0
+    assert delta < full_calls
+
+    # New dir is distinct (so atomic swap is meaningful).
+    assert new2 != new1
+    assert (new2 / "metadata.json").exists()
+
+
+def test_incremental_reindex_purges_deleted_file(repo: Path, cache_dir: Path) -> None:
+    """Removing a file from the working tree invalidates its rows in
+    every store at the next run_incremental call."""
+    embeddings = CountingFakeEmbeddings()
+    indexer = _build_real_indexer(repo, cache_dir, embeddings)
+    new1 = indexer.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new1.name, "version": 1}))
+
+    # Pick any file the indexer would have picked up.
+    doomed = repo / "src" / "sample_app" / "utils.py"
+    rel = "src/sample_app/utils.py"
+    assert doomed.is_file()
+    doomed.unlink()
+
+    s = indexer.dirty_set()
+    assert rel in s.deleted_files
+
+    new2 = indexer.run_incremental(s)
+
+    # Reload the new index and confirm the deleted file's chunks are gone.
+    fresh = NumPyParquetStore()
+    fresh.load(new2)
+    # Search with any query; the post-incremental chunks list must not
+    # include rows whose path == doomed_rel.
+    results = fresh.search(np.zeros(8, dtype=np.float32), k=100)
+    assert all(rel not in r[0].chunk.path for r in results)
 
 
 def test_changing_embeddings_model_invalidates_cache(repo: Path, cache_dir: Path) -> None:
