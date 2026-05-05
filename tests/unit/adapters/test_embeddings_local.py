@@ -73,6 +73,28 @@ def test_unknown_model_emits_warning_log(caplog) -> None:
     assert any("not in MODEL_REGISTRY" in r.message for r in caplog.records)
 
 
+def test_trust_remote_code_passed_to_load_model() -> None:
+    """trust_remote_code constructor arg flows through to _load_model."""
+    captured: dict[str, object] = {}
+
+    def fake_load(model_name: str, *, trust_remote_code: bool = False):
+        captured["name"] = model_name
+        captured["trust"] = trust_remote_code
+        fake_model = MagicMock()
+        fake_model.get_embedding_dimension.return_value = 4
+        fake_model.encode.return_value = np.zeros((1, 4), dtype=np.float32)
+        return fake_model
+
+    with patch(
+        "code_context.adapters.driven.embeddings_local._load_model",
+        side_effect=fake_load,
+    ):
+        adapter = LocalST(model_name="some/model", trust_remote_code=True)
+        adapter.embed(["hello"])
+
+    assert captured == {"name": "some/model", "trust": True}
+
+
 def test_embed_truncates_long_snippets() -> None:
     fake_model = MagicMock()
     fake_model.get_embedding_dimension.return_value = 4

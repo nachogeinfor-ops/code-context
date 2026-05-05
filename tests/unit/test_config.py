@@ -123,6 +123,22 @@ def test_rerank_accepts_truthy_aliases(tmp_path: Path) -> None:
             assert load_config(default_repo_root=tmp_path).rerank is False
 
 
+def test_trust_remote_code_default_is_false(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.trust_remote_code is False
+
+
+def test_trust_remote_code_on_via_env(tmp_path: Path) -> None:
+    """on/true/1 enable; off/false/0 / unset leave disabled."""
+    for v in ("on", "true", "1"):
+        with patch.dict(os.environ, {"CC_TRUST_REMOTE_CODE": v}, clear=True):
+            assert load_config(default_repo_root=tmp_path).trust_remote_code is True
+    for v in ("off", "false", "0", ""):
+        with patch.dict(os.environ, {"CC_TRUST_REMOTE_CODE": v}, clear=True):
+            assert load_config(default_repo_root=tmp_path).trust_remote_code is False
+
+
 def test_all_treesitter_extensions_are_in_default_includes(tmp_path: Path) -> None:
     """Regression test for the v0.4.1 hotfix.
 

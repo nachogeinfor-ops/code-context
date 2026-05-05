@@ -39,12 +39,18 @@ MODEL_REGISTRY: dict[str, dict[str, int | str]] = {
 _MAX_EMBED_CHARS = 2048
 
 
-def _load_model(model_name: str) -> Any:  # pragma: no cover - integration-tested
+def _load_model(
+    model_name: str, *, trust_remote_code: bool = False
+) -> Any:  # pragma: no cover - integration-tested
     """Lazy import + load. Patched in unit tests."""
     from sentence_transformers import SentenceTransformer
 
-    log.info("loading sentence-transformers model: %s", model_name)
-    return SentenceTransformer(model_name)
+    log.info(
+        "loading sentence-transformers model: %s (trust_remote_code=%s)",
+        model_name,
+        trust_remote_code,
+    )
+    return SentenceTransformer(model_name, trust_remote_code=trust_remote_code)
 
 
 def _lib_version() -> str:
@@ -57,7 +63,12 @@ def _lib_version() -> str:
 
 
 class LocalST:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+    def __init__(
+        self,
+        model_name: str = "all-MiniLM-L6-v2",
+        *,
+        trust_remote_code: bool = False,
+    ) -> None:
         if model_name not in MODEL_REGISTRY:
             log.warning(
                 "embeddings model %r not in MODEL_REGISTRY; staleness, "
@@ -65,6 +76,7 @@ class LocalST:
                 model_name,
             )
         self.model_name = model_name
+        self.trust_remote_code = trust_remote_code
         self._model: Any = None
 
     @property
@@ -91,4 +103,4 @@ class LocalST:
 
     def _ensure_loaded(self) -> None:
         if self._model is None:
-            self._model = _load_model(self.model_name)
+            self._model = _load_model(self.model_name, trust_remote_code=self.trust_remote_code)

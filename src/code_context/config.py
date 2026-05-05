@@ -48,6 +48,7 @@ class Config:
     rerank: bool
     rerank_model: str | None
     symbol_index_strategy: str  # "sqlite" (default) or "none"
+    trust_remote_code: bool  # Off by default. Required for some HF models that ship custom Python.
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -96,4 +97,6 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         rerank=os.environ.get("CC_RERANK", "off").lower() in ("on", "true", "1"),
         rerank_model=os.environ.get("CC_RERANK_MODEL"),
         symbol_index_strategy=os.environ.get("CC_SYMBOL_INDEX", "sqlite"),
+        trust_remote_code=os.environ.get("CC_TRUST_REMOTE_CODE", "off").lower()
+        in ("on", "true", "1"),
     )
