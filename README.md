@@ -19,11 +19,11 @@ Architecture: hexagonal (ports & adapters). 6 driven ports with default implemen
 
 ```bash
 pip install code-context
-# or, if you don't want torch (~2 GB), use the OpenAI embeddings backend:
+# or, if you don't want torch + the bge-code model (~2.4 GB total), use OpenAI embeddings:
 pip install code-context[openai]
 ```
 
-> Note: the default install pulls `sentence-transformers` which depends on `torch`. Plan for ~2 GB of disk after install. Use the `[openai]` extra to avoid torch.
+> Note: the default install pulls `sentence-transformers` + the `BAAI/bge-code-v1.5` model on first run. Plan for ~2.4 GB of disk after first reindex (torch ≈ 2 GB, model ≈ 340 MB). Use the `[openai]` extra to avoid torch entirely.
 
 ## Quickstart
 
@@ -39,6 +39,8 @@ export CC_EMBEDDINGS=openai
 export OPENAI_API_KEY=sk-...
 claude mcp add code-context --command code-context-server
 ```
+
+> **Want a smaller install?** Set `CC_EMBEDDINGS_MODEL=all-MiniLM-L6-v2` to use the v0.1.x default model (~90 MB) — lower retrieval quality on code but faster cold start and smaller disk.
 
 ## Making Claude actually use these tools
 
