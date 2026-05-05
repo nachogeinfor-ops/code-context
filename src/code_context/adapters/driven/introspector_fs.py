@@ -2,12 +2,47 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import tomllib
 from collections import Counter
 from pathlib import Path
 
+import pathspec
+
 from code_context.domain.models import ProjectSummary
+
+# Universally-noisy directories that mean "compiled output / vendored deps /
+# editor scratch", not source. Skipped even if .gitignore is missing —
+# every language ecosystem has at least one of these and they bloat
+# stats by 10-1000x (e.g. Sprint 5 smoke against WinServiceScheduler
+# reported 2179 files / 6.5M LOC because bin/obj/.dll were walked).
+_DENYLIST_DIRS = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        ".venv",
+        "venv",
+        "node_modules",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".tox",
+        "dist",
+        "build",
+        "bin",
+        "obj",
+        "out",
+        "publish",
+        "target",
+        "coverage",
+        ".idea",
+        ".vscode",
+        ".vs",
+    }
+)
 
 
 class FilesystemIntrospector:
@@ -15,11 +50,12 @@ class FilesystemIntrospector:
         self, root: Path, scope: str = "project", path: Path | None = None
     ) -> ProjectSummary:
         target = path if (scope == "module" and path is not None) else root
+        gitignore = self._load_gitignore(root)
         name = self._project_name(target)
         purpose = self._readme_first_paragraph(target)
         stack = self._detect_stack(target)
-        key_modules = self._key_modules(target)
-        stats = self._stats(target)
+        key_modules = self._key_modules(target, root, gitignore)
+        stats = self._stats(target, root, gitignore)
         entry_points = self._entry_points(target)
         return ProjectSummary(
             name=name,
@@ -29,6 +65,22 @@ class FilesystemIntrospector:
             key_modules=key_modules,
             stats=stats,
         )
+
+    @staticmethod
+    def _load_gitignore(root: Path) -> pathspec.PathSpec:
+        """Return a pathspec covering .gitignore + .git/ + the denylist.
+
+        Mirrors FilesystemSource._load_gitignore (Sprint 1). Adds a
+        baseline `.git/` line so even repos without a .gitignore skip
+        version-control internals; denylist dirs are appended as
+        gitignore-style patterns so the same matcher handles both.
+        """
+        lines = [".git/", *(f"{d}/" for d in sorted(_DENYLIST_DIRS))]
+        gi = root / ".gitignore"
+        if gi.exists():
+            with contextlib.suppress(OSError):
+                lines.extend(gi.read_text(encoding="utf-8", errors="replace").splitlines())
+        return pathspec.PathSpec.from_lines("gitignore", lines)
 
     @staticmethod
     def _project_name(root: Path) -> str:
@@ -97,26 +149,64 @@ class FilesystemIntrospector:
         return [c for c in candidates if (root / c).exists()]
 
     @staticmethod
-    def _key_modules(root: Path) -> list[dict[str, str]]:
+    def _key_modules(
+        target: Path,
+        root: Path,
+        gitignore: pathspec.PathSpec,
+    ) -> list[dict[str, str]]:
         out: list[dict[str, str]] = []
-        for child in sorted(root.iterdir()):
+        try:
+            entries = sorted(target.iterdir())
+        except OSError:
+            return out
+        for child in entries:
             if not child.is_dir():
                 continue
             name = child.name
-            if name.startswith(".") or name in {"node_modules", "__pycache__", "dist", "build"}:
+            if name.startswith(".") or name in _DENYLIST_DIRS:
+                continue
+            try:
+                rel_dir = child.resolve().relative_to(root.resolve()).as_posix()
+            except ValueError:
+                rel_dir = name  # target is outside root; don't gitignore-filter
+            # gitignore patterns expect dir entries with trailing slash.
+            if gitignore.match_file(rel_dir + "/") or gitignore.match_file(rel_dir):
                 continue
             out.append({"path": name, "purpose": ""})
         return out
 
     @staticmethod
-    def _stats(root: Path) -> dict[str, object]:
+    def _stats(
+        target: Path,
+        root: Path,
+        gitignore: pathspec.PathSpec,
+    ) -> dict[str, object]:
         files = 0
         loc = 0
         langs: Counter[str] = Counter()
-        for f in root.rglob("*"):
+        root_resolved = root
+        with contextlib.suppress(OSError):
+            root_resolved = root.resolve()
+        for f in target.rglob("*"):
             if not f.is_file():
                 continue
-            if any(part.startswith(".") for part in f.relative_to(root).parts):
+            # Filter against the denylist anywhere in the path so a nested
+            # `bin/`/`node_modules/` is excluded even if .gitignore is silent.
+            try:
+                rel_target = f.relative_to(target).parts
+            except ValueError:
+                continue
+            if any(part in _DENYLIST_DIRS for part in rel_target):
+                continue
+            if any(part.startswith(".") for part in rel_target):
+                continue
+            # Cross-check against .gitignore (which is anchored at repo root,
+            # so use the path relative to root, not target).
+            try:
+                rel_root = f.resolve().relative_to(root_resolved).as_posix()
+            except ValueError:
+                rel_root = "/".join(rel_target)
+            if gitignore.match_file(rel_root):
                 continue
             files += 1
             try:
