@@ -23,9 +23,16 @@ def _cmd_reindex(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
     indexer, _, _, _, _ = build_indexer_and_store(cfg)
-    log.info("reindexing %s", cfg.repo_root)
-    new_dir = safe_reindex(cfg, indexer)
-    print(f"reindexed -> {new_dir}")
+    if args.force:
+        log.info("reindexing %s (forced full)", cfg.repo_root)
+        new_dir = safe_reindex(cfg, indexer)
+        print(f"reindexed (full, forced) -> {new_dir}")
+        return 0
+    stale = indexer.dirty_set()
+    log.info("reindexing %s (%s)", cfg.repo_root, stale.reason)
+    new_dir = safe_reindex(cfg, indexer, stale=stale)
+    mode = "full" if stale.full_reindex_required else "incremental"
+    print(f"reindexed ({mode}: {stale.reason}) -> {new_dir}")
     return 0
 
 
@@ -53,7 +60,11 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"chunker:    {meta.get('chunker_version')}")
     print(f"keyword:    {meta.get('keyword_version', '<not indexed — pre-v0.4.0>')}")
     print(f"symbol:     {meta.get('symbol_version', '<not indexed — pre-v0.5.0>')}")
-    print(f"stale:      {indexer.is_stale()}")
+    stale = indexer.dirty_set()
+    print(f"dirty:      {len(stale.dirty_files)}")
+    print(f"deleted:    {len(stale.deleted_files)}")
+    print(f"full_reindex_required: {stale.full_reindex_required}")
+    print(f"reason:     {stale.reason}")
     return 0
 
 
@@ -121,7 +132,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="code-context", description="code-context CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("reindex", help="Force a full reindex now").set_defaults(func=_cmd_reindex)
+    r = sub.add_parser(
+        "reindex",
+        help="Reindex now (incremental by default; --force for full)",
+    )
+    r.add_argument(
+        "--force",
+        action="store_true",
+        help="Force a full reindex regardless of dirty_set verdict.",
+    )
+    r.set_defaults(func=_cmd_reindex)
     sub.add_parser("status", help="Show index health").set_defaults(func=_cmd_status)
 
     q = sub.add_parser("query", help="Run a search query without MCP")
