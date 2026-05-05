@@ -20,6 +20,7 @@ from code_context.adapters.driven.reranker_crossencoder import CrossEncoderReran
 from code_context.adapters.driven.symbol_index_sqlite import SymbolIndexSqlite
 from code_context.adapters.driven.vector_store_numpy import NumPyParquetStore
 from code_context.config import Config
+from code_context.domain.models import StaleSet
 from code_context.domain.ports import (
     Chunker,
     EmbeddingsProvider,
@@ -248,11 +249,21 @@ def _lock_path(cfg: Config) -> Path:
     return cfg.repo_cache_subdir() / ".lock"
 
 
-def safe_reindex(cfg: Config, indexer: IndexerUseCase) -> Path:
-    """Run a full reindex protected by a cross-platform file lock.
+def safe_reindex(
+    cfg: Config,
+    indexer: IndexerUseCase,
+    stale: StaleSet | None = None,
+) -> Path:
+    """Run reindex (full or incremental) protected by a cross-platform file lock.
 
     Acquires the lock or blocks for up to 5 min. Returns the path of the
     new index dir AND atomically swaps current.json to point at it.
+
+    If `stale` is omitted or has `full_reindex_required=True`, runs the
+    legacy full `indexer.run()`. Otherwise dispatches to
+    `indexer.run_incremental(stale)` so only `stale.dirty_files` get
+    re-embedded — the Sprint 6 win that turns a 1-2 minute edit-cycle
+    reindex into <10s on a typical repo.
     """
     from filelock import FileLock, Timeout
 
@@ -260,7 +271,10 @@ def safe_reindex(cfg: Config, indexer: IndexerUseCase) -> Path:
     try:
         with lock:
             log.info("acquired reindex lock at %s", _lock_path(cfg))
-            new_dir = indexer.run()
+            if stale is not None and not stale.full_reindex_required:
+                new_dir = indexer.run_incremental(stale)
+            else:
+                new_dir = indexer.run()
             current_path = cfg.repo_cache_subdir() / "current.json"
             tmp = current_path.with_suffix(".json.tmp")
             tmp.write_text(json.dumps({"active": new_dir.name, "version": 1}))
@@ -280,38 +294,44 @@ def ensure_index(
     keyword_index: KeywordIndex,
     symbol_index: SymbolIndex,
 ) -> None:
-    if not indexer.is_stale():
+    """Ensure the on-disk index is fresh, reusing it if possible.
+
+    Sprint 6 routing: ask the indexer for a `dirty_set()` once, then:
+      - StaleSet says no work → load the active index, return.
+      - StaleSet says full reindex required → full `indexer.run()`.
+      - Otherwise → `indexer.run_incremental(stale)`; only the
+        `dirty_files` pay the embedding cost.
+
+    Pre-Sprint-3 caches without keyword.sqlite and pre-Sprint-4 ones
+    without symbols.sqlite still self-heal: load() raises FileNotFound,
+    which forces a full reindex via the `_force_full` short-circuit.
+    """
+    stale = indexer.dirty_set()
+    no_work = not stale.full_reindex_required and not stale.dirty_files and not stale.deleted_files
+    if no_work:
         current = indexer.current_index_dir()
         if current is not None:
             log.info("loading existing index from %s", current)
             store.load(current)
-            backfill_required = False
             try:
                 keyword_index.load(current)
+                symbol_index.load(current)
             except FileNotFoundError:
-                backfill_required = True
-            if not backfill_required:
-                try:
-                    symbol_index.load(current)
-                except FileNotFoundError:
-                    backfill_required = True
-            if backfill_required:
-                # Pre-Sprint-3 indexes lack keyword.sqlite; pre-Sprint-4 lack
-                # symbols.sqlite. Either way, reindex to backfill so the
-                # hybrid + symbol legs become populated. is_stale() would
-                # have caught it if metadata had recorded the version, but
-                # old metadata predates those fields.
                 log.info(
                     "keyword or symbol index missing in %s; reindexing to backfill",
                     current,
                 )
-                new_dir = safe_reindex(cfg, indexer)
+                new_dir = safe_reindex(cfg, indexer)  # full
                 store.load(new_dir)
                 keyword_index.load(new_dir)
                 symbol_index.load(new_dir)
             return
-    log.info("index missing or stale; reindexing synchronously")
-    new_dir = safe_reindex(cfg, indexer)
+    log.info(
+        "ensure_index: %s — running %s reindex",
+        stale.reason,
+        "full" if stale.full_reindex_required else "incremental",
+    )
+    new_dir = safe_reindex(cfg, indexer, stale=stale)
     store.load(new_dir)
     keyword_index.load(new_dir)
     symbol_index.load(new_dir)
