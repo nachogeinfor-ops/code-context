@@ -3,13 +3,23 @@
 vector + keyword are fused via Reciprocal Rank Fusion (RRF). If a
 reranker is supplied, it re-scores the fused top-N. Returns top_k
 SearchResults with the fused or reranked score.
+
+Sprint 7: optional `bus` + `reload_callback` give the use case a
+"stale-aware" mode. On each `.run()` call, if the bus' generation has
+advanced since the last reload, the callback fires (typically
+re-loading the vector / keyword / symbol stores from `current.json`'s
+new active dir) before serving the query. Implemented as a single
+int compare in the hot path; legacy callers (no bus, no callback)
+incur zero overhead.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
+from code_context.domain.index_bus import IndexUpdateBus
 from code_context.domain.models import IndexEntry, SearchResult
 from code_context.domain.ports import EmbeddingsProvider, KeywordIndex, Reranker, VectorStore
 
@@ -30,6 +40,13 @@ class SearchRepoUseCase:
     vector_store: VectorStore
     keyword_index: KeywordIndex
     reranker: Reranker | None = None
+    bus: IndexUpdateBus | None = None
+    reload_callback: Callable[[], None] | None = None
+    # Initialized to -1 so the very first call (bus.generation == 0)
+    # also triggers a reload — covers the cold-start case where the
+    # bg indexer hasn't yet published a swap but the active index dir
+    # might already be on disk and unloaded.
+    _last_seen_generation: int = field(default=-1, init=False, repr=False)
 
     def run(
         self,
@@ -37,6 +54,7 @@ class SearchRepoUseCase:
         top_k: int = 5,
         scope: str | None = None,
     ) -> list[SearchResult]:
+        self._reload_if_swapped()
         pool = top_k * _OVER_FETCH_MULTIPLIER
         # 1. vector
         query_vec = self.embeddings.embed([query])[0]
@@ -54,6 +72,23 @@ class SearchRepoUseCase:
         else:
             fused = fused[:top_k]
         return [self._to_result(e, s) for e, s in fused]
+
+    def _reload_if_swapped(self) -> None:
+        """Refresh in-memory store handles if the bg indexer published a
+        new index dir since our last call. No-op for legacy callers
+        (bus is None). Reload exceptions propagate up — better to fail
+        loud than silently serve stale results — and the failed reload
+        does NOT update `_last_seen_generation`, so the next call retries.
+        """
+        if self.bus is None or self.reload_callback is None:
+            return
+        gen = self.bus.generation
+        if gen == self._last_seen_generation:
+            return
+        self.reload_callback()
+        # Only mark as seen AFTER a successful reload, so a transient
+        # failure (e.g. disk hiccup) gets retried on the next query.
+        self._last_seen_generation = gen
 
     @staticmethod
     def _to_result(entry: IndexEntry, score: float) -> SearchResult:

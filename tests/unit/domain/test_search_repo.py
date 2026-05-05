@@ -193,3 +193,119 @@ def test_reranker_called_when_provided() -> None:
     )
     out = uc.run(query="important", top_k=2)
     assert out[0].path == "b.py"
+
+
+# ----- Sprint 7: stale-aware reload-on-bus-tick -----
+
+
+def test_search_runs_without_bus_or_callback_legacy_callers() -> None:
+    """Backwards-compatible: omitting bus / reload_callback gives the
+    pre-Sprint-7 behavior (no reload check, no overhead)."""
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    uc = SearchRepoUseCase(
+        embeddings=FakeEmbeddings(),
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+    )
+    out = uc.run(query="x", top_k=1)
+    assert out and out[0].path == "a.py"
+
+
+def test_search_reloads_when_bus_generation_advances() -> None:
+    """When the background indexer publishes a swap, the next search
+    call detects the advanced generation and fires reload_callback
+    once before serving the query."""
+    from code_context.domain.index_bus import IndexUpdateBus
+
+    bus = IndexUpdateBus()
+    reload_calls = 0
+
+    def reload_cb() -> None:
+        nonlocal reload_calls
+        reload_calls += 1
+
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    uc = SearchRepoUseCase(
+        embeddings=FakeEmbeddings(),
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        bus=bus,
+        reload_callback=reload_cb,
+    )
+    # Initial run (generation 0): if the use case is initialized with
+    # `_last_seen=-1`, the first call sees a "drift" 0 != -1 and reloads
+    # once. That's intentional — guarantees the very first query is
+    # served from a freshly-loaded store, even if composition didn't
+    # eagerly load.
+    uc.run(query="x", top_k=1)
+    assert reload_calls == 1
+
+    # Background indexer publishes a swap.
+    bus.publish_swap("/tmp/new")
+    uc.run(query="x", top_k=1)
+    assert reload_calls == 2
+
+    # Subsequent calls without a publish: no extra reload.
+    uc.run(query="x", top_k=1)
+    assert reload_calls == 2
+
+
+def test_search_coalesces_multiple_publishes_into_one_reload() -> None:
+    """Two swaps between two queries → still one reload, because the
+    use case compares generation as an int, not by counting events."""
+    from code_context.domain.index_bus import IndexUpdateBus
+
+    bus = IndexUpdateBus()
+    reload_calls = 0
+
+    def reload_cb() -> None:
+        nonlocal reload_calls
+        reload_calls += 1
+
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    uc = SearchRepoUseCase(
+        embeddings=FakeEmbeddings(),
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        bus=bus,
+        reload_callback=reload_cb,
+    )
+    uc.run(query="x", top_k=1)
+    assert reload_calls == 1
+    bus.publish_swap("/tmp/a")
+    bus.publish_swap("/tmp/b")
+    bus.publish_swap("/tmp/c")
+    uc.run(query="x", top_k=1)
+    # Only one reload despite three publishes — the use case caught up
+    # to the latest generation in a single pass.
+    assert reload_calls == 2
+
+
+def test_reload_failure_does_not_swallow_search_errors() -> None:
+    """Reload exceptions propagate up (better to fail loud than serve
+    stale results silently). The next call retries reload — failure
+    didn't poison `_last_seen_generation`."""
+    from code_context.domain.index_bus import IndexUpdateBus
+
+    bus = IndexUpdateBus()
+    fail_count = [0]
+
+    def reload_cb() -> None:
+        fail_count[0] += 1
+        if fail_count[0] == 1:
+            raise OSError("disk gone")
+
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    uc = SearchRepoUseCase(
+        embeddings=FakeEmbeddings(),
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        bus=bus,
+        reload_callback=reload_cb,
+    )
+    with pytest.raises(OSError, match="disk gone"):
+        uc.run(query="x", top_k=1)
+    # Next call retries reload (and succeeds this time).
+    out = uc.run(query="x", top_k=1)
+    assert out and out[0].path == "a.py"
+    assert fail_count[0] == 2
