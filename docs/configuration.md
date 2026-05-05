@@ -17,7 +17,7 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_TOP_K_DEFAULT` | `5` | Default `top_k` for `search_repo`. |
 | `CC_CHUNK_LINES` | `50` | Lines per chunk (LineChunker only). |
 | `CC_CHUNK_OVERLAP` | `10` | Overlap between consecutive chunks (LineChunker only). |
-| `CC_CHUNKER` | `treesitter` | Chunking strategy: `treesitter` (AST-aware for Py/JS/TS/Go/Rust, line fallback for the rest) or `line` (legacy line-window for everything). |
+| `CC_CHUNKER` | `treesitter` | Chunking strategy: `treesitter` (AST-aware for Py/JS/TS/Go/Rust/C#, line fallback for the rest) or `line` (legacy line-window for everything). |
 
 ## Examples
 
@@ -61,7 +61,7 @@ warning at startup. Add the model to `MODEL_REGISTRY` (in code) to silence it.
 
 ## Chunking strategies
 
-Default (`CC_CHUNKER=treesitter`): for files with extensions `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.go`, `.rs`, the chunker uses tree-sitter to cut along function/class/method boundaries. Each chunk is a complete semantic unit. For everything else (markdown, JSON, YAML, C#, Java, …) the chunker falls back to a line-window (50 lines + 10 overlap by default). Tree-sitter parse errors also fall back to line-window so no file is ever lost from the index.
+Default (`CC_CHUNKER=treesitter`): for files with extensions `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.go`, `.rs`, `.cs`, the chunker uses tree-sitter to cut along function/class/method boundaries. Each chunk is a complete semantic unit. For everything else (markdown, JSON, YAML, Java, …) the chunker falls back to a line-window (50 lines + 10 overlap by default). Tree-sitter parse errors also fall back to line-window so no file is ever lost from the index.
 
 `CC_CHUNKER=line` restores v0.1.x behavior: every file is chunked by line-window. Use this if tree-sitter parsers cause issues on your platform or if you need byte-for-byte reproducibility with a v0.1.x index.
 

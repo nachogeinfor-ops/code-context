@@ -79,11 +79,11 @@ def test_version_combines_subchunker_versions() -> None:
 
 
 def test_extensions_routed_to_treesitter() -> None:
-    """All five language extensions go to treesitter."""
+    """All supported language extensions go to treesitter."""
     ts = _Recording("ts")
     line = _Recording("line")
     d = ChunkerDispatcher(treesitter=ts, line=line)
-    for ext in [".py", ".js", ".ts", ".go", ".rs", ".jsx", ".tsx"]:
+    for ext in [".py", ".js", ".ts", ".go", ".rs", ".jsx", ".tsx", ".cs"]:
         d.chunk("content", f"x{ext}")
-    assert len(ts.calls) == 7
+    assert len(ts.calls) == 8
     assert not line.calls

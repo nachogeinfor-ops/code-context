@@ -78,7 +78,7 @@ Configured via env vars. See [`docs/configuration.md`](docs/configuration.md) fo
 | `CC_EMBEDDINGS` | `local` (or `openai`) |
 | `CC_EMBEDDINGS_MODEL` | `all-MiniLM-L6-v2` |
 | `CC_INCLUDE_EXTENSIONS` | `.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.md,.yaml,.yml,.json` |
-| `CC_CHUNKER` | `treesitter` (AST-aware for Py/JS/TS/Go/Rust, line fallback) — set `line` for v0.1.x behavior |
+| `CC_CHUNKER` | `treesitter` (AST-aware for Py/JS/TS/Go/Rust/C#, line fallback) — set `line` for v0.1.x behavior |
 | `CC_CACHE_DIR` | platformdirs user cache |
 
 ## Architecture

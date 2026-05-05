@@ -13,7 +13,7 @@ from pathlib import Path
 from code_context.domain.models import Chunk
 from code_context.domain.ports import Chunker
 
-_TREESITTER_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs"}
+_TREESITTER_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".cs"}
 
 
 @dataclass

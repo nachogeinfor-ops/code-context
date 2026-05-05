@@ -67,6 +67,7 @@ def test_version_starts_with_treesitter() -> None:
         ("typescript", "ts", {"function", "class", "interface", "type"}),
         ("go", "go", {"func", "type"}),
         ("rust", "rs", {"pub", "impl"}),  # struct/enum/fn lines start with `pub `
+        ("csharp", "cs", {"public", "private", "internal", "static"}),
     ],
 )
 def test_other_languages_chunk(lang: str, ext: str, expected_first_tokens: set[str]) -> None:
@@ -80,9 +81,15 @@ def test_other_languages_chunk(lang: str, ext: str, expected_first_tokens: set[s
     )
 
 
-@pytest.mark.parametrize("ext", ["js", "ts", "go", "rs"])
+@pytest.mark.parametrize("ext", ["js", "ts", "go", "rs", "cs"])
 def test_other_languages_chunk_lines_match_source(ext: str) -> None:
-    lang_by_ext = {"js": "javascript", "ts": "typescript", "go": "go", "rs": "rust"}
+    lang_by_ext = {
+        "js": "javascript",
+        "ts": "typescript",
+        "go": "go",
+        "rs": "rust",
+        "cs": "csharp",
+    }
     lang = lang_by_ext[ext]
     src = _read(FIXTURES / lang / f"sample.{ext}")
     chunks = TreeSitterChunker().chunk(src, f"x.{ext}")

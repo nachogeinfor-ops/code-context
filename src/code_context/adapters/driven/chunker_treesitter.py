@@ -27,6 +27,7 @@ _EXT_TO_LANG: dict[str, str] = {
     ".tsx": "typescript",
     ".go": "go",
     ".rs": "rust",
+    ".cs": "csharp",
 }
 
 
@@ -51,7 +52,7 @@ class TreeSitterChunker:
     @property
     def version(self) -> str:
         # Bump the trailing -vN when query semantics change — invalidates the index cache.
-        return "treesitter-v1"
+        return "treesitter-v2"
 
     def chunk(self, content: str, path: str) -> list[Chunk]:
         if not content:

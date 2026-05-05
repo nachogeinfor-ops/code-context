@@ -8,6 +8,9 @@ Each query captures the AST nodes we want to emit as chunks. A node is
   method_definition, arrow function assigned at module scope.
 - Go: function_declaration, method_declaration, type_declaration.
 - Rust: function_item, struct_item, enum_item, impl_item, trait_item.
+- C#: method_declaration, constructor_declaration, class_declaration,
+  interface_declaration, struct_declaration, record_declaration,
+  enum_declaration.
 
 Smaller nodes (assignments, single statements) are NOT captured — they
 are rolled up into a synthetic "module-prelude" chunk in the chunker
@@ -53,10 +56,21 @@ RUST = """
 (trait_item) @chunk
 """
 
+CSHARP = """
+(method_declaration) @chunk
+(constructor_declaration) @chunk
+(class_declaration) @chunk
+(interface_declaration) @chunk
+(struct_declaration) @chunk
+(record_declaration) @chunk
+(enum_declaration) @chunk
+"""
+
 QUERIES_BY_LANG: dict[str, str] = {
     "python": PYTHON,
     "javascript": JAVASCRIPT,
     "typescript": TYPESCRIPT,
     "go": GO,
     "rust": RUST,
+    "csharp": CSHARP,
 }
