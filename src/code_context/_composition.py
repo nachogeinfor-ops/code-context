@@ -17,9 +17,18 @@ from code_context.adapters.driven.git_source_cli import GitCliSource
 from code_context.adapters.driven.introspector_fs import FilesystemIntrospector
 from code_context.adapters.driven.keyword_index_sqlite import SqliteFTS5Index
 from code_context.adapters.driven.reranker_crossencoder import CrossEncoderReranker
+from code_context.adapters.driven.symbol_index_sqlite import SymbolIndexSqlite
 from code_context.adapters.driven.vector_store_numpy import NumPyParquetStore
 from code_context.config import Config
-from code_context.domain.ports import Chunker, EmbeddingsProvider, KeywordIndex, Reranker
+from code_context.domain.ports import (
+    Chunker,
+    EmbeddingsProvider,
+    KeywordIndex,
+    Reranker,
+    SymbolIndex,
+)
+from code_context.domain.use_cases.find_definition import FindDefinitionUseCase
+from code_context.domain.use_cases.find_references import FindReferencesUseCase
 from code_context.domain.use_cases.get_summary import GetSummaryUseCase
 from code_context.domain.use_cases.indexer import IndexerUseCase
 from code_context.domain.use_cases.recent_changes import RecentChangesUseCase
@@ -44,6 +53,34 @@ class _NullKeywordIndex:
         pass
 
     def search(self, query: str, k: int):
+        return []
+
+    def persist(self, path) -> None:
+        pass
+
+    def load(self, path) -> None:
+        pass
+
+
+class _NullSymbolIndex:
+    """No-op symbol index for users who set CC_SYMBOL_INDEX=none.
+
+    Implements the SymbolIndex Protocol; find_definition/find_references
+    return []. Lets users disable the symbol pipeline without breaking
+    composition (e.g., on platforms where SQLite FTS5 misbehaves).
+    """
+
+    @property
+    def version(self) -> str:
+        return "null-symbol-v1"
+
+    def add_definitions(self, defs) -> None:
+        pass
+
+    def find_definition(self, name, language=None, max_count=5):
+        return []
+
+    def find_references(self, name, max_count=50):
         return []
 
     def persist(self, path) -> None:
@@ -96,6 +133,18 @@ def build_keyword_index(cfg: Config) -> KeywordIndex:
     return SqliteFTS5Index()
 
 
+def build_symbol_index(cfg: Config) -> SymbolIndex:
+    if cfg.symbol_index_strategy == "none":
+        return _NullSymbolIndex()
+    if cfg.symbol_index_strategy == "sqlite":
+        return SymbolIndexSqlite()
+    log.error(
+        "unknown CC_SYMBOL_INDEX=%r; falling back to sqlite",
+        cfg.symbol_index_strategy,
+    )
+    return SymbolIndexSqlite()
+
+
 def build_reranker(cfg: Config) -> Reranker | None:
     if not cfg.rerank:
         return None
@@ -106,7 +155,13 @@ def build_reranker(cfg: Config) -> Reranker | None:
 
 def build_indexer_and_store(
     cfg: Config,
-) -> tuple[IndexerUseCase, NumPyParquetStore, EmbeddingsProvider, KeywordIndex]:
+) -> tuple[
+    IndexerUseCase,
+    NumPyParquetStore,
+    EmbeddingsProvider,
+    KeywordIndex,
+    SymbolIndex,
+]:
     cfg.repo_cache_subdir().mkdir(parents=True, exist_ok=True)
 
     embeddings = build_embeddings(cfg)
@@ -115,19 +170,21 @@ def build_indexer_and_store(
     git_source = GitCliSource()
     store = NumPyParquetStore()
     keyword_index = build_keyword_index(cfg)
+    symbol_index = build_symbol_index(cfg)
     indexer = IndexerUseCase(
         cache_dir=cfg.repo_cache_subdir(),
         repo_root=cfg.repo_root,
         embeddings=embeddings,
         vector_store=store,
         keyword_index=keyword_index,
+        symbol_index=symbol_index,
         chunker=chunker,
         code_source=code_source,
         git_source=git_source,
         include_extensions=cfg.include_extensions,
         max_file_bytes=cfg.max_file_bytes,
     )
-    return indexer, store, embeddings, keyword_index
+    return indexer, store, embeddings, keyword_index, symbol_index
 
 
 def build_use_cases(
@@ -136,7 +193,14 @@ def build_use_cases(
     store: NumPyParquetStore,
     embeddings: EmbeddingsProvider,
     keyword_index: KeywordIndex,
-) -> tuple[SearchRepoUseCase, RecentChangesUseCase, GetSummaryUseCase]:
+    symbol_index: SymbolIndex,
+) -> tuple[
+    SearchRepoUseCase,
+    RecentChangesUseCase,
+    GetSummaryUseCase,
+    FindDefinitionUseCase,
+    FindReferencesUseCase,
+]:
     git_source = GitCliSource()
     introspector = FilesystemIntrospector()
     reranker = build_reranker(cfg)
@@ -149,6 +213,8 @@ def build_use_cases(
         ),
         RecentChangesUseCase(git_source=git_source, repo_root=cfg.repo_root),
         GetSummaryUseCase(introspector=introspector, repo_root=cfg.repo_root),
+        FindDefinitionUseCase(symbol_index=symbol_index),
+        FindReferencesUseCase(symbol_index=symbol_index),
     )
 
 
@@ -187,31 +253,43 @@ def ensure_index(
     indexer: IndexerUseCase,
     store: NumPyParquetStore,
     keyword_index: KeywordIndex,
+    symbol_index: SymbolIndex,
 ) -> None:
     if not indexer.is_stale():
         current = indexer.current_index_dir()
         if current is not None:
             log.info("loading existing index from %s", current)
             store.load(current)
+            backfill_required = False
             try:
                 keyword_index.load(current)
             except FileNotFoundError:
-                # Pre-Sprint-3 indexes don't have keyword.sqlite. Trigger a
-                # rebuild so the keyword leg becomes populated. is_stale()
-                # would have caught this if the prior run had stamped a
-                # keyword_version, but old metadata predates that field.
+                backfill_required = True
+            if not backfill_required:
+                try:
+                    symbol_index.load(current)
+                except FileNotFoundError:
+                    backfill_required = True
+            if backfill_required:
+                # Pre-Sprint-3 indexes lack keyword.sqlite; pre-Sprint-4 lack
+                # symbols.sqlite. Either way, reindex to backfill so the
+                # hybrid + symbol legs become populated. is_stale() would
+                # have caught it if metadata had recorded the version, but
+                # old metadata predates those fields.
                 log.info(
-                    "keyword index missing in %s; reindexing to backfill",
+                    "keyword or symbol index missing in %s; reindexing to backfill",
                     current,
                 )
                 new_dir = safe_reindex(cfg, indexer)
                 store.load(new_dir)
                 keyword_index.load(new_dir)
+                symbol_index.load(new_dir)
             return
     log.info("index missing or stale; reindexing synchronously")
     new_dir = safe_reindex(cfg, indexer)
     store.load(new_dir)
     keyword_index.load(new_dir)
+    symbol_index.load(new_dir)
 
 
 def setup_logging(cfg: Config) -> None:

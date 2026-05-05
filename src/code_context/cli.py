@@ -22,7 +22,7 @@ log = logging.getLogger("code_context")
 def _cmd_reindex(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
-    indexer, _, _, _ = build_indexer_and_store(cfg)
+    indexer, _, _, _, _ = build_indexer_and_store(cfg)
     log.info("reindexing %s", cfg.repo_root)
     new_dir = safe_reindex(cfg, indexer)
     print(f"reindexed -> {new_dir}")
@@ -32,7 +32,7 @@ def _cmd_reindex(args: argparse.Namespace) -> int:
 def _cmd_status(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
-    indexer, _, _, _ = build_indexer_and_store(cfg)
+    indexer, _, _, _, _ = build_indexer_and_store(cfg)
     current = indexer.current_index_dir()
     print(f"repo_root:  {cfg.repo_root}")
     print(f"cache_dir:  {cfg.repo_cache_subdir()}")
@@ -52,6 +52,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"model:      {meta.get('embeddings_model')}")
     print(f"chunker:    {meta.get('chunker_version')}")
     print(f"keyword:    {meta.get('keyword_version', '<not indexed — pre-v0.4.0>')}")
+    print(f"symbol:     {meta.get('symbol_version', '<not indexed — pre-v0.5.0>')}")
     print(f"stale:      {indexer.is_stale()}")
     return 0
 
@@ -59,7 +60,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
 def _cmd_query(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
-    indexer, store, embeddings, keyword_index = build_indexer_and_store(cfg)
+    indexer, store, embeddings, keyword_index, symbol_index = build_indexer_and_store(cfg)
     current = indexer.current_index_dir()
     if current is None:
         print("error: no index. run `code-context reindex` first.", file=sys.stderr)
@@ -79,7 +80,22 @@ def _cmd_query(args: argparse.Namespace) -> int:
             "Run `code-context reindex` to backfill the keyword leg.",
             current,
         )
-    search, _, _ = build_use_cases(cfg, indexer, store, embeddings, keyword_index)
+    try:
+        symbol_index.load(current)
+    except FileNotFoundError:
+        log.warning(
+            "symbol index missing in %s — find_definition/find_references unavailable. "
+            "Run `code-context reindex` to backfill the symbol leg.",
+            current,
+        )
+    search, _, _, _, _ = build_use_cases(
+        cfg,
+        indexer,
+        store,
+        embeddings,
+        keyword_index,
+        symbol_index,
+    )
     results = search.run(query=args.text, top_k=args.k or cfg.top_k_default)
     for r in results:
         print(f"{r.score:.3f} {r.path}:{r.lines[0]}-{r.lines[1]}  ({r.why})")

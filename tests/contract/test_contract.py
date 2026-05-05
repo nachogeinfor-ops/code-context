@@ -19,7 +19,13 @@ from code_context.domain.use_cases.search_repo import SearchRepoUseCase
 UPSTREAM = (
     "https://raw.githubusercontent.com/nachogeinfor-ops/context-template/main/docs/tool-protocol.md"
 )
-EXPECTED_TOOLS = {"search_repo", "recent_changes", "get_summary"}
+EXPECTED_TOOLS = {
+    "search_repo",
+    "recent_changes",
+    "get_summary",
+    "find_definition",
+    "find_references",
+}
 
 _TABLE_ROW = re.compile(r"\|\s*`(\w+)`\s*\|\s*`\(([^)]*)\)`\s*\|")
 
@@ -90,3 +96,28 @@ def test_search_repo_params() -> None:
     sig_obj = inspect.signature(SearchRepoUseCase.run)
     params = [p for p in sig_obj.parameters if p != "self"]
     assert params == [name for name, _ in expected]
+
+
+def test_find_definition_params(
+    upstream_protocol: dict[str, list[tuple[str, bool]]],
+) -> None:
+    """find_definition takes name (required) plus language? and max? (optional)."""
+    params = upstream_protocol["find_definition"]
+    names = [name for name, _ in params]
+    assert names == ["name", "language", "max"]
+    optionality = dict(params)
+    assert optionality["name"] is False
+    assert optionality["language"] is True
+    assert optionality["max"] is True
+
+
+def test_find_references_params(
+    upstream_protocol: dict[str, list[tuple[str, bool]]],
+) -> None:
+    """find_references takes name (required) plus max? (optional)."""
+    params = upstream_protocol["find_references"]
+    names = [name for name, _ in params]
+    assert names == ["name", "max"]
+    optionality = dict(params)
+    assert optionality["name"] is False
+    assert optionality["max"] is True

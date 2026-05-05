@@ -47,6 +47,7 @@ class Config:
     keyword_strategy: str  # "sqlite" (default) or "none"
     rerank: bool
     rerank_model: str | None
+    symbol_index_strategy: str  # "sqlite" (default) or "none"
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -94,4 +95,5 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         keyword_strategy=os.environ.get("CC_KEYWORD_INDEX", "sqlite"),
         rerank=os.environ.get("CC_RERANK", "off").lower() in ("on", "true", "1"),
         rerank_model=os.environ.get("CC_RERANK_MODEL"),
+        symbol_index_strategy=os.environ.get("CC_SYMBOL_INDEX", "sqlite"),
     )

@@ -1,4 +1,4 @@
-"""MCP driving adapter: registers the 3 contract tools on an mcp Server."""
+"""MCP driving adapter: registers the 5 contract tools on an mcp Server."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from code_context.domain.use_cases.find_definition import FindDefinitionUseCase
+from code_context.domain.use_cases.find_references import FindReferencesUseCase
 from code_context.domain.use_cases.get_summary import GetSummaryUseCase
 from code_context.domain.use_cases.recent_changes import RecentChangesUseCase
 from code_context.domain.use_cases.search_repo import SearchRepoUseCase
@@ -25,8 +27,10 @@ def register(
     search_repo: SearchRepoUseCase,
     recent_changes: RecentChangesUseCase,
     get_summary: GetSummaryUseCase,
+    find_definition: FindDefinitionUseCase,
+    find_references: FindReferencesUseCase,
 ) -> None:
-    """Register the 3 contract tools on the given mcp Server instance."""
+    """Register the 5 contract tools on the given mcp Server instance."""
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -95,6 +99,62 @@ def register(
                     },
                 },
             ),
+            Tool(
+                name="find_definition",
+                description=(
+                    "Locate the definition site of a named symbol (function, class, "
+                    "method, type, struct, enum, interface, record). Use this INSTEAD of "
+                    'shelling out to grep when the user asks "where is X defined?" — '
+                    "returns SymbolDef[] with path, line range, kind, and language. "
+                    "Faster and more accurate than grepping for `def X` / `class X` / "
+                    "`function X` / etc., because it consults a tree-sitter-indexed "
+                    "symbol table built at reindex time, not the raw text."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Exact identifier to locate.",
+                        },
+                        "language": {
+                            "type": "string",
+                            "enum": [
+                                "python",
+                                "javascript",
+                                "typescript",
+                                "go",
+                                "rust",
+                                "csharp",
+                            ],
+                            "description": ("Optional language hint for same-name disambiguation."),
+                        },
+                        "max": {"type": "integer", "default": 5},
+                    },
+                    "required": ["name"],
+                },
+            ),
+            Tool(
+                name="find_references",
+                description=(
+                    "List every textual occurrence of a named symbol in the indexed "
+                    'corpus. Use INSTEAD of `grep -n "X"` when the user asks "who '
+                    'calls X?" or "where is X used?". Returns SymbolRef[] with path, '
+                    "line, snippet. Word-boundary matched, so 'log' won't return "
+                    "'logger' or 'log_format'."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Exact identifier to find references for.",
+                        },
+                        "max": {"type": "integer", "default": 50},
+                    },
+                    "required": ["name"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -105,6 +165,10 @@ def register(
             return await asyncio.to_thread(_handle_recent, recent_changes, arguments)
         if name == "get_summary":
             return await asyncio.to_thread(_handle_summary, get_summary, arguments)
+        if name == "find_definition":
+            return await asyncio.to_thread(_handle_find_definition, find_definition, arguments)
+        if name == "find_references":
+            return await asyncio.to_thread(_handle_find_references, find_references, arguments)
         raise ValueError(f"unknown tool: {name}")
 
 
@@ -161,6 +225,34 @@ def _handle_summary(uc: GetSummaryUseCase, args: dict[str, Any]) -> list[TextCon
         "key_modules": summary.key_modules,
         "stats": summary.stats,
     }
+    return [TextContent(type="text", text=_to_json(payload))]
+
+
+def _handle_find_definition(uc: FindDefinitionUseCase, args: dict[str, Any]) -> list[TextContent]:
+    defs = uc.run(
+        name=args["name"],
+        language=args.get("language"),
+        max_count=int(args.get("max", 5)),
+    )
+    payload = [
+        {
+            "name": d.name,
+            "path": d.path,
+            "lines": list(d.lines),
+            "kind": d.kind,
+            "language": d.language,
+        }
+        for d in defs
+    ]
+    return [TextContent(type="text", text=_to_json(payload))]
+
+
+def _handle_find_references(uc: FindReferencesUseCase, args: dict[str, Any]) -> list[TextContent]:
+    refs = uc.run(
+        name=args["name"],
+        max_count=int(args.get("max", 50)),
+    )
+    payload = [{"path": r.path, "line": r.line, "snippet": r.snippet} for r in refs]
     return [TextContent(type="text", text=_to_json(payload))]
 
 

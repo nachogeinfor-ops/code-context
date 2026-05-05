@@ -22,12 +22,26 @@ log = logging.getLogger("code_context")
 
 
 async def _run_server(cfg: Config) -> None:
-    indexer, store, embeddings, keyword_index = build_indexer_and_store(cfg)
-    ensure_index(cfg, indexer, store, keyword_index)
-    search, recent, summary = build_use_cases(cfg, indexer, store, embeddings, keyword_index)
+    indexer, store, embeddings, keyword_index, symbol_index = build_indexer_and_store(cfg)
+    ensure_index(cfg, indexer, store, keyword_index, symbol_index)
+    search, recent, summary, find_def, find_ref = build_use_cases(
+        cfg,
+        indexer,
+        store,
+        embeddings,
+        keyword_index,
+        symbol_index,
+    )
 
     server = Server("code-context")
-    register(server, search_repo=search, recent_changes=recent, get_summary=summary)
+    register(
+        server,
+        search_repo=search,
+        recent_changes=recent,
+        get_summary=summary,
+        find_definition=find_def,
+        find_references=find_ref,
+    )
 
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())

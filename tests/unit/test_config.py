@@ -83,6 +83,18 @@ def test_keyword_strategy_overridden_by_env(tmp_path: Path) -> None:
     assert cfg.keyword_strategy == "none"
 
 
+def test_symbol_index_strategy_defaults_to_sqlite(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.symbol_index_strategy == "sqlite"
+
+
+def test_symbol_index_strategy_overridden_by_env(tmp_path: Path) -> None:
+    with patch.dict(os.environ, {"CC_SYMBOL_INDEX": "none"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.symbol_index_strategy == "none"
+
+
 def test_rerank_default_is_off(tmp_path: Path) -> None:
     with patch.dict(os.environ, {}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
