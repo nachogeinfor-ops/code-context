@@ -77,6 +77,14 @@ class SqliteFTS5Index:
         )
         self._conn.commit()
 
+    def delete_by_path(self, path: str) -> int:
+        """Remove every row whose path == `path` from the FTS5 table.
+        Returns the rowcount. Used by Sprint 6 incremental reindex."""
+        assert self._conn is not None
+        cur = self._conn.execute(f"DELETE FROM {_FTS_TABLE} WHERE path = ?", (path,))
+        self._conn.commit()
+        return cur.rowcount
+
     def search(self, query: str, k: int) -> list[tuple[IndexEntry, float]]:
         assert self._conn is not None
         sanitised = _sanitise(query)

@@ -71,6 +71,16 @@ class SymbolIndexSqlite:
         )
         self._conn.commit()
 
+    def delete_by_path(self, path: str) -> int:
+        """Remove every row whose path == `path` from BOTH symbol_defs
+        and symbol_refs_fts. Returns the total rowcount across the two
+        tables. Used by Sprint 6 incremental reindex."""
+        assert self._conn is not None
+        defs_cur = self._conn.execute(f"DELETE FROM {_DEFS_TABLE} WHERE path = ?", (path,))
+        refs_cur = self._conn.execute(f"DELETE FROM {_REFS_TABLE} WHERE path = ?", (path,))
+        self._conn.commit()
+        return defs_cur.rowcount + refs_cur.rowcount
+
     def find_definition(
         self,
         name: str,

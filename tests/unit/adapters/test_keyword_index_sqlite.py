@@ -68,6 +68,29 @@ def test_version_format() -> None:
     assert SqliteFTS5Index().version.startswith("sqlite-fts5-")
 
 
+def test_delete_by_path_removes_all_rows_for_file() -> None:
+    """Sprint 6: incremental reindex purges rows for changed files via
+    DELETE FROM chunks_fts WHERE path = ?. Returns the rowcount."""
+    idx = SqliteFTS5Index()
+    idx.add(
+        [
+            _entry("a.py", "def foo(): ..."),
+            _entry("a.py", "class Bar: pass"),
+            _entry("b.py", "def foo(): ..."),
+        ]
+    )
+    n = idx.delete_by_path("a.py")
+    assert n == 2
+    out = idx.search("foo", k=5)
+    assert {e.chunk.path for e, _ in out} == {"b.py"}
+
+
+def test_delete_by_path_unknown_path_is_zero() -> None:
+    idx = SqliteFTS5Index()
+    idx.add([_entry("a.py", "def foo(): ...")])
+    assert idx.delete_by_path("never.py") == 0
+
+
 def test_search_works_from_non_main_thread() -> None:
     """Regression for the v0.6.1 SQLite threading bug.
 

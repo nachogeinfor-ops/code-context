@@ -48,6 +48,11 @@ class VectorStore(Protocol):
     def search(self, query: np.ndarray, k: int) -> list[tuple[IndexEntry, float]]:
         """Returns top-k entries with cosine similarity scores, descending."""
 
+    def delete_by_path(self, path: str) -> int:
+        """Remove every entry whose chunk.path == `path`. Returns the row
+        count removed. Used by incremental reindex (Sprint 6) to purge a
+        file's chunks before re-adding fresh ones."""
+
     def persist(self, path: Path) -> None:
         """Writes vectors.npy + chunks.parquet under path/."""
 
@@ -128,6 +133,10 @@ class KeywordIndex(Protocol):
     def search(self, query: str, k: int) -> list[tuple[IndexEntry, float]]:
         """Returns top-k entries with BM25-style scores, descending."""
 
+    def delete_by_path(self, path: str) -> int:
+        """Remove every row whose path == `path`. Returns the row count
+        removed. Used by incremental reindex (Sprint 6)."""
+
     def persist(self, path: Path) -> None: ...
 
     def load(self, path: Path) -> None: ...
@@ -185,6 +194,11 @@ class SymbolIndex(Protocol):
 
     def find_references(self, name: str, max_count: int = 50) -> list[SymbolRef]:
         """Returns lines mentioning `name` as a whole-word match (no `log` → `logger`)."""
+
+    def delete_by_path(self, path: str) -> int:
+        """Remove every definition AND reference row whose path == `path`.
+        Returns the total row count removed across both tables. Used by
+        incremental reindex (Sprint 6)."""
 
     def persist(self, path: Path) -> None: ...
 

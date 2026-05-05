@@ -35,6 +35,24 @@ class NumPyParquetStore:
         else:
             self._vectors = np.concatenate([self._vectors, stacked], axis=0)
 
+    def delete_by_path(self, path: str) -> int:
+        """Remove every chunk whose path == `path`. Returns the row count
+        removed (0 if nothing matched). Rebuilds `_vectors` via boolean
+        masking; if the deletion empties the store, `_vectors` resets to
+        None so subsequent `search` short-circuits on the empty-store
+        branch (matches the post-`__init__` invariant)."""
+        if self._vectors is None or not self._chunks:
+            return 0
+        keep = [c.path != path for c in self._chunks]
+        n_removed = sum(1 for k in keep if not k)
+        if n_removed == 0:
+            return 0
+        self._vectors = self._vectors[keep]
+        self._chunks = [c for c, k in zip(self._chunks, keep, strict=True) if k]
+        if self._vectors.shape[0] == 0:
+            self._vectors = None
+        return n_removed
+
     def search(self, query: np.ndarray, k: int) -> list[tuple[IndexEntry, float]]:
         if self._vectors is None or self._vectors.shape[0] == 0:
             return []

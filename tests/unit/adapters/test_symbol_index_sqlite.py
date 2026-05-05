@@ -60,6 +60,46 @@ def test_persist_load_roundtrip(tmp_path: Path) -> None:
     assert out[0] == SymbolDef("x", "a.py", (1, 5), "function", "python")
 
 
+def test_delete_by_path_purges_defs_and_refs() -> None:
+    """Sprint 6 incremental reindex: when a file changes, we drop its
+    rows from BOTH symbol_defs AND symbol_refs_fts before re-inserting.
+    Returns the total rowcount across the two tables."""
+    idx = SymbolIndexSqlite()
+    idx.add_definitions(
+        [
+            SymbolDef("foo", "a.py", (1, 5), "function", "python"),
+            SymbolDef("bar", "a.py", (10, 12), "function", "python"),
+            SymbolDef("foo", "b.py", (1, 5), "function", "python"),
+        ]
+    )
+    idx.populate_references_for_test(
+        [
+            ("a.py", 7, "  foo()"),
+            ("a.py", 13, "  bar()"),
+            ("b.py", 4, "  foo()"),
+        ]
+    )
+
+    n = idx.delete_by_path("a.py")
+    # 2 defs + 2 refs purged from a.py
+    assert n == 4
+
+    # b.py rows survive.
+    foos = idx.find_definition("foo")
+    assert {d.path for d in foos} == {"b.py"}
+    bars = idx.find_definition("bar")
+    assert bars == []
+    refs = idx.find_references("foo")
+    assert {r.path for r in refs} == {"b.py"}
+
+
+def test_delete_by_path_unknown_path_is_zero() -> None:
+    idx = SymbolIndexSqlite()
+    idx.add_definitions([SymbolDef("foo", "a.py", (1, 5), "function", "python")])
+    assert idx.delete_by_path("never.py") == 0
+    assert idx.find_definition("foo") != []  # untouched
+
+
 def test_load_from_empty_dir_raises() -> None:
     with pytest.raises(FileNotFoundError):
         SymbolIndexSqlite().load(Path("/no/such/dir"))

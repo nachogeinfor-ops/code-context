@@ -71,3 +71,44 @@ def test_load_from_empty_dir_results_in_empty_store(tmp_path: Path) -> None:
     # Empty dir; persist nothing
     with pytest.raises(FileNotFoundError):
         store.load(tmp_path)
+
+
+def test_delete_by_path_removes_matching_rows() -> None:
+    """Sprint 6: incremental reindex needs to purge rows for changed files
+    before re-adding fresh chunks. delete_by_path is the per-file primitive.
+    Returns the number of rows removed."""
+    store = NumPyParquetStore()
+    store.add(
+        [
+            _entry("a.py", [1.0, 0.0, 0.0, 0.0]),
+            _entry("a.py", [0.5, 0.5, 0.0, 0.0]),  # second chunk in same file
+            _entry("b.py", [0.0, 1.0, 0.0, 0.0]),
+        ]
+    )
+    n = store.delete_by_path("a.py")
+    assert n == 2
+    out = store.search(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), k=10)
+    assert {e.chunk.path for e, _ in out} == {"b.py"}
+
+
+def test_delete_by_path_unknown_path_is_zero() -> None:
+    store = NumPyParquetStore()
+    store.add([_entry("a.py", [1.0, 0.0, 0.0, 0.0])])
+    assert store.delete_by_path("never-indexed.py") == 0
+    out = store.search(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), k=10)
+    assert {e.chunk.path for e, _ in out} == {"a.py"}
+
+
+def test_delete_by_path_empty_store_is_zero() -> None:
+    assert NumPyParquetStore().delete_by_path("a.py") == 0
+
+
+def test_delete_by_path_to_zero_rows_collapses_array() -> None:
+    """When the last row is deleted, the internal array goes back to None
+    so subsequent search() short-circuits on the empty-store branch."""
+    store = NumPyParquetStore()
+    store.add([_entry("only.py", [1.0, 0.0, 0.0, 0.0])])
+    n = store.delete_by_path("only.py")
+    assert n == 1
+    out = store.search(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32), k=5)
+    assert out == []

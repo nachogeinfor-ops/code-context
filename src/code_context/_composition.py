@@ -57,6 +57,9 @@ class _NullKeywordIndex:
     def search(self, query: str, k: int):
         return []
 
+    def delete_by_path(self, path: str) -> int:
+        return 0
+
     def persist(self, path) -> None:
         pass
 
@@ -87,6 +90,9 @@ class _NullSymbolIndex:
 
     def find_references(self, name, max_count=50):
         return []
+
+    def delete_by_path(self, path: str) -> int:
+        return 0
 
     def persist(self, path) -> None:
         pass
