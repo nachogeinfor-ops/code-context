@@ -25,6 +25,8 @@ EXPECTED_TOOLS = {
     "get_summary",
     "find_definition",
     "find_references",
+    "get_file_tree",
+    "explain_diff",
 }
 
 _TABLE_ROW = re.compile(r"\|\s*`(\w+)`\s*\|\s*`\(([^)]*)\)`\s*\|")
@@ -121,3 +123,27 @@ def test_find_references_params(
     optionality = dict(params)
     assert optionality["name"] is False
     assert optionality["max"] is True
+
+
+def test_get_file_tree_params(
+    upstream_protocol: dict[str, list[tuple[str, bool]]],
+) -> None:
+    """get_file_tree takes path?, max_depth?, include_hidden? — all optional."""
+    params = upstream_protocol["get_file_tree"]
+    names = [n for n, _ in params]
+    assert names == ["path", "max_depth", "include_hidden"]
+    optionality = dict(params)
+    for opt in names:
+        assert optionality[opt] is True
+
+
+def test_explain_diff_params(
+    upstream_protocol: dict[str, list[tuple[str, bool]]],
+) -> None:
+    """explain_diff takes ref (required) and max_chunks (optional)."""
+    params = upstream_protocol["explain_diff"]
+    names = [n for n, _ in params]
+    assert names == ["ref", "max_chunks"]
+    optionality = dict(params)
+    assert optionality["ref"] is False
+    assert optionality["max_chunks"] is True

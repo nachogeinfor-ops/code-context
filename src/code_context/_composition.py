@@ -27,8 +27,10 @@ from code_context.domain.ports import (
     Reranker,
     SymbolIndex,
 )
+from code_context.domain.use_cases.explain_diff import ExplainDiffUseCase
 from code_context.domain.use_cases.find_definition import FindDefinitionUseCase
 from code_context.domain.use_cases.find_references import FindReferencesUseCase
+from code_context.domain.use_cases.get_file_tree import GetFileTreeUseCase
 from code_context.domain.use_cases.get_summary import GetSummaryUseCase
 from code_context.domain.use_cases.indexer import IndexerUseCase
 from code_context.domain.use_cases.recent_changes import RecentChangesUseCase
@@ -206,9 +208,13 @@ def build_use_cases(
     GetSummaryUseCase,
     FindDefinitionUseCase,
     FindReferencesUseCase,
+    GetFileTreeUseCase,
+    ExplainDiffUseCase,
 ]:
     git_source = GitCliSource()
     introspector = FilesystemIntrospector()
+    code_source = FilesystemSource()
+    chunker = build_chunker(cfg)
     reranker = build_reranker(cfg)
     return (
         SearchRepoUseCase(
@@ -221,6 +227,13 @@ def build_use_cases(
         GetSummaryUseCase(introspector=introspector, repo_root=cfg.repo_root),
         FindDefinitionUseCase(symbol_index=symbol_index),
         FindReferencesUseCase(symbol_index=symbol_index),
+        GetFileTreeUseCase(code_source=code_source, repo_root=cfg.repo_root),
+        ExplainDiffUseCase(
+            chunker=chunker,
+            code_source=code_source,
+            git_source=git_source,
+            repo_root=cfg.repo_root,
+        ),
     )
 
 

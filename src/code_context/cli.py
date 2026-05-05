@@ -88,7 +88,7 @@ def _cmd_query(args: argparse.Namespace) -> int:
             "Run `code-context reindex` to backfill the symbol leg.",
             current,
         )
-    search, _, _, _, _ = build_use_cases(
+    search, _, _, _, _, _, _ = build_use_cases(
         cfg,
         indexer,
         store,

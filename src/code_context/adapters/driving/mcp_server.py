@@ -1,4 +1,4 @@
-"""MCP driving adapter: registers the 5 contract tools on an mcp Server."""
+"""MCP driving adapter: registers the 7 contract tools on an mcp Server."""
 
 from __future__ import annotations
 
@@ -12,8 +12,10 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from code_context.domain.use_cases.explain_diff import ExplainDiffUseCase
 from code_context.domain.use_cases.find_definition import FindDefinitionUseCase
 from code_context.domain.use_cases.find_references import FindReferencesUseCase
+from code_context.domain.use_cases.get_file_tree import GetFileTreeUseCase
 from code_context.domain.use_cases.get_summary import GetSummaryUseCase
 from code_context.domain.use_cases.recent_changes import RecentChangesUseCase
 from code_context.domain.use_cases.search_repo import SearchRepoUseCase
@@ -29,8 +31,10 @@ def register(
     get_summary: GetSummaryUseCase,
     find_definition: FindDefinitionUseCase,
     find_references: FindReferencesUseCase,
+    get_file_tree: GetFileTreeUseCase,
+    explain_diff: ExplainDiffUseCase,
 ) -> None:
-    """Register the 5 contract tools on the given mcp Server instance."""
+    """Register the 7 contract tools on the given mcp Server instance."""
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -155,6 +159,64 @@ def register(
                     "required": ["name"],
                 },
             ),
+            Tool(
+                name="get_file_tree",
+                description=(
+                    "Repo-relative directory tree, gitignore-aware. Use INSTEAD of "
+                    "shelling out to `Bash: ls -R` or `Bash: tree` when the user "
+                    "asks for the project structure or for orientation in an "
+                    "unfamiliar module. Returns a hierarchical FileTreeNode with "
+                    "files (with byte sizes) and directories (with recursive "
+                    "children, capped at max_depth). Honors .gitignore; skips "
+                    "hidden files unless include_hidden=true."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": (
+                                "Optional repo-relative subdirectory; defaults to root."
+                            ),
+                        },
+                        "max_depth": {
+                            "type": "integer",
+                            "default": 4,
+                            "description": "Cap on tree depth.",
+                        },
+                        "include_hidden": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": "Include dot-files / dot-directories.",
+                        },
+                    },
+                },
+            ),
+            Tool(
+                name="explain_diff",
+                description=(
+                    "AST-aligned chunks affected by the diff at `ref`. Use INSTEAD "
+                    'of `Bash: git show <sha>` when the user asks "what does this '
+                    'commit do?" or "what changed in HEAD~3?". The chunker resolves '
+                    "which whole functions / classes were touched, not just raw line "
+                    "additions — much easier for an LLM to reason about. Returns "
+                    "DiffChunk[] with path, lines, snippet, kind, and change "
+                    '("added"|"modified"|"deleted").'
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "ref": {
+                            "type": "string",
+                            "description": (
+                                "Git ref: full SHA, short SHA, HEAD, HEAD~N, branch name."
+                            ),
+                        },
+                        "max_chunks": {"type": "integer", "default": 50},
+                    },
+                    "required": ["ref"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -169,6 +231,10 @@ def register(
             return await asyncio.to_thread(_handle_find_definition, find_definition, arguments)
         if name == "find_references":
             return await asyncio.to_thread(_handle_find_references, find_references, arguments)
+        if name == "get_file_tree":
+            return await asyncio.to_thread(_handle_file_tree, get_file_tree, arguments)
+        if name == "explain_diff":
+            return await asyncio.to_thread(_handle_explain_diff, explain_diff, arguments)
         raise ValueError(f"unknown tool: {name}")
 
 
@@ -253,6 +319,45 @@ def _handle_find_references(uc: FindReferencesUseCase, args: dict[str, Any]) -> 
         max_count=int(args.get("max", 50)),
     )
     payload = [{"path": r.path, "line": r.line, "snippet": r.snippet} for r in refs]
+    return [TextContent(type="text", text=_to_json(payload))]
+
+
+def _handle_file_tree(uc: GetFileTreeUseCase, args: dict[str, Any]) -> list[TextContent]:
+    tree = uc.run(
+        path=args.get("path"),
+        max_depth=int(args.get("max_depth", 4)),
+        include_hidden=bool(args.get("include_hidden", False)),
+    )
+    payload = _serialize_tree_node(tree)
+    return [TextContent(type="text", text=_to_json(payload))]
+
+
+def _serialize_tree_node(node) -> dict[str, Any]:
+    """Recursively flatten a FileTreeNode tuple to plain JSON dicts."""
+    out: dict[str, Any] = {
+        "path": node.path,
+        "kind": node.kind,
+        "size": node.size,
+        "children": [_serialize_tree_node(c) for c in node.children],
+    }
+    return out
+
+
+def _handle_explain_diff(uc: ExplainDiffUseCase, args: dict[str, Any]) -> list[TextContent]:
+    chunks = uc.run(
+        ref=args["ref"],
+        max_chunks=int(args.get("max_chunks", 50)),
+    )
+    payload = [
+        {
+            "path": c.path,
+            "lines": list(c.lines),
+            "snippet": c.snippet,
+            "kind": c.kind,
+            "change": c.change,
+        }
+        for c in chunks
+    ]
     return [TextContent(type="text", text=_to_json(payload))]
 
 
