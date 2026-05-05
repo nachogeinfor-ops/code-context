@@ -7,13 +7,15 @@
 
 ## What it does
 
-When you point Claude Code at a repo, you give it `CLAUDE.md` for static context. `code-context` adds **dynamic context** via 3 MCP tools:
+When you point Claude Code at a repo, you give it `CLAUDE.md` for static context. `code-context` adds **dynamic context** via 5 MCP tools:
 
 - **`search_repo(query, top_k?, scope?)`** — **hybrid retrieval** across the codebase: vector embeddings (semantic) fused with BM25 keyword search (exact identifiers) via Reciprocal Rank Fusion. Optional cross-encoder reranking (off by default — enable with `CC_RERANK=on`).
 - **`recent_changes(since?, paths?, max?)`** — recent git commits, optionally filtered.
 - **`get_summary(scope?, path?)`** — structured project summary (name, stack, key modules, stats).
+- **`find_definition(name, language?, max?)`** — locate where a symbol (function, class, method, type) is defined. Use INSTEAD of `Grep` for `def X` / `class X` / `function X` patterns. Returns repo-relative paths with line ranges and the symbol's kind (function, class, method, interface, struct, enum, record).
+- **`find_references(name, max?)`** — list every line mentioning a named symbol. Use INSTEAD of `grep -n "X"` when the user asks "who calls X?" or "where is X used?". Word-boundary matched, so `log` doesn't return `logger`.
 
-Architecture: hexagonal (ports & adapters). 6 driven ports with default implementations (sentence-transformers embeddings, NumPy+Parquet vector store, line-based chunker, filesystem code source, git CLI, filesystem introspector). All swappable.
+Architecture: hexagonal (ports & adapters). 9 driven ports with default implementations (sentence-transformers embeddings, NumPy+Parquet vector store, tree-sitter / line chunker, filesystem code source, git CLI, filesystem introspector, SQLite FTS5 keyword index, cross-encoder reranker, SQLite-backed symbol index). All swappable.
 
 ## Install
 
@@ -52,6 +54,8 @@ This repo has the [code-context](https://github.com/nachogeinfor-ops/code-contex
 - **`search_repo(query, top_k?, scope?)`** — for conceptual questions like "where do we handle authentication" or "how is caching implemented". Use this instead of `Grep` whenever the query isn't an exact string match.
 - **`recent_changes(since?, paths?, max?)`** — for "what changed recently" / commit-history questions. Use this instead of shelling out to `git log`.
 - **`get_summary(scope?, path?)`** — for project orientation at session start, or to inspect a specific module.
+- **`find_definition(name, language?, max?)`** — for "where is X defined?". Use this instead of `Grep` for `def X` / `class X` patterns; tree-sitter-indexed at reindex time, so it's faster and more accurate than scanning text.
+- **`find_references(name, max?)`** — for "who calls X?" / "where is X used?". Use this instead of `grep -n`; word-boundary matched so `log` won't match `logger`.
 ```
 
 Without this hint, Claude will work fine — it just won't reach for the MCP tools, which means the index goes unused. The hint is one paragraph; copy-paste it.

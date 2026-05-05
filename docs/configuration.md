@@ -21,6 +21,7 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_KEYWORD_INDEX` | `sqlite` | Keyword index strategy: `sqlite` (FTS5 BM25, default) or `none` (vector-only). |
 | `CC_RERANK` | `off` | Set to `on`/`true`/`1` to activate cross-encoder reranking on the fused top-N candidates. ~80 MB model download on first use. |
 | `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Override the cross-encoder model. Only consulted when `CC_RERANK=on`. |
+| `CC_SYMBOL_INDEX` | `sqlite` | Symbol-index strategy: `sqlite` (default, FTS5-backed) or `none` (disables `find_definition`/`find_references`). |
 
 ## Examples
 
@@ -116,6 +117,42 @@ The keyword index persists as `keyword.sqlite` next to `vectors.npy` in
 your cache dir. Size is roughly proportional to the source repo (each
 chunk's snippet text is stored once). For a 50K-file repo, expect
 ~50-100 MB of keyword index alongside the vector data.
+
+## Symbol tools
+
+`find_definition` and `find_references` (added in v0.5.0) are powered by a
+SQLite-backed symbol index that is populated at reindex time:
+
+- **Definitions** come from `TreeSitterChunker.extract_definitions`. Each
+  function/class/method/struct/enum/interface/record node in a Py/JS/TS/
+  Go/Rust/C# file produces a row in the `symbol_defs` table with `name`,
+  `path`, `line_start`, `line_end`, `kind`, `language`. `find_definition`
+  is a single indexed SQL lookup on `name` (optionally narrowed by
+  `language`).
+- **References** come from the FTS5-indexed snippet text of every chunk
+  emitted by the chunker (tree-sitter or LineChunker fallback). FTS5
+  unicode61 tokenizer matches the symbol; a word-boundary regex
+  post-filter catches near-misses (e.g., `log` doesn't return `logger`).
+
+The symbol index lives in the same on-disk directory as the vector store
+and keyword index (`<cache>/<repo-hash>/index-<head>-<ts>/symbols.sqlite`).
+Disk overhead is small — the symbol_defs table has one row per definition
+and the references FTS5 table re-uses chunk snippet text that's already
+present in the keyword index.
+
+### Disabling
+
+If you don't want symbol tools (e.g., your project doesn't have
+tree-sitter-supported languages, or the SQLite FTS5 isn't available):
+
+```bash
+export CC_SYMBOL_INDEX=none
+```
+
+This wires a no-op adapter; both `find_definition` and `find_references`
+return `[]`. The MCP tools stay registered (so the contract holds) but
+they never produce results — Claude's smart enough to fall back to
+`Grep` when an MCP tool returns nothing.
 
 ## Chunking strategies
 
