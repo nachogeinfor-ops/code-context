@@ -1,5 +1,99 @@
 # Changelog
 
+## v0.9.0 — 2026-05-05
+
+Sprint 7 ships. **Background reindex + optional live mode.** The
+MCP server now starts in **<1 ms cold / ~457 ms warm** on
+`WinServiceScheduler` (305 files / 2220 chunks); reindex work runs
+on a daemon thread. Optional `CC_WATCH=on` turns every save into
+an automatic incremental reindex within ~4 s.
+
+The user-visible v0.7.x pain — "Failed to reconnect" on cold start
+because the synchronous reindex blocked stdio for minutes — is
+gone. Foreground is non-blocking regardless of cache state.
+
+### Behavior
+
+- **`IndexUpdateBus`** — threadsafe pub-sub: monotonic generation
+  counter + subscriber list, both guarded by a single Lock.
+  Subscribers fire OUTSIDE the lock; exceptions in subscribers are
+  logged-and-swallowed.
+- **`BackgroundIndexer`** — daemon thread with a sticky `Event` for
+  trigger coalescing. N triggers within `idle_seconds` collapse to
+  one reindex; trigger arriving DURING a slow reindex produces
+  exactly one follow-up. Errors are caught and logged; the worker
+  keeps running so the next trigger has a chance.
+- **Stale-aware `SearchRepoUseCase`** — optional `bus` +
+  `reload_callback` constructor args. On each `.run()` call,
+  compares `bus.generation` to `_last_seen_generation`; on advance,
+  fires the callback (which composition wires to "load active
+  index dir into all 3 stores") before serving the query. Single
+  int compare in the hot path; legacy callers (no bus) incur zero
+  overhead.
+- **Server startup shape changed**: foreground builds the runtime,
+  fast-loads whatever index is on disk, registers MCP tools, runs
+  stdio. Total foreground time on a previously-indexed repo:
+  ~0.5 s. On a cache-cold repo: <1 ms. Bg thread runs the first
+  reindex job; queries serve empty until it completes.
+- **Optional `RepoWatcher`** — `CC_WATCH=on` + `pip install
+  code-context[watch]` (adds `watchdog>=4`). Lazy import; setting
+  the env var without the extra is a no-op with a warning. Saves
+  flow through a debounce window (default 1 s, configurable via
+  `CC_WATCH_DEBOUNCE_MS`) into a `bg.trigger()` call. Net: edits
+  reflected in the live index within ~`debounce + 4 s` without
+  manual `code-context reindex`.
+
+### New env vars
+
+| Var | Default | Effect |
+|---|---|---|
+| `CC_BG_REINDEX` | `on` | Start the background indexer at server startup. `off` falls back to v0.7-style synchronous reindex when no index exists. |
+| `CC_BG_IDLE_SECONDS` | `1.0` | Coalesce window for trigger storms. |
+| `CC_WATCH` | `off` | Opt-in fs watcher. Requires `[watch]` extra. |
+| `CC_WATCH_DEBOUNCE_MS` | `1000` | Watcher debounce window. |
+
+### Tests
+
+- 6 new `IndexUpdateBus` tests (initial state, monotonic
+  generation, deliver to subs, no backlog replay, fault isolation,
+  concurrent publish from 4 threads).
+- 9 new `BackgroundIndexer` tests (full vs incremental dispatch,
+  no-work skip, burst-before-run coalescing, trigger-during-run
+  follow-up, clean stop, indexer-exception isolation,
+  trigger-before-start, no thread leak).
+- 4 new stale-aware `SearchRepoUseCase` tests (legacy callers,
+  reload-on-advance, coalesce-multiple-publishes, retry after
+  reload failure).
+- 6 new `RepoWatcher` tests (single event, burst-coalescing, two
+  windows, stop cancels timer, callback exception isolation, no
+  observer thread leak).
+- 2 new integration tests against tiny_repo + real git
+  (cold-start serves empty → bg completes → reload + serve;
+  manual publish triggers reload).
+- **254 tests passing total** (was 227 in v0.8.0; +27 net).
+
+### Smoke against WinServiceScheduler (`scripts/bench_sprint7.py`)
+
+| Phase | Wall ms |
+|---|--:|
+| Foreground cold startup | 0.8 |
+| BG full reindex (cold) | 410 500 |
+| **Foreground warm startup** | **456.7** |
+| BG incremental after edit | 5 248 |
+| **Watch mode save → swap** | **3 965** |
+
+Sprint-7 acceptance criteria all green under the bench driver;
+transcripts in
+[`benchmarks/sprint-7-background-reindex.md`](benchmarks/sprint-7-background-reindex.md).
+
+### Affected versions
+
+v0.6.x–v0.8.0. Foreground startup drops from minutes to ~0.5 s on
+a warm cache. Set `CC_BG_REINDEX=off` to opt back into the v0.7-
+style synchronous behavior if you need deterministic "all queries
+work as soon as the server is up." Set `CC_WATCH=on` (with
+`[watch]` extra) for editor-driven live reindex.
+
 ## v0.8.0 — 2026-05-05
 
 Sprint 6 ships. **Incremental reindex** replaces the all-or-nothing
