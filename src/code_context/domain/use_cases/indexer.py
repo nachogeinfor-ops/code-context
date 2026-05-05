@@ -1,14 +1,15 @@
-"""IndexerUseCase — orchestrates the 5 ports for full reindex + staleness."""
+"""IndexerUseCase — orchestrates the 5 ports for full + incremental reindex."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from code_context.domain.models import IndexEntry, SymbolDef
+from code_context.domain.models import IndexEntry, StaleSet, SymbolDef
 from code_context.domain.ports import (
     Chunker,
     CodeSource,
@@ -23,7 +24,9 @@ log = logging.getLogger(__name__)
 
 _BATCH_SIZE = 64
 _CURRENT_FILE = "current.json"
-_VERSION = 1
+# v1: original schema (no file_hashes).
+# v2: Sprint 6 — adds file_hashes for incremental reindex.
+_VERSION = 2
 
 
 @dataclass
@@ -42,39 +45,79 @@ class IndexerUseCase:
 
     # ---------- public ----------
 
-    def is_stale(self) -> bool:
+    def dirty_set(self) -> StaleSet:
+        """Verdict that drives Sprint 6's incremental reindex.
+
+        Returns a StaleSet whose `full_reindex_required` is True for any
+        of these blow-it-all-away conditions: no current index, no git
+        repo, metadata schema older than v2 (i.e. file_hashes absent),
+        or any global version (embeddings model id, chunker version,
+        keyword/symbol index version) changed since last index. Otherwise
+        compares the per-file content SHA of every currently-indexable
+        file against `metadata.file_hashes`; mismatches go to
+        `dirty_files`, vanished entries go to `deleted_files`. Both
+        empty + flag False = "no work" steady state.
+        """
         active = self._current_metadata()
         if active is None:
-            return True
-
+            return StaleSet(full_reindex_required=True, reason="no current index")
         if not self.git_source.is_repo(self.repo_root):
-            # No repo → no HEAD → can't track changes deterministically.
-            return True
-
-        if active.get("head_sha") != self.git_source.head_sha(self.repo_root):
-            return True
+            return StaleSet(full_reindex_required=True, reason="not a git repo")
+        if active.get("version", 1) < _VERSION:
+            return StaleSet(
+                full_reindex_required=True,
+                reason="metadata schema upgrade (v1 → v2)",
+            )
         if active.get("embeddings_model") != self.embeddings.model_id:
-            return True
+            return StaleSet(full_reindex_required=True, reason="embeddings_model changed")
         if active.get("chunker_version") != self.chunker.version:
-            return True
+            return StaleSet(full_reindex_required=True, reason="chunker_version changed")
         if active.get("keyword_version") != self.keyword_index.version:
-            return True
+            return StaleSet(full_reindex_required=True, reason="keyword_version changed")
         if active.get("symbol_version") != self.symbol_index.version:
-            return True
+            return StaleSet(full_reindex_required=True, reason="symbol_version changed")
 
-        indexed_at = datetime.fromisoformat(active["indexed_at"])
+        prior_hashes: dict[str, str] = active.get("file_hashes") or {}
         files = self.code_source.list_files(
             self.repo_root, self.include_extensions, self.max_file_bytes
         )
+        current_paths_rel: set[str] = set()
+        dirty: list[Path] = []
         for f in files:
+            rel = f.relative_to(self.repo_root).as_posix()
+            current_paths_rel.add(rel)
             try:
-                mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=UTC)
-            except OSError:
+                content = self.code_source.read(f)
+            except (OSError, UnicodeDecodeError):
+                # Unreadable now — skip; if it was indexed before, the next
+                # full reindex picks it up. Don't mark as dirty (avoids a
+                # poison-pill loop where a permanently-broken file forces
+                # repeated incremental runs).
                 continue
-            if mtime > indexed_at:
-                return True
+            sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
+            if prior_hashes.get(rel) != sha:
+                dirty.append(f)
 
-        return False
+        deleted = tuple(p for p in prior_hashes if p not in current_paths_rel)
+
+        return StaleSet(
+            full_reindex_required=False,
+            reason=f"{len(dirty)} dirty, {len(deleted)} deleted",
+            dirty_files=tuple(dirty),
+            deleted_files=deleted,
+        )
+
+    def is_stale(self) -> bool:
+        """Thin wrapper kept so existing CLI / composition callers work.
+
+        Returns True when dirty_set's verdict is anything other than
+        the steady-state "no work". Sprint 6 retired the head_sha
+        global invalidator: changing HEAD without modifying any indexed
+        file no longer triggers a reindex (per-file SHA tracks content
+        truth, not commit position).
+        """
+        s = self.dirty_set()
+        return s.full_reindex_required or bool(s.dirty_files) or bool(s.deleted_files)
 
     def run(self) -> Path:
         """Full reindex. Returns the new index directory path.
@@ -91,6 +134,9 @@ class IndexerUseCase:
         all_defs: list[SymbolDef] = []
         # Collect chunks first so we can batch-embed.
         chunks_with_paths: list = []
+        # Per-file SHA stamped into metadata so dirty_set() has a baseline
+        # for the next run. Computed inline so we don't re-read every file.
+        file_hashes: dict[str, str] = {}
         for f in files:
             try:
                 content = self.code_source.read(f)
@@ -98,6 +144,7 @@ class IndexerUseCase:
                 log.warning("indexer: skipping %s (%s)", f, exc)
                 continue
             rel = f.relative_to(self.repo_root).as_posix()
+            file_hashes[rel] = hashlib.sha256(content.encode("utf-8")).hexdigest()
             for chunk in self.chunker.chunk(content, rel):
                 chunks_with_paths.append(chunk)
             # Symbol extraction — only chunkers that expose it (TreeSitterChunker).
@@ -145,7 +192,8 @@ class IndexerUseCase:
             "keyword_version": self.keyword_index.version,
             "symbol_version": self.symbol_index.version,
             "n_chunks": len(all_entries),
-            "n_files": len(files),
+            "n_files": len(file_hashes),
+            "file_hashes": file_hashes,
         }
         (new_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
 
