@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.3.2 — 2026-05-05
+
+C# language support lands in TreeSitterChunker. Cache auto-invalidates
+on upgrade because `chunker.version` bumped from `treesitter-v1` to
+`treesitter-v2` (the staleness check sees the version drift and
+triggers a full reindex on first v0.3.2 run).
+
+For users with C#-heavy repos (e.g., WinServiceScheduler) this is the
+release where Sprint 1 (tree-sitter chunks) and Sprint 2 (code-tuned
+embeddings) actually compose. Until v0.3.2, `.cs` files fell through
+to LineChunker so the bge-code-v1.5 embeddings saw 50-line windows
+instead of whole methods.
+
+- feat(adapter): TreeSitterChunker handles `.cs` files (method,
+  constructor, class, interface, struct, record, enum captures).
+  Lazy-loads the parser via `tree-sitter-language-pack`.
+- chore(adapter): bump TreeSitterChunker version `treesitter-v1` →
+  `treesitter-v2` so caches invalidate on upgrade.
+- test(adapter): C# fixture + parametrize coverage for chunker (kinds
+  + line-range round-trip) + dispatcher (8 extensions routed).
+- docs: README + configuration.md mention C# in the supported list.
+
 ## v0.3.1 — 2026-05-05
 
 Hot patch immediately after v0.3.0 to fix CI lint. No runtime behavior
