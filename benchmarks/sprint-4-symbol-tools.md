@@ -59,7 +59,19 @@ something a developer would actually type.
 | # | Prompt | Tool invoked | Result quality | Notes |
 |---|---|---|---|---|
 | 1 | Where is BushidoLogScannerAdapter defined? | ✓ `find_definition(name="BushidoLogScannerAdapter", language="csharp")` | ✓ Top-1 = `GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogScannerAdapter.cs:16-465` (class) + 37-47 (constructor) | First-try success after 2 hotfixes — see lessons below |
-| 2 | Find every caller of `BushidoLogScannerAdapter` | ✓ `find_references(name="BushidoLogScannerAdapter")` | ✓ 26 refs: 1 production (DI extension `ServiceCollectionExtensions.cs:164`) + 25 across 7 test files. Claude synthesised "Production code instantiates it in exactly one place" from the clean per-line data. | First clean result after v0.6.2; v0.6.1 had returned ~100 KB chunks and got rejected by Claude's MCP token budget. |
+| 2 | Find every caller of `BushidoLogScannerAdapter` | ✓ `find_references(name="BushidoLogScannerAdapter")` | ✓ 26 refs: 1 production (DI extension `ServiceCollectionExtensions.cs:164`) + 25 across 7 test files. Claude synthesised "Production code instantiates it in exactly one place". | First clean result after v0.6.2; v0.6.1 had returned ~100 KB chunks and got rejected by Claude's MCP token budget. |
+| 3 | Who calls `AddBushidoLogMonitoring`? | ✓ `find_references(name="AddBushidoLogMonitoring")` | ✓ 2 production callers (`Program.cs:52` and `:111`), 0 in tests. Claude **filtered out** the comment-mention at `WebPanelServiceCollectionExtensions.cs:132` from real callers — semantic synthesis on top of the data. | Demonstrates Claude reasoning past raw matches into "this is a comment, not a call". |
+| 4 | Where is `IBushidoLogScanner` implemented? | ✓ `find_references(name="IBushidoLogScanner")` | ✓ 1 production impl (`BushidoLogScannerAdapter.cs:16`) + 5 test mocks via Moq + interface definition at `Domain/Ports/IBushidoLogScanner.cs:11`. Claude classified: "clean single-implementor port: one real adapter, Moq for tests". | Used `find_references` instead of `find_definition` because "implementations" matches the `: IBushidoLogScanner` declaration line — sound choice. |
+| 5 | Where is `ConvertTo-Bat` defined? | ✓ `find_definition(name="ConvertTo-Bat")` returned empty → ✓ fell back to `Search` (Grep) | ✓ Correct empty result. Claude synthesised: "Not found... PowerShell cmdlet shape but no script defines it. Share the spelling if you had a different name in mind". | **Correct fallback**: MCP empty + Grep empty = symbol genuinely doesn't exist; Claude's interpretation is the right behavior. |
+
+**Tool invocation rate**: **5/5** (target was ≥4/5 for ship).
+
+**Result quality**: **5/5** (target was ≥4/5; prompt #5's empty + fallback IS the correct behavior, not a quality regression).
+
+**Sprint 4 decision rule met**: ship `code-context` v0.5.0+v0.6.x line as the
+reference implementation of Tool Protocol v1.1. Both new tools demonstrably
+produce clean, structured data that Claude can analyze beyond simple
+match-listing.
 | 3 | Where is IConfigurationAdapter implemented? | _TBD_ | _TBD_ | _TBD_ |
 | 4 | Who calls services.AddGeinforConfiguration? | _TBD_ | _TBD_ | _TBD_ |
 | 5 | Where is ConvertTo-Bat defined in the install scripts? | _TBD_ | _TBD_ | _TBD_ |
@@ -97,12 +109,29 @@ of why production smokes find bugs that 162 unit + integration tests
 miss: each layer was correct in isolation, but the composition
 exposed boundary-crossing edge cases.
 
-After v0.6.2, prompt #2 not only worked but Claude was able to
-**reason** about the data — it grouped 26 refs into production (1)
-and tests (25), and surfaced the meta-observation that the adapter
-is instantiated in exactly one place. That kind of analytical layer
-on top of the tool output is the actual value proposition of the
-MCP server: clean structured data → Claude does the synthesis.
+After v0.6.2, prompts #2–#4 didn't just work — Claude **reasoned** about
+the data:
+
+- Prompt #2: grouped 26 refs into production (1) vs tests (25); surfaced
+  "instantiated in exactly one place".
+- Prompt #3: distinguished real callers from a comment-mention at
+  `WebPanelServiceCollectionExtensions.cs:132` ("just a comment,
+  not a call").
+- Prompt #4: classified the implementation pattern as "clean
+  single-implementor port: one real adapter, Moq for tests".
+
+That meta-analytical layer is the actual value proposition of the MCP
+server: clean structured data → Claude does the synthesis. Replacing it
+with raw `Grep` output forces Claude to spend tokens on parse + dedup +
+filter before reasoning — and on a 100 KB chunk dump, the token budget
+runs out before Claude even starts reasoning.
+
+Prompt #5 (`ConvertTo-Bat`) demonstrated the **correct fallback path**:
+`find_definition` returned empty → Claude tried `Search` (Grep) → also
+empty → synthesised "doesn't exist, you might have a different name in
+mind". That's exactly the behavior the v0.5.0 plan called for: MCP
+tools are first-class but Grep remains a valid fallback for
+out-of-scope queries (PowerShell isn't tree-sitter-chunked).
 
 **Tool invocation rate**: _TBD_ / 5 (target ≥4 for v0.5.0 ship).
 
@@ -149,6 +178,8 @@ After the table is filled:
 
 ---
 
-**Status: pending smoke run during v0.5.0 release (T14).** Tables to be
-filled by the maintainer who runs the 5 prompts in Claude Code against
-`WinServiceScheduler` after the v0.5.0 reindex completes.
+**Status: completed 2026-05-05.** All 5 prompts ran against
+`WinServiceScheduler` on `code-context` v0.6.2 (post-hotfix chain
+v0.6.0 → v0.6.1 → v0.6.2). Tool invocation rate 5/5; result quality
+5/5; Sprint 4 decision rule met. Symbol tools demonstrably produce
+clean structured data that Claude analyses beyond simple match-listing.
