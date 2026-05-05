@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.3.0 — 2026-05-05
+
+Code-trained embeddings ship as the new default. The cache auto-invalidates
+on upgrade because `model_id` changes (the staleness check sees the new
+identifier and triggers a full reindex on first v0.3.0 run).
+
+### Behavior
+
+- feat(adapter): `MODEL_REGISTRY` in `embeddings_local.py` documents the
+  models we have benchmarked / characterised (`BAAI/bge-code-v1.5`,
+  `nomic-ai/nomic-embed-text-v2-moe`, `microsoft/codebert-base`,
+  `all-MiniLM-L6-v2`). Constructing `LocalST` with an unknown model still
+  works but logs a warning at startup so users know dimension hints +
+  benchmarks won't recognise it.
+- feat(adapter): `_MAX_EMBED_CHARS = 2048` snippet truncation in
+  `embed()`. Whole-function chunks from tree-sitter (Sprint 1) can exceed
+  the 512-token BERT context window — we now embed the truncated head
+  while the full snippet is preserved in the chunk for the search
+  response payload.
+- feat(config): default `CC_EMBEDDINGS_MODEL` is now
+  `BAAI/bge-code-v1.5` (vs `all-MiniLM-L6-v2` in v0.2.x). ~340 MB on
+  first download (vs ~90 MB). Override with
+  `CC_EMBEDDINGS_MODEL=all-MiniLM-L6-v2` to keep the legacy small model
+  on bandwidth-limited setups.
+- test(integration): swap-model staleness contract pinned —
+  `IndexerUseCase.is_stale()` returns `True` whenever the live
+  `embeddings.model_id` drifts from `metadata.json`. Catches future
+  regressions in cache-invalidation plumbing.
+- docs: README install-size note (~2.4 GB on first run, plus a
+  "smaller install" tip pointing at the legacy model). New
+  `docs/configuration.md` "Choosing a model" section with the registry
+  table.
+- benchmarks: `benchmarks/sprint-2-embedding-quality.md` —
+  methodology + scaffold for an MRR comparison
+  (`all-MiniLM-L6-v2` vs `BAAI/bge-code-v1.5`) on
+  `WinServiceScheduler`. Tables to be filled by the maintainer during
+  the smoke run.
+
+### Tests
+
+- 99 passing (added 4 across unit + integration: registry warning,
+  embed truncation, default-model assertion, swap-model staleness
+  integration).
+
 ## v0.2.0 — 2026-05-04
 
 AST-aware chunking ships. Default chunker is now `ChunkerDispatcher` —
