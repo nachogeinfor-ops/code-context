@@ -1,5 +1,46 @@
 # Changelog
 
+## v0.7.1 — 2026-05-05
+
+Hotfix. `explain_diff` crashed silently on Windows when the underlying
+`git diff` output contained any byte that the system's default code page
+couldn't decode (e.g. `0x8f`, `0x90`, `0x9f` are undefined in cp1252).
+Symptom in the user-facing smoke: Claude Code invoked `explain_diff` and
+sat waiting for ~minutes with the spinner — the MCP tool never returned
+because the handler raised
+`AttributeError: 'NoneType' object has no attribute 'splitlines'` when
+trying to parse stdout that had become `None` (Python's
+`subprocess.run(text=True)` reader thread crashed silently mid-decode).
+
+Caught live during the Sprint 5 v0.7.0 smoke against
+`WinServiceScheduler` — Claude ran the 5 prompts in parallel and
+`explain_diff(HEAD~1)` was the one that hung.
+
+Fix: every `subprocess.run` call in `git_source_cli.py` now forces
+`encoding="utf-8"` + `errors="replace"`, so all bytes can be decoded
+(lossy where needed) and `stdout` is always a string. Defensive guard
+added in `diff_files` to also handle the (now-impossible) case of
+`None` stdout. `commits()` and `head_sha()` get the same encoding fix
+as a precaution.
+
+### Behavior
+
+- fix(adapter): force `encoding="utf-8" + errors="replace"` on every
+  subprocess.run call in GitCliSource (3 sites: rev-parse, log,
+  diff). Defensive `if diff_text is None: return []` in diff_files.
+- test(adapter): regression test
+  `test_diff_files_handles_undecodable_bytes_in_diff` — sets up a
+  real repo with a file containing `0x8f` / `0x90` / `0x9f`, runs
+  `git diff`, confirms `diff_files` returns a list without crashing.
+- 189 passing total (added 1 regression).
+
+### Affected versions
+
+v0.7.0. Anyone who used `explain_diff` against a real repo with
+binary chunks or non-UTF-8 source files — common on Windows where
+mixed-encoding files (Razor with Spanish comments in cp1252, .NET
+project files, etc.) are routine. Upgrade.
+
 ## v0.7.0 — 2026-05-05
 
 Sprint 5 ships. Two more MCP tools that close the remaining "Claude
