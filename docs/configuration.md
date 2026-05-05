@@ -163,6 +163,26 @@ return `[]`. The MCP tools stay registered (so the contract holds) but
 they never produce results — Claude's smart enough to fall back to
 `Grep` when an MCP tool returns nothing.
 
+## Tree and diff tools
+
+`get_file_tree` and `explain_diff` (added in v0.7.0) don't have any
+configuration toggles — they delegate to the existing `CodeSource` and
+`GitSource` adapters which already drive the rest of the pipeline.
+
+- **`get_file_tree`** uses `FilesystemSource.walk_tree`, which honors
+  the same `.gitignore` rules as `list_files`. Defaults: `max_depth=4`,
+  `include_hidden=False`. Hidden files (dot-prefixed) are skipped by
+  default; pass `include_hidden=true` if Claude needs to see `.github/`,
+  `.env`, etc.
+- **`explain_diff`** uses `GitCliSource.diff_files`, which shells out
+  to `git diff <ref>^! --unified=0` to get hunks. The chunker
+  (TreeSitterChunker → LineChunker fallback) is consulted to find
+  AST-aligned chunks overlapping each hunk. If a hunk falls outside any
+  chunk (e.g. top-of-file imports), a "fragment" DiffChunk is emitted
+  with the raw line range so Claude still sees what changed.
+
+No new env vars in v0.7.0.
+
 ## Chunking strategies
 
 Default (`CC_CHUNKER=treesitter`): for files with extensions `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.go`, `.rs`, `.cs`, the chunker uses tree-sitter to cut along function/class/method boundaries. Each chunk is a complete semantic unit. For everything else (markdown, JSON, YAML, Java, …) the chunker falls back to a line-window (50 lines + 10 overlap by default). Tree-sitter parse errors also fall back to line-window so no file is ever lost from the index.

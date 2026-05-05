@@ -7,13 +7,15 @@
 
 ## What it does
 
-When you point Claude Code at a repo, you give it `CLAUDE.md` for static context. `code-context` adds **dynamic context** via 5 MCP tools:
+When you point Claude Code at a repo, you give it `CLAUDE.md` for static context. `code-context` adds **dynamic context** via 7 MCP tools:
 
 - **`search_repo(query, top_k?, scope?)`** — **hybrid retrieval** across the codebase: vector embeddings (semantic) fused with BM25 keyword search (exact identifiers) via Reciprocal Rank Fusion. Optional cross-encoder reranking (off by default — enable with `CC_RERANK=on`).
 - **`recent_changes(since?, paths?, max?)`** — recent git commits, optionally filtered.
 - **`get_summary(scope?, path?)`** — structured project summary (name, stack, key modules, stats).
 - **`find_definition(name, language?, max?)`** — locate where a symbol (function, class, method, type) is defined. Use INSTEAD of `Grep` for `def X` / `class X` / `function X` patterns. Returns repo-relative paths with line ranges and the symbol's kind (function, class, method, interface, struct, enum, record).
 - **`find_references(name, max?)`** — list every line mentioning a named symbol. Use INSTEAD of `grep -n "X"` when the user asks "who calls X?" or "where is X used?". Word-boundary matched, so `log` doesn't return `logger`.
+- **`get_file_tree(path?, max_depth?, include_hidden?)`** — repo-relative directory tree, gitignore-aware. Use INSTEAD of `Bash: ls -R` or `Bash: tree` for orientation prompts ("show me the project structure", "what's in this module?"). Returns hierarchical FileTreeNode with file sizes; honors `.gitignore`; defaults to depth 4.
+- **`explain_diff(ref, max_chunks?)`** — AST-aligned chunks affected by the diff at `ref` (full SHA, `HEAD`, `HEAD~N`, branch). Use INSTEAD of `Bash: git show <sha>` for "what does this commit do" questions. The chunker resolves which whole functions/classes were touched, not raw line additions.
 
 Architecture: hexagonal (ports & adapters). 9 driven ports with default implementations (sentence-transformers embeddings, NumPy+Parquet vector store, tree-sitter / line chunker, filesystem code source, git CLI, filesystem introspector, SQLite FTS5 keyword index, cross-encoder reranker, SQLite-backed symbol index). All swappable.
 
@@ -56,6 +58,8 @@ This repo has the [code-context](https://github.com/nachogeinfor-ops/code-contex
 - **`get_summary(scope?, path?)`** — for project orientation at session start, or to inspect a specific module.
 - **`find_definition(name, language?, max?)`** — for "where is X defined?". Use this instead of `Grep` for `def X` / `class X` patterns; tree-sitter-indexed at reindex time, so it's faster and more accurate than scanning text.
 - **`find_references(name, max?)`** — for "who calls X?" / "where is X used?". Use this instead of `grep -n`; word-boundary matched so `log` won't match `logger`.
+- **`get_file_tree(path?, max_depth?, include_hidden?)`** — for "show me the project structure" / "what's in this module?". Use this instead of `Bash: ls -R` / `Bash: tree`; gitignore-aware and structured (file sizes included).
+- **`explain_diff(ref, max_chunks?)`** — for "what does this commit do?" / "what changed in HEAD~3?". Use this instead of `Bash: git show <sha>`; the chunker resolves whole functions/classes that were touched, not raw line additions.
 ```
 
 Without this hint, Claude will work fine — it just won't reach for the MCP tools, which means the index goes unused. The hint is one paragraph; copy-paste it.
