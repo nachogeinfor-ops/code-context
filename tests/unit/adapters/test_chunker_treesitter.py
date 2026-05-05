@@ -97,3 +97,68 @@ def test_other_languages_chunk_lines_match_source(ext: str) -> None:
     for c in chunks:
         snippet = "\n".join(lines[c.line_start - 1 : c.line_end])
         assert c.snippet == snippet
+
+
+def test_extract_definitions_python_returns_function_and_class() -> None:
+    src = _read(FIXTURES / "python" / "sample.py")
+    defs = TreeSitterChunker().extract_definitions(src, "python/sample.py")
+    names = {d.name for d in defs}
+    # tiny_repo's python sample defines format_message, is_palindrome (functions),
+    # and Storage (class) plus its methods.
+    assert "format_message" in names
+    assert "Storage" in names
+    kinds = {d.kind for d in defs}
+    assert "function" in kinds and "class" in kinds
+
+
+def test_extract_definitions_csharp_covers_all_kinds() -> None:
+    src = _read(FIXTURES / "csharp" / "sample.cs")
+    defs = TreeSitterChunker().extract_definitions(src, "x.cs")
+    names = {d.name for d in defs}
+    # Fixture has: IGreeter, GreetingRecord, Severity, Point, Greeter,
+    # Capitalize, Main, Program — at minimum.
+    assert "Greeter" in names
+    assert "IGreeter" in names
+    assert "Severity" in names
+    kinds = {d.kind for d in defs}
+    assert kinds & {"class", "interface", "enum", "method", "constructor", "struct", "record"}
+
+
+@pytest.mark.parametrize(
+    "lang, ext",
+    [
+        ("javascript", "js"),
+        ("typescript", "ts"),
+        ("go", "go"),
+        ("rust", "rs"),
+    ],
+)
+def test_extract_definitions_other_languages(lang: str, ext: str) -> None:
+    src = _read(FIXTURES / lang / f"sample.{ext}")
+    defs = TreeSitterChunker().extract_definitions(src, f"x.{ext}")
+    assert defs, f"no definitions for {lang}"
+    assert all(d.language == lang for d in defs)
+    # All names are non-empty identifiers (real names, no whitespace, no ?).
+    for d in defs:
+        assert d.name
+        assert not d.name[0].isspace()
+        # Sanity: kind is one we recognize, not "unknown".
+        # (Some grammars may fall through to "unknown" for edge cases — acceptable
+        # but flag if the entire output is "unknown".)
+    assert any(d.kind != "unknown" for d in defs), f"all defs unknown for {lang}"
+
+
+def test_extract_definitions_empty_content_returns_empty() -> None:
+    assert TreeSitterChunker().extract_definitions("", "x.py") == []
+
+
+def test_extract_definitions_unknown_language_returns_empty() -> None:
+    assert TreeSitterChunker().extract_definitions("anything", "file.unknown") == []
+
+
+def test_extract_definitions_lines_are_one_indexed() -> None:
+    src = _read(FIXTURES / "python" / "sample.py")
+    defs = TreeSitterChunker().extract_definitions(src, "x.py")
+    for d in defs:
+        assert d.lines[0] >= 1, f"line_start must be 1-indexed, got {d.lines}"
+        assert d.lines[1] >= d.lines[0]

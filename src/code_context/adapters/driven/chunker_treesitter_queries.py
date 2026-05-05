@@ -12,6 +12,11 @@ Each query captures the AST nodes we want to emit as chunks. A node is
   interface_declaration, struct_declaration, record_declaration,
   enum_declaration.
 
+Each query also captures the symbol's identifier as ``@name`` so callers
+that want to mine ``SymbolDef`` objects (extract_definitions) can pair
+the chunk node with its name child. Existing chunk-only consumers that
+filter ``captures["chunk"]`` continue to work unchanged.
+
 Smaller nodes (assignments, single statements) are NOT captured — they
 are rolled up into a synthetic "module-prelude" chunk in the chunker
 (future work; v0.2.0 simply skips them).
@@ -20,50 +25,80 @@ are rolled up into a synthetic "module-prelude" chunk in the chunker
 from __future__ import annotations
 
 PYTHON = """
-(function_definition) @chunk
-(class_definition) @chunk
+(function_definition
+  name: (identifier) @name) @chunk
+(class_definition
+  name: (identifier) @name) @chunk
 """
 
 JAVASCRIPT = """
-(function_declaration) @chunk
-(class_declaration) @chunk
-(method_definition) @chunk
+(function_declaration
+  name: (identifier) @name) @chunk
+(class_declaration
+  name: (identifier) @name) @chunk
+(method_definition
+  name: (property_identifier) @name) @chunk
 (variable_declarator
-  name: (identifier)
+  name: (identifier) @name
   value: (arrow_function)) @chunk
 """
 
-# TypeScript inherits all JS captures plus interface and type alias.
-TYPESCRIPT = (
-    JAVASCRIPT
-    + """
-(interface_declaration) @chunk
-(type_alias_declaration) @chunk
+# TypeScript shares JS's overall shape but the grammar names the class with
+# (type_identifier) rather than (identifier), so we cannot reuse the JS
+# string verbatim — the TS class_declaration pattern needs its own form.
+TYPESCRIPT = """
+(function_declaration
+  name: (identifier) @name) @chunk
+(class_declaration
+  name: (type_identifier) @name) @chunk
+(method_definition
+  name: (property_identifier) @name) @chunk
+(variable_declarator
+  name: (identifier) @name
+  value: (arrow_function)) @chunk
+(interface_declaration
+  name: (type_identifier) @name) @chunk
+(type_alias_declaration
+  name: (type_identifier) @name) @chunk
 """
-)
 
 GO = """
-(function_declaration) @chunk
-(method_declaration) @chunk
-(type_declaration) @chunk
+(function_declaration
+  name: (identifier) @name) @chunk
+(method_declaration
+  name: (field_identifier) @name) @chunk
+(type_declaration
+  (type_spec name: (type_identifier) @name)) @chunk
 """
 
 RUST = """
-(function_item) @chunk
-(struct_item) @chunk
-(enum_item) @chunk
-(impl_item) @chunk
-(trait_item) @chunk
+(function_item
+  name: (identifier) @name) @chunk
+(struct_item
+  name: (type_identifier) @name) @chunk
+(enum_item
+  name: (type_identifier) @name) @chunk
+(impl_item
+  type: (type_identifier) @name) @chunk
+(trait_item
+  name: (type_identifier) @name) @chunk
 """
 
 CSHARP = """
-(method_declaration) @chunk
-(constructor_declaration) @chunk
-(class_declaration) @chunk
-(interface_declaration) @chunk
-(struct_declaration) @chunk
-(record_declaration) @chunk
-(enum_declaration) @chunk
+(method_declaration
+  name: (identifier) @name) @chunk
+(constructor_declaration
+  name: (identifier) @name) @chunk
+(class_declaration
+  name: (identifier) @name) @chunk
+(interface_declaration
+  name: (identifier) @name) @chunk
+(struct_declaration
+  name: (identifier) @name) @chunk
+(record_declaration
+  name: (identifier) @name) @chunk
+(enum_declaration
+  name: (identifier) @name) @chunk
 """
 
 QUERIES_BY_LANG: dict[str, str] = {
