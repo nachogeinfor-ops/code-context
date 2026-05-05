@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from code_context.domain.models import Chunk
+from code_context.domain.models import Chunk, SymbolDef
 from code_context.domain.ports import Chunker
 
 _TREESITTER_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".cs"}
@@ -34,3 +34,10 @@ class ChunkerDispatcher:
             if chunks:
                 return chunks
         return self.line.chunk(content, path)
+
+    def extract_definitions(self, content: str, path: str) -> list[SymbolDef]:
+        """Delegate symbol extraction to the tree-sitter sub-chunker if it has it."""
+        extractor = getattr(self.treesitter, "extract_definitions", None)
+        if extractor is None:
+            return []
+        return extractor(content, path)

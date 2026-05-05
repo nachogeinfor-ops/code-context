@@ -94,6 +94,31 @@ class FakeKeywordIndex:
         pass
 
 
+class FakeSymbolIndex:
+    version = "fake-symbol-v0"
+
+    def __init__(self) -> None:
+        self.added: list = []
+        self.persisted_to: Path | None = None
+
+    def add_definitions(self, defs):
+        self.added.extend(defs)
+
+    def find_definition(self, name, language=None, max_count=5):
+        return []
+
+    def find_references(self, name, max_count=50):
+        return []
+
+    def persist(self, path: Path):
+        self.persisted_to = path
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "symbols.sqlite").write_bytes(b"symbols")
+
+    def load(self, path: Path):
+        pass
+
+
 class FakeGit:
     def __init__(self, repo: bool, head: str = "abc123") -> None:
         self._repo = repo
@@ -130,6 +155,7 @@ def _build_uc(
     repo_present: bool = True,
     head: str = "abc123",
     keyword_index: FakeKeywordIndex | None = None,
+    symbol_index: FakeSymbolIndex | None = None,
 ):
     return IndexerUseCase(
         cache_dir=cache,
@@ -137,6 +163,7 @@ def _build_uc(
         embeddings=FakeEmbeddings(),
         vector_store=FakeVectorStore(),
         keyword_index=keyword_index or FakeKeywordIndex(),
+        symbol_index=symbol_index or FakeSymbolIndex(),
         chunker=FakeChunker(),
         code_source=FakeCodeSource(files or {}),
         git_source=FakeGit(repo=repo_present, head=head),
@@ -255,4 +282,37 @@ def test_is_stale_when_keyword_version_changes(cache_dir: Path, repo_root: Path)
         version = "fake-keyword-v999"
 
     uc.keyword_index = DifferentKeyword()
+    assert uc.is_stale() is True
+
+
+def test_run_persists_symbol_index_alongside_others(cache_dir: Path, repo_root: Path) -> None:
+    f = repo_root / "a.py"
+    f.write_text("def x(): pass\n", encoding="utf-8")
+    symbols = FakeSymbolIndex()
+    uc = _build_uc(cache_dir, repo_root, files={f: "def x(): pass\n"}, symbol_index=symbols)
+    new_dir = uc.run()
+    assert symbols.persisted_to == new_dir
+
+
+def test_metadata_includes_symbol_version(cache_dir: Path, repo_root: Path) -> None:
+    f = repo_root / "a.py"
+    f.write_text("def x(): pass\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "def x(): pass\n"})
+    out = uc.run()
+    meta = json.loads((out / "metadata.json").read_text())
+    assert meta["symbol_version"] == "fake-symbol-v0"
+
+
+def test_is_stale_when_symbol_version_changes(cache_dir: Path, repo_root: Path) -> None:
+    f = repo_root / "a.py"
+    f.write_text("def x(): pass\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "def x(): pass\n"})
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+    assert uc.is_stale() is False
+
+    class DifferentSymbol(FakeSymbolIndex):
+        version = "fake-symbol-v999"
+
+    uc.symbol_index = DifferentSymbol()
     assert uc.is_stale() is True

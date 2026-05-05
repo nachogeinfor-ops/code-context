@@ -21,6 +21,7 @@ from code_context.adapters.driven.chunker_treesitter import TreeSitterChunker
 from code_context.adapters.driven.code_source_fs import FilesystemSource
 from code_context.adapters.driven.git_source_cli import GitCliSource
 from code_context.adapters.driven.keyword_index_sqlite import SqliteFTS5Index
+from code_context.adapters.driven.symbol_index_sqlite import SymbolIndexSqlite
 from code_context.adapters.driven.vector_store_numpy import NumPyParquetStore
 from code_context.domain.use_cases.indexer import IndexerUseCase
 from code_context.domain.use_cases.search_repo import SearchRepoUseCase
@@ -88,6 +89,7 @@ def test_query_for_identifier_surfaces_relevant_files(repo: Path, cache_dir: Pat
     embeddings = _DeterministicFakeEmbeddings()
     vector = NumPyParquetStore()
     keyword = SqliteFTS5Index()
+    symbols = SymbolIndexSqlite()
     line = LineChunker(chunk_lines=20, overlap=5)
     chunker = ChunkerDispatcher(treesitter=TreeSitterChunker(), line=line)
     indexer = IndexerUseCase(
@@ -96,6 +98,7 @@ def test_query_for_identifier_surfaces_relevant_files(repo: Path, cache_dir: Pat
         embeddings=embeddings,
         vector_store=vector,
         keyword_index=keyword,
+        symbol_index=symbols,
         chunker=chunker,
         code_source=FilesystemSource(),
         git_source=GitCliSource(),
@@ -132,6 +135,7 @@ def test_hybrid_results_filterable_by_scope(repo: Path, cache_dir: Path) -> None
     embeddings = _DeterministicFakeEmbeddings()
     vector = NumPyParquetStore()
     keyword = SqliteFTS5Index()
+    symbols = SymbolIndexSqlite()
     chunker = ChunkerDispatcher(
         treesitter=TreeSitterChunker(),
         line=LineChunker(chunk_lines=20, overlap=5),
@@ -142,6 +146,7 @@ def test_hybrid_results_filterable_by_scope(repo: Path, cache_dir: Path) -> None
         embeddings=embeddings,
         vector_store=vector,
         keyword_index=keyword,
+        symbol_index=symbols,
         chunker=chunker,
         code_source=FilesystemSource(),
         git_source=GitCliSource(),

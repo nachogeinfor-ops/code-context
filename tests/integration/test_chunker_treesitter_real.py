@@ -46,6 +46,22 @@ class _FakeKeywordIndex:
         return []
 
 
+class _FakeSymbolIndex:
+    """No-op symbol index — keeps this test focused on chunker behavior."""
+
+    version = "fake-symbol-v0"
+
+    def add_definitions(self, defs) -> None: ...
+    def persist(self, path) -> None: ...
+    def load(self, path) -> None: ...
+
+    def find_definition(self, name, language=None, max_count=5):
+        return []
+
+    def find_references(self, name, max_count=50):
+        return []
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     target = tmp_path / "repo"
@@ -78,6 +94,7 @@ def test_indexer_produces_function_aligned_chunks(repo: Path, cache: Path) -> No
         embeddings=_FakeEmbeddings(),
         vector_store=store,
         keyword_index=_FakeKeywordIndex(),
+        symbol_index=_FakeSymbolIndex(),
         chunker=chunker,
         code_source=FilesystemSource(),
         git_source=GitCliSource(),

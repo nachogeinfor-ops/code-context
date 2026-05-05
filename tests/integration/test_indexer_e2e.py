@@ -55,6 +55,22 @@ class FakeKeywordIndex:
         return []
 
 
+class FakeSymbolIndex:
+    """No-op symbol index — keeps this test focused on the vector path."""
+
+    version = "fake-symbol-v0"
+
+    def add_definitions(self, defs) -> None: ...
+    def persist(self, path) -> None: ...
+    def load(self, path) -> None: ...
+
+    def find_definition(self, name, language=None, max_count=5):
+        return []
+
+    def find_references(self, name, max_count=50):
+        return []
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A copy of the tiny-repo fixture initialized as a git repo."""
@@ -83,6 +99,7 @@ def test_indexer_runs_against_tiny_repo(repo: Path, cache_dir: Path) -> None:
         embeddings=FakeEmbeddings(),
         vector_store=store,
         keyword_index=FakeKeywordIndex(),
+        symbol_index=FakeSymbolIndex(),
         chunker=LineChunker(chunk_lines=20, overlap=5),
         code_source=FilesystemSource(),
         git_source=GitCliSource(),
@@ -107,6 +124,7 @@ def test_search_returns_storage_chunk_when_querying_storage(repo: Path, cache_di
         embeddings=embeddings,
         vector_store=store,
         keyword_index=FakeKeywordIndex(),
+        symbol_index=FakeSymbolIndex(),
         chunker=LineChunker(chunk_lines=20, overlap=5),
         code_source=FilesystemSource(),
         git_source=GitCliSource(),
@@ -140,6 +158,7 @@ def test_changing_embeddings_model_invalidates_cache(repo: Path, cache_dir: Path
         embeddings=embeddings_a,
         vector_store=NumPyParquetStore(),
         keyword_index=FakeKeywordIndex(),
+        symbol_index=FakeSymbolIndex(),
         chunker=LineChunker(chunk_lines=20, overlap=5),
         code_source=FilesystemSource(),
         git_source=GitCliSource(),

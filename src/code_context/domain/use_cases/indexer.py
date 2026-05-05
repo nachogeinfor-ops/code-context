@@ -8,13 +8,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from code_context.domain.models import IndexEntry
+from code_context.domain.models import IndexEntry, SymbolDef
 from code_context.domain.ports import (
     Chunker,
     CodeSource,
     EmbeddingsProvider,
     GitSource,
     KeywordIndex,
+    SymbolIndex,
     VectorStore,
 )
 
@@ -32,6 +33,7 @@ class IndexerUseCase:
     embeddings: EmbeddingsProvider
     vector_store: VectorStore
     keyword_index: KeywordIndex
+    symbol_index: SymbolIndex
     chunker: Chunker
     code_source: CodeSource
     git_source: GitSource
@@ -56,6 +58,8 @@ class IndexerUseCase:
         if active.get("chunker_version") != self.chunker.version:
             return True
         if active.get("keyword_version") != self.keyword_index.version:
+            return True
+        if active.get("symbol_version") != self.symbol_index.version:
             return True
 
         indexed_at = datetime.fromisoformat(active["indexed_at"])
@@ -84,6 +88,7 @@ class IndexerUseCase:
         log.info("indexer: reindexing %d files", len(files))
 
         all_entries: list[IndexEntry] = []
+        all_defs: list[SymbolDef] = []
         # Collect chunks first so we can batch-embed.
         chunks_with_paths: list = []
         for f in files:
@@ -95,6 +100,13 @@ class IndexerUseCase:
             rel = f.relative_to(self.repo_root).as_posix()
             for chunk in self.chunker.chunk(content, rel):
                 chunks_with_paths.append(chunk)
+            # Symbol extraction — only chunkers that expose it (TreeSitterChunker).
+            extractor = getattr(self.chunker, "extract_definitions", None)
+            if extractor is not None:
+                try:
+                    all_defs.extend(extractor(content, rel))
+                except Exception as exc:  # noqa: BLE001 - extractor failure must not abort indexing
+                    log.warning("indexer: symbol extract failed for %s (%s)", rel, exc)
 
         # Batch-embed.
         for i in range(0, len(chunks_with_paths), _BATCH_SIZE):
@@ -115,6 +127,9 @@ class IndexerUseCase:
         self.keyword_index.add(all_entries)
         self.keyword_index.persist(new_dir)
 
+        self.symbol_index.add_definitions(all_defs)
+        self.symbol_index.persist(new_dir)
+
         meta = {
             "version": _VERSION,
             "head_sha": head,
@@ -123,6 +138,7 @@ class IndexerUseCase:
             "embeddings_dimension": self.embeddings.dimension,
             "chunker_version": self.chunker.version,
             "keyword_version": self.keyword_index.version,
+            "symbol_version": self.symbol_index.version,
             "n_chunks": len(all_entries),
             "n_files": len(files),
         }
