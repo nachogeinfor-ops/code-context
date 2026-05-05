@@ -59,37 +59,50 @@ something a developer would actually type.
 | # | Prompt | Tool invoked | Result quality | Notes |
 |---|---|---|---|---|
 | 1 | Where is BushidoLogScannerAdapter defined? | ✓ `find_definition(name="BushidoLogScannerAdapter", language="csharp")` | ✓ Top-1 = `GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogScannerAdapter.cs:16-465` (class) + 37-47 (constructor) | First-try success after 2 hotfixes — see lessons below |
-| 2 | Find every caller of format_message | _TBD_ | _TBD_ | _TBD_ |
+| 2 | Find every caller of `BushidoLogScannerAdapter` | ✓ `find_references(name="BushidoLogScannerAdapter")` | ✓ 26 refs: 1 production (DI extension `ServiceCollectionExtensions.cs:164`) + 25 across 7 test files. Claude synthesised "Production code instantiates it in exactly one place" from the clean per-line data. | First clean result after v0.6.2; v0.6.1 had returned ~100 KB chunks and got rejected by Claude's MCP token budget. |
 | 3 | Where is IConfigurationAdapter implemented? | _TBD_ | _TBD_ | _TBD_ |
 | 4 | Who calls services.AddGeinforConfiguration? | _TBD_ | _TBD_ | _TBD_ |
 | 5 | Where is ConvertTo-Bat defined in the install scripts? | _TBD_ | _TBD_ | _TBD_ |
 
-### Lessons from prompt #1's path to green
+### Lessons from prompts #1 and #2's path to green
 
-The first attempt (v0.5.0 + no `CLAUDE.md`) bypassed the MCP entirely
-— Claude went straight to `Search`/`Grep`. The second attempt (with
-`CLAUDE.md` §8 listing all 5 tools prescriptively) DID invoke
-`find_definition`, but the MCP server raised `sqlite3.ProgrammingError`
-because the SQLite connection was created on the main thread and queries
-ran in `asyncio.to_thread` worker threads. Claude printed
-"MCP tool hit a SQLite threading error. Falling back to Grep." and
-silently degraded.
+Three real-repo bugs surfaced through this benchmark before the tools
+worked end-to-end. The integration tests covered NONE of them because
+each lived in a layer the tests didn't exercise.
 
-Two prerequisites had to be fixed before prompt #1 could pass:
+1. **Discoverability** (v0.5.0 → v0.6.0) — without `CLAUDE.md` §8 listing
+   the 5 tools prescriptively, Claude defaults to built-in `Grep`/`Search`
+   even when the MCP server is `connected`. Caught by smoke #1; fixed by
+   adding §8 with imperative language ("**REQUIRED for symbol queries**").
+2. **SQLite threading** (v0.6.1) — Python's stdlib `sqlite3` enforces
+   single-thread connection ownership by default. The MCP server runs
+   query handlers via `asyncio.to_thread`, so every find_definition /
+   find_references call lands in a worker thread → `ProgrammingError` →
+   Claude prints "Falling back to Grep" and silently degrades. Caught
+   by smoke #2; fixed with `check_same_thread=False`. Integration tests
+   missed it because they all run in the test thread.
+3. **chunk-vs-line snippet** (v0.6.2) — `find_references` was returning
+   the full chunk snippet (50+ lines, ~4 KB) per match, in violation of
+   the contract `SymbolRef.snippet: "The matching line, trimmed."`. A
+   single call returned ~100 KB → Claude's MCP token budget rejected it,
+   diverted to a file, delegated to subagent for chunked reading. UX
+   collapse on first `find_references` smoke. Caught by smoke #3; fixed
+   by walking each chunk's lines and emitting one ref per matching line
+   with the actual line number.
 
-1. **Discoverability** — without `CLAUDE.md` §8, Claude defaults to
-   built-in `Grep`/`Search` even when the MCP server is `connected`.
-   The fix is purely template (the prescriptive language we've been
-   honing since v0.1.x's "Making Claude actually use these tools"
-   section).
-2. **SQLite threading** (v0.6.1) — `check_same_thread=False` on every
-   `sqlite3.connect()` so a single connection works across the asyncio
-   thread pool. Integration tests didn't catch this because they run
-   in the test thread; v0.6.1 added explicit `threading.Thread`
-   regression tests.
+Without all three fixes, the find tools were either invisible to
+Claude (smoke #1), broken at the SQLite layer (smoke #2), or producing
+output Claude couldn't consume (smoke #3). This is a perfect example
+of why production smokes find bugs that 162 unit + integration tests
+miss: each layer was correct in isolation, but the composition
+exposed boundary-crossing edge cases.
 
-The combination of those two fixes is what made prompt #1's clean
-result possible.
+After v0.6.2, prompt #2 not only worked but Claude was able to
+**reason** about the data — it grouped 26 refs into production (1)
+and tests (25), and surfaced the meta-observation that the adapter
+is instantiated in exactly one place. That kind of analytical layer
+on top of the tool output is the actual value proposition of the
+MCP server: clean structured data → Claude does the synthesis.
 
 **Tool invocation rate**: _TBD_ / 5 (target ≥4 for v0.5.0 ship).
 
