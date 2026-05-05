@@ -65,3 +65,23 @@ class ProjectSummary:
     entry_points: list[str]
     key_modules: list[dict[str, str]] = field(default_factory=list)
     stats: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolDef:
+    """Result of find_definition. Matches tool-protocol.md SymbolDef (v1.1)."""
+
+    name: str
+    path: str
+    lines: tuple[int, int]
+    kind: str  # "function" | "class" | "method" | "type" | "enum" | "interface" | "struct" | ...
+    language: str  # "python" | "javascript" | "typescript" | "go" | "rust" | "csharp"
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolRef:
+    """Result of find_references. Matches tool-protocol.md SymbolRef (v1.1)."""
+
+    path: str
+    line: int
+    snippet: str
