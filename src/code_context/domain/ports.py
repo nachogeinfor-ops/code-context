@@ -87,3 +87,38 @@ class ProjectIntrospector(Protocol):
     def summary(
         self, root: Path, scope: str = "project", path: Path | None = None
     ) -> ProjectSummary: ...
+
+
+class KeywordIndex(Protocol):
+    """Keyword-based index for exact-identifier search. Default: SqliteFTS5Index."""
+
+    @property
+    def version(self) -> str:
+        """Identifier for staleness detection."""
+
+    def add(self, entries: Iterable[IndexEntry]) -> None: ...
+
+    def search(self, query: str, k: int) -> list[tuple[IndexEntry, float]]:
+        """Returns top-k entries with BM25-style scores, descending."""
+
+    def persist(self, path: Path) -> None: ...
+
+    def load(self, path: Path) -> None: ...
+
+
+class Reranker(Protocol):
+    """Re-orders search candidates with a more accurate model. Optional."""
+
+    @property
+    def version(self) -> str: ...
+
+    @property
+    def model_id(self) -> str: ...
+
+    def rerank(
+        self,
+        query: str,
+        candidates: list[tuple[IndexEntry, float]],
+        k: int,
+    ) -> list[tuple[IndexEntry, float]]:
+        """Returns the top-k candidates re-scored by the reranker, descending."""
