@@ -1,0 +1,7 @@
+# Hybrid retrieval + cross-encoder reranking on the top of the fused pool.
+# More accurate, ~50-200 ms slower per query.
+#   $env:CC_KEYWORD_INDEX = "sqlite"
+#   $env:CC_RERANK = "on"
+env:
+  CC_KEYWORD_INDEX: sqlite
+  CC_RERANK: "on"

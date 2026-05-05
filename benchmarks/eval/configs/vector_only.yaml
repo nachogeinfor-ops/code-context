@@ -1,0 +1,7 @@
+# Vector-only retrieval (BM25 + rerank disabled).
+# Apply with:
+#   $env:CC_KEYWORD_INDEX = "none"
+#   $env:CC_RERANK = "off"
+env:
+  CC_KEYWORD_INDEX: none
+  CC_RERANK: "off"

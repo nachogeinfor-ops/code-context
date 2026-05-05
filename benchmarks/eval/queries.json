@@ -1,0 +1,177 @@
+[
+  {
+    "query": "where is BushidoLogScannerAdapter defined",
+    "expected_top1_path": "BushidoLogScannerAdapter.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "how is settings.json loaded",
+    "expected_top1_path": "Settings",
+    "kind": "search_repo"
+  },
+  {
+    "query": "scheduler worker main loop",
+    "expected_top1_path": "Worker.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "task execution history maintenance",
+    "expected_top1_path": "HistoryMaintenance",
+    "kind": "search_repo"
+  },
+  {
+    "query": "send a test notification",
+    "expected_top1_path": "SendTestNotification",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete a bat file",
+    "expected_top1_path": "DeleteBatFile",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list all bat files",
+    "expected_top1_path": "ListBatFiles",
+    "kind": "search_repo"
+  },
+  {
+    "query": "read a bat file content",
+    "expected_top1_path": "ReadBatFile",
+    "kind": "search_repo"
+  },
+  {
+    "query": "save a bat file",
+    "expected_top1_path": "SaveBatFile",
+    "kind": "search_repo"
+  },
+  {
+    "query": "retry policy validation rules",
+    "expected_top1_path": "RetryPolicy",
+    "kind": "search_repo"
+  },
+  {
+    "query": "scheduler logger adapter implementation",
+    "expected_top1_path": "SchedulerLoggerAdapter.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "execution history repository port",
+    "expected_top1_path": "IExecutionHistoryRepository",
+    "kind": "search_repo"
+  },
+  {
+    "query": "bushido log scanner port interface",
+    "expected_top1_path": "IBushidoLogScanner.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "scheduler logger port interface",
+    "expected_top1_path": "ISchedulerLogger.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "service install powershell script",
+    "expected_top1_path": "install.ps1",
+    "kind": "search_repo"
+  },
+  {
+    "query": "global usings for the GeinforScheduler project",
+    "expected_top1_path": "GlobalUsings.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Program startup entry point",
+    "expected_top1_path": "Program.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "settings dto builder mapping",
+    "expected_top1_path": "SettingsDtoBuilder",
+    "kind": "search_repo"
+  },
+  {
+    "query": "history paging helper logic",
+    "expected_top1_path": "HistoryPagingHelper",
+    "kind": "search_repo"
+  },
+  {
+    "query": "task edit config builder",
+    "expected_top1_path": "TaskEditConfigBuilder",
+    "kind": "search_repo"
+  },
+  {
+    "query": "schedule builder web component",
+    "expected_top1_path": "ScheduleBuilder",
+    "kind": "search_repo"
+  },
+  {
+    "query": "exception handling helper centralized errors",
+    "expected_top1_path": "ExceptionHandlingHelper",
+    "kind": "search_repo"
+  },
+  {
+    "query": "host builder extensions registration",
+    "expected_top1_path": "HostBuilderExtensions",
+    "kind": "search_repo"
+  },
+  {
+    "query": "navigation menu component",
+    "expected_top1_path": "NavMenu",
+    "kind": "search_repo"
+  },
+  {
+    "query": "main layout error boundary",
+    "expected_top1_path": "MainLayoutErrorBoundary",
+    "kind": "search_repo"
+  },
+  {
+    "query": "confirm dialog reusable component",
+    "expected_top1_path": "ConfirmDialog",
+    "kind": "search_repo"
+  },
+  {
+    "query": "history filter with dates and status",
+    "expected_top1_path": "HistoryFilter",
+    "kind": "search_repo"
+  },
+  {
+    "query": "tasks page double-click handling",
+    "expected_top1_path": "TasksDoubleClick",
+    "kind": "search_repo"
+  },
+  {
+    "query": "periodic refresh loop component",
+    "expected_top1_path": "PeriodicRefreshLoop",
+    "kind": "search_repo"
+  },
+  {
+    "query": "task configuration JSON serialization",
+    "expected_top1_path": "TaskConfigurationSerialization",
+    "kind": "search_repo"
+  },
+  {
+    "query": "settings configuration loading rules",
+    "expected_top1_path": "SettingsConfigurationLoading",
+    "kind": "search_repo"
+  },
+  {
+    "query": "appsettings defaults for the web project",
+    "expected_top1_path": "AppSettingsDefaults",
+    "kind": "search_repo"
+  },
+  {
+    "query": "bushido logs v1.11.0 debug regression",
+    "expected_top1_path": "BushidoLogV1110Debug",
+    "kind": "search_repo"
+  },
+  {
+    "query": "json backward compatibility integration",
+    "expected_top1_path": "JsonBackwardCompatibility",
+    "kind": "search_repo"
+  },
+  {
+    "query": "sample config cron format integration",
+    "expected_top1_path": "SampleConfigCronFormat",
+    "kind": "search_repo"
+  }
+]

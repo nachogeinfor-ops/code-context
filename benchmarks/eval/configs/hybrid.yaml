@@ -1,0 +1,6 @@
+# Hybrid retrieval (vector + BM25 fused via RRF). Default.
+#   $env:CC_KEYWORD_INDEX = "sqlite"
+#   $env:CC_RERANK = "off"
+env:
+  CC_KEYWORD_INDEX: sqlite
+  CC_RERANK: "off"
