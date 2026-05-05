@@ -51,6 +51,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     print(f"n_files:    {meta.get('n_files')}")
     print(f"model:      {meta.get('embeddings_model')}")
     print(f"chunker:    {meta.get('chunker_version')}")
+    print(f"keyword:    {meta.get('keyword_version', '<not indexed — pre-v0.4.0>')}")
     print(f"stale:      {indexer.is_stale()}")
     return 0
 
