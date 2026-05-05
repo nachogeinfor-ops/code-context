@@ -29,9 +29,11 @@ class GitCliSource:
                 cwd=str(root),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=True,
             )
-            return out.stdout.strip()
+            return (out.stdout or "").strip()
         except subprocess.CalledProcessError as exc:
             log.warning("git rev-parse HEAD failed: %s", exc)
             return ""
@@ -54,12 +56,20 @@ class GitCliSource:
             cmd.extend(paths)
 
         try:
-            res = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, check=True)
+            res = subprocess.run(
+                cmd,
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+            )
         except subprocess.CalledProcessError as exc:
             log.warning("git log failed: %s", exc)
             return []
 
-        return _parse(res.stdout)
+        return _parse(res.stdout or "")
 
     def diff_files(self, root: Path, ref: str) -> list[DiffFile]:
         """Use git diff-tree + numstat-like parsing to get hunks per file.
@@ -80,12 +90,23 @@ class GitCliSource:
         # ^! syntax means "this commit's changes vs its parent". Equivalent to
         # `git diff <ref>~1 <ref>` for non-merge commits. For the initial
         # commit, ^! is invalid; fall back to `git diff --root <ref>`.
+        #
+        # Critical Windows note: text=True alone uses Python's default
+        # locale encoding (cp1252 on Windows), which CANNOT decode many
+        # bytes that legitimately appear in git diff output (binary chunks,
+        # mixed-encoding source files). When the reader thread fails to
+        # decode, `res.stdout` becomes None even though the subprocess
+        # exited successfully. We force UTF-8 + errors="replace" to ensure
+        # we always get a string back, and we defensively guard against
+        # None in case future git versions change the behavior again.
         try:
             res = subprocess.run(
                 ["git", "diff", f"{ref}^!", "--unified=0", "--no-color"],
                 cwd=str(root),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=True,
             )
             diff_text = res.stdout
@@ -97,6 +118,8 @@ class GitCliSource:
                     cwd=str(root),
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     check=True,
                 )
                 diff_text = res.stdout
@@ -104,6 +127,9 @@ class GitCliSource:
                 log.warning("git diff failed for ref %r: %s", ref, exc)
                 return []
 
+        if diff_text is None:
+            log.warning("git diff returned None stdout for ref %r — empty []", ref)
+            return []
         return _parse_diff(diff_text)
 
 

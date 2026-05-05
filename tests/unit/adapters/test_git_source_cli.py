@@ -79,3 +79,39 @@ def test_diff_files_returns_hunks_for_committed_change(tmp_path: Path) -> None:
 def test_diff_files_returns_empty_for_non_repo(tmp_path: Path) -> None:
     src = GitCliSource()
     assert src.diff_files(tmp_path, "HEAD") == []
+
+
+def test_diff_files_handles_undecodable_bytes_in_diff(tmp_path: Path) -> None:
+    """Regression for the v0.7.1 Windows cp1252 bug.
+
+    git diff output can contain arbitrary bytes (binary chunks, files in
+    encodings other than UTF-8 — e.g., a Razor file with a Spanish comment
+    in cp1252). On Windows, subprocess.run(text=True) defaults to cp1252,
+    which can't decode 0x8f and similar bytes. The reader thread crashes
+    silently and stdout becomes None — explain_diff then crashed with
+    AttributeError: 'NoneType' has no attribute 'splitlines'.
+
+    The fix forces encoding="utf-8" + errors="replace" so all bytes can
+    be decoded (lossy where needed). This test sets up a real repo with
+    a file containing a non-UTF-8 byte sequence and confirms diff_files
+    returns a list (not a crash).
+    """
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+    # Write a file with a byte that cp1252 can't decode (0x8f is undefined in cp1252).
+    (tmp_path / "binary.bin").write_bytes(b"hello\x8fworld\x90end\n")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"], cwd=tmp_path, check=True, capture_output=True
+    )
+    # Second commit modifying the binary-ish file.
+    (tmp_path / "binary.bin").write_bytes(b"hello\x8fworld\x90end\nmodified\x9f\n")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "tweak"], cwd=tmp_path, check=True, capture_output=True)
+
+    src = GitCliSource()
+    # Must NOT raise; may return [] or a DiffFile entry — either is acceptable
+    # for a repo with binary content (git might emit "Binary files differ").
+    files = src.diff_files(tmp_path, "HEAD")
+    assert isinstance(files, list)
