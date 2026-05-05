@@ -71,6 +71,14 @@ def _cmd_query(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     store.load(current)
+    try:
+        keyword_index.load(current)
+    except FileNotFoundError:
+        log.warning(
+            "keyword index missing in %s — search will fall back to vector-only. "
+            "Run `code-context reindex` to backfill the keyword leg.",
+            current,
+        )
     search, _, _ = build_use_cases(cfg, indexer, store, embeddings, keyword_index)
     results = search.run(query=args.text, top_k=args.k or cfg.top_k_default)
     for r in results:
