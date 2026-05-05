@@ -22,6 +22,7 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_RERANK` | `off` | Set to `on`/`true`/`1` to activate cross-encoder reranking on the fused top-N candidates. ~80 MB model download on first use. |
 | `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Override the cross-encoder model. Only consulted when `CC_RERANK=on`. |
 | `CC_SYMBOL_INDEX` | `sqlite` | Symbol-index strategy: `sqlite` (default, FTS5-backed) or `none` (disables `find_definition`/`find_references`). |
+| `CC_TRUST_REMOTE_CODE` | `off` | Set to `on`/`true`/`1` to allow `sentence-transformers` to execute custom Python from the HF model repo. Required for models like `jinaai/jina-embeddings-v2-base-code` that use custom architectures. **Off by default for safety.** |
 
 ## Examples
 
@@ -54,14 +55,22 @@ get a warning at startup.
 
 | Model | Size | Dim | Best for | Notes |
 |---|---|---|---|---|
-| `all-MiniLM-L6-v2` (default) | ~90 MB | 384 | General-purpose | Smallest install, ships with sentence-transformers natively. |
-| `jinaai/jina-embeddings-v2-base-code` | ~640 MB | 768 | Code (functions, identifiers) | Apache-2.0. Requires `trust_remote_code=True` (not yet wired up — planned for v0.4). |
-| `BAAI/bge-code-v1` | ~8 GB | 1536 | Code (large repos) | Apache-2.0. 2B params, requires `trust_remote_code=True` and a real GPU for usable inference. |
+| `all-MiniLM-L6-v2` (default) | ~90 MB | 384 | General-purpose | Smallest install, ships with sentence-transformers natively. No `trust_remote_code` required. |
+| `jinaai/jina-embeddings-v2-base-code` | ~640 MB | 768 | Code (functions, identifiers) | Apache-2.0. Trained on GitHub + 150M code+docstring pairs. **Requires `CC_TRUST_REMOTE_CODE=true`** because the model uses a custom JinaBert architecture. Recommended code-tuned alternative as of v0.6.0. |
+
+> **Note on `trust_remote_code`.** Some Hugging Face models ship custom Python
+> code (a custom architecture, a custom tokenizer wrapper) that
+> `sentence-transformers` evaluates at load time. By default
+> `code-context` refuses to evaluate that code (`CC_TRUST_REMOTE_CODE=off`).
+> Set it to `on` ONLY for models you have personally vetted on the HF model
+> page. The `jinaai/jina-embeddings-v2-base-code` model is the one we
+> recommend in this category as of v0.6.0.
 
 > **Note (v0.3.3).** v0.3.0–v0.3.2 shipped a default of `BAAI/bge-code-v1.5`
-> which does not exist on Hugging Face — a planning error. v0.3.3 reverts
-> the default to `all-MiniLM-L6-v2` while we re-evaluate code-tuned options
-> for v0.4.
+> which does not exist on Hugging Face — a planning error. v0.3.3 reverted
+> the default to `all-MiniLM-L6-v2`. The CI job `hf-guard` (added in v0.6.0)
+> pings the HF API for every registered model on every push, so this class
+> of bug can't recur silently.
 
 If you put an unknown model in `CC_EMBEDDINGS_MODEL`, it'll work but you'll get
 a warning at startup.

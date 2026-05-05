@@ -28,6 +28,11 @@ log = logging.getLogger(__name__)
 MODEL_REGISTRY: dict[str, dict[str, int | str]] = {
     "sentence-transformers/all-MiniLM-L6-v2": {"dimension": 384, "kind": "general"},
     "all-MiniLM-L6-v2": {"dimension": 384, "kind": "general"},  # short alias
+    # Code-tuned (opt-in via CC_EMBEDDINGS_MODEL + CC_TRUST_REMOTE_CODE=true).
+    # 161M params (~640 MB FP32), Apache-2.0, English + 30 programming languages.
+    # Verified existing on HF as of v0.6.0 release; CI's hf-guard job re-checks
+    # on every push.
+    "jinaai/jina-embeddings-v2-base-code": {"dimension": 768, "kind": "code"},
 }
 
 
