@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.6.2 — 2026-05-05
+
+Hotfix. `find_references` was emitting one `SymbolRef` per matching
+**chunk** instead of per matching **line**, in violation of the
+tool-protocol.md contract (`SymbolRef.snippet: "The matching line,
+trimmed."`). With line-chunked C# / Java code the chunks are 50+
+lines long, so a single `find_references("BushidoLogScannerAdapter")`
+call returned ~100 KB of output. Claude Code's MCP-tool token budget
+rejected the response and the user saw it diverted to a file +
+delegated to a subagent — UX collapse on the very first
+`find_references` smoke after v0.6.1's threading fix landed.
+
+The contract was clear; the implementation was wrong. Fix:
+
+- For each FTS5-matched chunk, walk its lines.
+- Emit one `SymbolRef` per line where `\bname\b` matches.
+- Use the ACTUAL line number (chunk_start_line + offset), not the
+  chunk's start line — so callers see the precise location.
+- Trim each line and cap at 200 chars to keep the MCP output budget
+  sane even for long generated lines.
+- Dedupe by (path, line) so overlapping chunks don't double-count.
+
+### Behavior
+
+- fix(adapter): `SymbolIndexSqlite.find_references` now returns one
+  `SymbolRef` per matching line. Snippet is the trimmed line (max 200
+  chars). Line number is the actual line where the symbol appears.
+- test(adapter): `test_find_references_emits_per_line_not_per_chunk`
+  pins the contract — a multi-line chunk with 2 mentions of `foo`
+  emits 2 refs with the correct line numbers, single-line snippets,
+  and no newlines leaked. `test_find_references_caps_snippet_length`
+  pins the 200-char trim.
+
+### Tests
+
+- 169 passing total (added 2: per-line emission, snippet length cap).
+
+### Affected versions
+
+v0.5.0–v0.6.1. Anyone who triggered `find_references` through the
+MCP server hit the same UX problem: response too big for Claude Code,
+diverted to a file, delegated to subagent. v0.6.2 fixes it cleanly
+— upgrade and re-run the smoke.
+
 ## v0.6.1 — 2026-05-05
 
 Hotfix. The MCP server runs query handlers via `asyncio.to_thread()` so
