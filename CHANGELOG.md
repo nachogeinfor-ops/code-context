@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.3.3 — 2026-05-05
+
+Hotfix. v0.3.0–v0.3.2 shipped a default `CC_EMBEDDINGS_MODEL = "BAAI/bge-code-v1.5"`
+that **does not exist on Hugging Face** — a planning error. The first user
+who ran `code-context reindex` against a real repo hit a 401 / RepositoryNotFoundError.
+This release reverts the default to the v0.1.x value (`all-MiniLM-L6-v2`)
+so reindex works out-of-box again.
+
+- fix(config): default `CC_EMBEDDINGS_MODEL` reverted from
+  `BAAI/bge-code-v1.5` (does not exist) to `all-MiniLM-L6-v2`.
+- fix(adapter): `MODEL_REGISTRY` trimmed to verified entries
+  (`all-MiniLM-L6-v2` + short alias). The original list contained
+  fabricated identifiers and approximate dims; corrected here.
+- docs: README + `docs/configuration.md` updated. New "Choosing a model"
+  section flags `jinaai/jina-embeddings-v2-base-code` and `BAAI/bge-code-v1`
+  as opt-in code-tuned alternatives that need `trust_remote_code=True`
+  plumbing (planned for v0.4).
+- benchmarks: methodology kept; the v0.3.0 column is no longer canonical.
+
+Cache auto-invalidates because `model_id` changes again — affected users
+get a fresh reindex on first v0.3.3 run.
+
+Lesson: every model identifier in `MODEL_REGISTRY` and config defaults
+must be verified against the HF API before shipping. v0.4 will introduce
+a CI step that pings `https://huggingface.co/api/models/<id>` for each
+registered model name.
+
 ## v0.3.2 — 2026-05-05
 
 C# language support lands in TreeSitterChunker. Cache auto-invalidates
