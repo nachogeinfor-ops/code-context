@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.4.1 — 2026-05-05
+
+Hotfix. v0.3.2 added C# to the tree-sitter chunker (`_EXT_TO_LANG[".cs"]
+= "csharp"`) but forgot to also add `.cs` to `_DEFAULT_EXTENSIONS` in
+`config.py`. Result: from v0.3.2 through v0.4.0, **C#-heavy repos
+indexed as if they had no source files** — `FilesystemSource.list_files`
+filtered by `.include_extensions` and `.cs` wasn't on the list, so the
+chunker never saw them. Smoke against `WinServiceScheduler` (51 files,
+mostly C#) revealed the bug: 762 chunks produced, all from `.md`/`.yml`/
+`.json`/`.js`. The 33+ `.cs` source files contributed zero chunks, so
+hybrid retrieval queries for C# identifiers (e.g. `BushidoLogScannerAdapter`)
+returned only documentation files.
+
+- fix(config): add `.cs` to `_DEFAULT_EXTENSIONS`. Restores parity with
+  the chunker's supported language set.
+- test(config): regression test
+  `test_all_treesitter_extensions_are_in_default_includes` pins the
+  invariant — every extension in `chunker_treesitter._EXT_TO_LANG` must
+  appear in `config._DEFAULT_EXTENSIONS`. Future language additions
+  cannot silently re-introduce this bug.
+
+Affected users (v0.3.2 through v0.4.0 with `.cs` files):
+1. `pip install -U "git+https://github.com/nachogeinfor-ops/code-context.git@v0.4.1"`
+2. `code-context clear --yes && code-context reindex` — picks up `.cs`
+   files for the first time.
+
+Cache auto-invalidates because `chunker.version` is unchanged but the
+file-mtime check trips on the newly-included `.cs` files (now they
+appear in `list_files`, their mtimes precede `indexed_at` only by
+microseconds, but on next `is_stale()` call they are seen as new). In
+practice users should `clear --yes` to be safe.
+
 ## v0.4.0 — 2026-05-05
 
 Hybrid retrieval ships. `search_repo` now runs vector + BM25 keyword
