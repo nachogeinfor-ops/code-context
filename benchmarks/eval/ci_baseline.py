@@ -42,9 +42,13 @@ from pathlib import Path
 
 def compute_metrics(csv_path: Path) -> dict:
     """Read a per-run CSV, return dict with ndcg10, mrr, hit_at_1, hit_at_10, p50_ms, p95_ms, n."""
-    rows = list(csv.DictReader(csv_path.open(encoding="utf-8")))
+    rows = list(csv.DictReader(csv_path.open(newline="", encoding="utf-8")))
     if not rows:
         raise ValueError(f"CSV is empty: {csv_path}")
+    required = {"hit_at_1", "hit_at_10", "ndcg10", "rr", "latency_ms"}
+    missing = required - set(rows[0].keys())
+    if missing:
+        raise ValueError(f"CSV {csv_path} is missing required columns: {sorted(missing)}")
 
     ndcgs = [float(r["ndcg10"]) for r in rows]
     rrs = [float(r["rr"]) for r in rows]
@@ -121,7 +125,11 @@ def render_comment(
     d_p95 = metrics["p95_ms"] - bl["p95_ms"]
 
     def _fmt_delta_float(v: float) -> str:
-        return f"+{v:.4f}" if v >= 0 else f"{v:.4f}"
+        if v > 0:
+            return f"+{v:.4f}"
+        if v < 0:
+            return f"{v:.4f}"
+        return "0.0000"
 
     def _fmt_delta_int(v: int) -> str:
         return f"+{v}" if v > 0 else str(v)

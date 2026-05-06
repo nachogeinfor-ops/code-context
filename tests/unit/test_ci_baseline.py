@@ -159,6 +159,56 @@ def test_render_comment_contains_expected_sections(baseline_file: Path, csv_file
     assert "python" in comment
 
 
+def test_fmt_delta_float_zero_renders_without_sign(baseline_file: Path, csv_file: Path) -> None:
+    """_fmt_delta_float(0.0) must render as '0.0000' — no '+' or '-' prefix."""
+    from benchmarks.eval.ci_baseline import render_comment
+
+    # Build a metrics dict that exactly matches the v1.1.0 baseline so all
+    # float deltas are zero; use the real baseline_file to keep things simple.
+    baseline_data = json.loads(baseline_file.read_text(encoding="utf-8"))
+    bl = baseline_data["v1.1.0"]["hybrid_python"]
+    metrics = {
+        "ndcg10": bl["ndcg10"],
+        "mrr": bl["mrr"],
+        "hit_at_1": bl["hit_at_1"],
+        "hit_at_10": bl["hit_at_10"],
+        "n_queries": bl["n_queries"],
+        "p50_ms": bl["p50_ms"],
+        "p95_ms": bl["p95_ms"],
+    }
+    comment = render_comment(
+        metrics,
+        baseline_data["v1.1.0"],
+        version="v1.1.0",
+        repo="python",
+        config="hybrid",
+    )
+    # The NDCG@10 delta is exactly 0 — must NOT have a leading '+'
+    assert "| NDCG@10 |" in comment
+    ndcg_line = next(ln for ln in comment.splitlines() if "NDCG@10" in ln)
+    # The delta cell must be "0.0000", not "+0.0000"
+    assert "| 0.0000 |" in ndcg_line
+    assert "+0.0000" not in ndcg_line
+
+
+def test_compute_metrics_missing_column_raises_with_context(tmp_path: Path) -> None:
+    """compute_metrics must raise ValueError naming both the CSV path and missing column."""
+    from benchmarks.eval.ci_baseline import compute_metrics
+
+    # Write a CSV that is missing 'hit_at_10'
+    p = tmp_path / "bad.csv"
+    p.write_text(
+        "query,expected,top1,hit_at_1,ndcg10,rr,latency_ms\n"
+        "find user,user.py,user.py,1,1.0,1.0,20.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError) as exc_info:
+        compute_metrics(p)
+    msg = str(exc_info.value)
+    assert "bad.csv" in msg or str(p) in msg
+    assert "hit_at_10" in msg
+
+
 def test_render_comment_table_structure(baseline_file: Path, csv_file: Path) -> None:
     from benchmarks.eval.ci_baseline import compute_metrics, load_baseline, render_comment
 

@@ -24,7 +24,16 @@ Thumbs.db
 .code-context/
 
 # Eval suite per-run output (reproducible; per-run CSVs are not committed).
-# baseline.json IS committed — it holds the canonical comparison numbers.
+#
+# Files we DO commit under this directory:
+#   - results/baseline.json (canonical comparison numbers)
+#   - results/v0.9.0_*.csv, results/v1.0.0_*.csv, results/v1.1.0/** (historical baselines)
+#
+# Note: the `!benchmarks/eval/results/baseline.json` negation below is
+# informational only — git ignores negation patterns when the parent
+# directory is itself excluded. To track a NEW file under this directory,
+# use `git add -f <path>` once; subsequent updates to that tracked file
+# will be picked up by normal `git add`.
 benchmarks/eval/results/
 !benchmarks/eval/results/baseline.json
 
