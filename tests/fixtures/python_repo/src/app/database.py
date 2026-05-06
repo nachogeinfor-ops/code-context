@@ -1,0 +1,38 @@
+"""SQLAlchemy engine, session factory, and base declarative class."""
+
+from collections.abc import Generator
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+from app.config import get_settings
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+def _make_engine():
+    settings = get_settings()
+    connect_args = {}
+    if settings.database_url.startswith("sqlite"):
+        connect_args = {"check_same_thread": False}
+    return create_engine(settings.database_url, connect_args=connect_args)
+
+
+engine = _make_engine()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def get_db() -> Generator[Session, None, None]:
+    """FastAPI dependency that yields a database session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def create_tables() -> None:
+    """Create all tables defined in SQLAlchemy models."""
+    Base.metadata.create_all(bind=engine)

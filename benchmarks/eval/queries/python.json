@@ -1,0 +1,152 @@
+[
+  {
+    "query": "create user endpoint POST route",
+    "expected_top1_path": "routers/users.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users endpoint pagination",
+    "expected_top1_path": "routers/users.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete user by id route",
+    "expected_top1_path": "routers/users.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get user by id endpoint handler",
+    "expected_top1_path": "routers/users.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create item endpoint with owner",
+    "expected_top1_path": "routers/items.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list items route with skip and limit",
+    "expected_top1_path": "routers/items.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update item partial patch endpoint",
+    "expected_top1_path": "routers/items.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "login endpoint username password authentication",
+    "expected_top1_path": "routers/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refresh token route exchange token pair",
+    "expected_top1_path": "routers/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "pydantic UserCreate schema with email and password",
+    "expected_top1_path": "schemas/user.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserRead response model pydantic",
+    "expected_top1_path": "schemas/user.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemCreate pydantic schema for new items",
+    "expected_top1_path": "schemas/item.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemUpdate schema optional title description",
+    "expected_top1_path": "schemas/item.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TokenResponse schema access refresh token fields",
+    "expected_top1_path": "schemas/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "SQLAlchemy User model table columns",
+    "expected_top1_path": "models/user.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Item SQLAlchemy database model owner foreign key",
+    "expected_top1_path": "models/item.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "password hashing function bcrypt",
+    "expected_top1_path": "services/auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JWT access token encoding function",
+    "expected_top1_path": "services/auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "verify token decode JWT payload",
+    "expected_top1_path": "services/auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create refresh token long lived JWT",
+    "expected_top1_path": "services/auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "user service business logic create account",
+    "expected_top1_path": "services/user_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item service list items by owner",
+    "expected_top1_path": "services/item_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "user database queries find by email",
+    "expected_top1_path": "repositories/user_repository.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get user by email SQLAlchemy query",
+    "expected_top1_path": "repositories/user_repository.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item repository list items by owner id",
+    "expected_top1_path": "repositories/item_repository.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "SQLAlchemy session factory database engine setup",
+    "expected_top1_path": "database.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "test create user endpoint 201 response",
+    "expected_top1_path": "tests/test_users.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "test login flow returns access token",
+    "expected_top1_path": "tests/test_auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserService class create_user method",
+    "expected_top1_path": "services/user_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemRepository class SQLAlchemy CRUD operations",
+    "expected_top1_path": "repositories/item_repository.py",
+    "kind": "search_repo"
+  }
+]
