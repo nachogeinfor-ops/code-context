@@ -115,6 +115,14 @@ def _classify_path(path: str, source_tiers: list[str]) -> int:
     # --- Other (rank 3) ---
     return 3
 
+# T8 review fix — find_references over-fetches a wide pool to ensure source-tier
+# results reach the post-sort even on repos with large docs/archive corpora.
+# Without this, repos like WinServiceScheduler return only docs results because
+# their docs chunks for common identifiers (e.g., "ExecuteAsync") occupy all
+# top-N positions in FTS5's rowid order (or BM25 order). 1000 is a large enough
+# cap to span typical repos without unbounded latency.
+_FETCH_LIMIT = 1000
+
 # FTS5 query sanitisation — same logic as keyword_index_sqlite.py.
 # Strip punctuation (FTS5 parses `.`, `-`, `:`, etc. as syntax even
 # though the unicode61 tokenizer accepts them in indexed text), and
@@ -355,8 +363,10 @@ class SymbolIndexSqlite:
         try:
             cur = self._conn.execute(
                 f"SELECT path, line, snippet FROM {_REFS_TABLE} "
-                f"WHERE {_REFS_TABLE} MATCH ? LIMIT ?",
-                (sanitised, max_count * 4),  # over-fetch; per-line expand trims.
+                f"WHERE {_REFS_TABLE} MATCH ? "
+                f"ORDER BY rank "
+                f"LIMIT ?",
+                (sanitised, _FETCH_LIMIT),
             )
         except sqlite3.OperationalError as exc:
             log.warning("symbol refs query failed (%s) for %r → []", exc, name)

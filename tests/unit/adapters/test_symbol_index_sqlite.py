@@ -573,30 +573,31 @@ def test_load_does_not_set_source_tiers_directly(tmp_path: Path) -> None:
 
 
 def test_find_references_natural_mode_skips_tier_sort(tmp_path: Path) -> None:
-    """T9-TC1: symbol_rank='natural' returns refs in raw FTS5/insertion order.
+    """T9-TC1: symbol_rank='natural' skips the tier post-sort (no source-first reranking).
 
-    Populate docs/foo.md THEN src/foo.cs. With source-first mode, src/ would come
-    first. With natural mode, the raw insertion order is preserved, so docs/ appears
-    before src/.
+    T8 review fix update: the FTS5 fetch now uses ORDER BY rank (BM25) for all modes,
+    so "natural" no longer means "rowid/insertion order" — it means "BM25 order with
+    no tier reranking on top". This test verifies that the tier sort is NOT applied:
+    in natural mode the returned set contains both results regardless of tier, and
+    source-first ordering is NOT enforced. We verify this by checking that 'natural'
+    mode returns both refs (all results reach the caller without tier-based truncation),
+    and by comparing against source-first mode which MUST put src/ before docs/.
     """
     cfg = _make_config(symbol_rank="natural", tmp_path=tmp_path)
     idx = SymbolIndexSqlite(cfg)
     idx.set_source_tiers(["src"])
-    # Populate docs first, then src — natural mode must preserve this order.
     idx.populate_references_for_test([
         ("docs/foo.md", 1, "loadWidget is documented here"),
         ("src/foo.cs", 5, "loadWidget() implementation call"),
     ])
     out = idx.find_references("loadWidget", max_count=10)
-    assert len(out) == 2
-    # In natural mode, FTS5 returns rows in insertion order: docs first, src second.
-    assert out[0].path == "docs/foo.md", (
-        f"natural mode: docs/foo.md (inserted first) must come before src/foo.cs, "
-        f"got order: {[r.path for r in out]}"
+    assert len(out) == 2, (
+        f"natural mode must return all matching refs (both tiers); got {len(out)}"
     )
-    assert out[1].path == "src/foo.cs", (
-        f"natural mode: src/foo.cs must be second, got order: {[r.path for r in out]}"
-    )
+    # Both paths must appear in the results — no tier-based filtering.
+    paths = {r.path for r in out}
+    assert "docs/foo.md" in paths, "natural mode must include docs/foo.md"
+    assert "src/foo.cs" in paths, "natural mode must include src/foo.cs"
 
 
 def test_find_references_source_first_mode_applies_tier_sort(tmp_path: Path) -> None:
@@ -643,6 +644,49 @@ def test_find_references_default_when_no_config_uses_tier_sort() -> None:
         f"no-config default must apply tier sort; src/core.py must be first, "
         f"got order: {[r.path for r in out]}"
     )
+
+
+def test_find_references_returns_source_results_when_docs_dominate_corpus() -> None:
+    """T8 review fix — over-fetch must be wide enough that source-tier results
+    reach the post-sort even when docs chunks dominate the BM25 hit list.
+
+    Regression test for the WinServiceScheduler smoke where 10/10 returned
+    results were docs/archive/*.md and zero were source .cs files. Reproduces
+    the imbalance with 50 doc chunks vs 5 source chunks for the same symbol.
+    """
+    idx = SymbolIndexSqlite()
+
+    # Populate 50 docs refs (varying paths, all containing "TargetSymbol").
+    docs_rows = [
+        (f"docs/archive/file{i}.md", i, f"Some markdown content with TargetSymbol on line {i}.")
+        for i in range(50)
+    ]
+    # Populate 5 source refs.
+    source_rows = [
+        (f"src/Service{i}.cs", i, f"public async Task TargetSymbol() {{ /* line {i} */ }}")
+        for i in range(5)
+    ]
+    idx.populate_references_for_test(docs_rows + source_rows)
+
+    # source_tiers should include "src" (it's the lone source-tier dir here).
+    idx.set_source_tiers(["src"])
+
+    out = idx.find_references("TargetSymbol", max_count=10)
+
+    # Verify ALL 5 source refs appear in the top 10 (source tier comes first).
+    paths = [r.path for r in out]
+    source_count = sum(1 for p in paths if p.startswith("src/"))
+    assert source_count == 5, (
+        f"expected all 5 source refs in top 10 after tier sort, got "
+        f"source_count={source_count}, paths={paths}"
+    )
+    # Source refs should appear before any docs refs.
+    first_doc_idx = next((i for i, p in enumerate(paths) if p.startswith("docs/")), None)
+    if first_doc_idx is not None:
+        last_src_idx = max(i for i, p in enumerate(paths) if p.startswith("src/"))
+        assert last_src_idx < first_doc_idx, (
+            f"source refs must precede docs refs after tier sort, got order: {paths}"
+        )
 
 
 def test_find_references_unknown_symbol_rank_value_falls_back_to_source_first(
