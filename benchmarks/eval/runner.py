@@ -223,7 +223,10 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
     parser.add_argument(
         "--queries",
         type=Path,
-        help="Path to queries.json (list of {query, expected_top1_path, kind}).",
+        help=(
+            "Path to a queries JSON file (e.g. queries/csharp.json)"
+            " (list of {query, expected_top1_path, kind})."
+        ),
     )
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument(

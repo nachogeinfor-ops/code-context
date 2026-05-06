@@ -4,7 +4,7 @@ Run with:
 
     python -m benchmarks.eval.runner \
         --repo C:/path/to/repo \
-        --queries benchmarks/eval/queries.json
+        --queries benchmarks/eval/queries/csharp.json
 
 Set env vars from `benchmarks/eval/configs/*.yaml` to switch
 retrieval modes (vector_only, hybrid, hybrid_rerank).

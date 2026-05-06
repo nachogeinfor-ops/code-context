@@ -298,5 +298,20 @@
     "query": "ServiceStatusBadge component web UI",
     "expected_top1_path": "ServiceStatusBadge.razor",
     "kind": "search_repo"
+  },
+  {
+    "query": "BushidoLogSource",
+    "expected_top1_path": "BushidoLogSource.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TaskExecutor",
+    "expected_top1_path": "TaskExecutor.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "WebPanelServiceCollectionExtensions",
+    "expected_top1_path": "WebPanelServiceCollectionExtensions.cs",
+    "kind": "search_repo"
   }
 ]
