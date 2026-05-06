@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from code_context.domain.models import IndexEntry, StaleSet, SymbolDef
+from code_context.domain.models import Chunk, IndexEntry, StaleSet, SymbolDef
 from code_context.domain.ports import (
     Chunker,
     CodeSource,
@@ -31,7 +31,7 @@ _VERSION = 3
 _SOURCE_TIERS_TOP_N = 3
 
 
-def _compute_source_tiers(chunks: list) -> list[str]:
+def _compute_source_tiers(chunks: list[Chunk]) -> list[str]:
     """Return the top-N top-level directories by chunk count.
 
     Algorithm:
@@ -39,6 +39,7 @@ def _compute_source_tiers(chunks: list) -> list[str]:
     - Root-level files (no '/') are excluded — they have no directory bucket.
     - Tie-breaker: alphabetical ascending (ensures deterministic output).
     - Returns at most ``_SOURCE_TIERS_TOP_N`` directory names.
+    - Result is ordered descending by chunk count (result[0] = most-chunk-dense directory).
     """
     counts: dict[str, int] = {}
     for chunk in chunks:
@@ -90,8 +91,8 @@ class IndexerUseCase:
             return StaleSet(full_reindex_required=True, reason="no current index")
         if not self.git_source.is_repo(self.repo_root):
             return StaleSet(full_reindex_required=True, reason="not a git repo")
-        if active.get("version", 1) < _VERSION:
-            prior_ver = active.get("version", 1)
+        prior_ver = active.get("version", 1)
+        if prior_ver < _VERSION:
             return StaleSet(
                 full_reindex_required=True,
                 reason=f"metadata schema upgrade (v{prior_ver} → v{_VERSION})",

@@ -910,9 +910,7 @@ def test_run_incremental_handles_missing_source_tiers_in_v3_metadata(
 
     uc.code_source = FakeCodeSource({f: "a = 99\n"})
     s = uc.dirty_set()
-    # May or may not require full reindex depending on version; if it does, skip.
-    if s.full_reindex_required:
-        pytest.skip("full reindex triggered — incremental path not exercised")
+    assert not s.full_reindex_required
 
     new_dir2 = uc.run_incremental(s)
     meta2 = json.loads((new_dir2 / "metadata.json").read_text())
