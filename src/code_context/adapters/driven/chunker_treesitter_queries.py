@@ -11,6 +11,8 @@ Each query captures the AST nodes we want to emit as chunks. A node is
 - C#: method_declaration, constructor_declaration, class_declaration,
   interface_declaration, struct_declaration, record_declaration,
   enum_declaration.
+- Java: class_declaration, method_declaration, constructor_declaration,
+  interface_declaration, enum_declaration, record_declaration.
 
 Each query also captures the symbol's identifier as ``@name`` so callers
 that want to mine ``SymbolDef`` objects (extract_definitions) can pair
@@ -101,6 +103,23 @@ CSHARP = """
   name: (identifier) @name) @chunk
 """
 
+# Java shares C#'s overall shape (same node names for most declarations).
+# The struct_declaration from C# has no Java equivalent — omitted.
+JAVA = """
+(class_declaration
+  name: (identifier) @name) @chunk
+(method_declaration
+  name: (identifier) @name) @chunk
+(constructor_declaration
+  name: (identifier) @name) @chunk
+(interface_declaration
+  name: (identifier) @name) @chunk
+(enum_declaration
+  name: (identifier) @name) @chunk
+(record_declaration
+  name: (identifier) @name) @chunk
+"""
+
 QUERIES_BY_LANG: dict[str, str] = {
     "python": PYTHON,
     "javascript": JAVASCRIPT,
@@ -108,4 +127,5 @@ QUERIES_BY_LANG: dict[str, str] = {
     "go": GO,
     "rust": RUST,
     "csharp": CSHARP,
+    "java": JAVA,
 }

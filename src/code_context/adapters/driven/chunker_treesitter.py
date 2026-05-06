@@ -28,6 +28,7 @@ _EXT_TO_LANG: dict[str, str] = {
     ".go": "go",
     ".rs": "rust",
     ".cs": "csharp",
+    ".java": "java",
 }
 
 

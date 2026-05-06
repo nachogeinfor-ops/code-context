@@ -72,6 +72,7 @@ def test_version_starts_with_treesitter() -> None:
         ("go", "go", {"func", "type"}),
         ("rust", "rs", {"pub", "impl"}),  # struct/enum/fn lines start with `pub `
         ("csharp", "cs", {"public", "private", "internal", "static"}),
+        ("java", "java", {"public", "private", "protected"}),
     ],
 )
 def test_other_languages_chunk(lang: str, ext: str, expected_first_tokens: set[str]) -> None:
@@ -85,7 +86,7 @@ def test_other_languages_chunk(lang: str, ext: str, expected_first_tokens: set[s
     )
 
 
-@pytest.mark.parametrize("ext", ["js", "ts", "go", "rs", "cs"])
+@pytest.mark.parametrize("ext", ["js", "ts", "go", "rs", "cs", "java"])
 def test_other_languages_chunk_lines_match_source(ext: str) -> None:
     lang_by_ext = {
         "js": "javascript",
@@ -93,6 +94,7 @@ def test_other_languages_chunk_lines_match_source(ext: str) -> None:
         "go": "go",
         "rs": "rust",
         "cs": "csharp",
+        "java": "java",
     }
     lang = lang_by_ext[ext]
     src = _read(FIXTURES / lang / f"sample.{ext}")
@@ -126,6 +128,66 @@ def test_extract_definitions_csharp_covers_all_kinds() -> None:
     assert "Severity" in names
     kinds = {d.kind for d in defs}
     assert kinds & {"class", "interface", "enum", "method", "constructor", "struct", "record"}
+
+
+def test_chunks_java_file_by_class_and_method() -> None:
+    """T3 (Sprint 11) — behavioral test: Java chunker emits correct kinds and line ranges.
+
+    The fixture (sample.java) defines, in document order:
+      - IShape      interface  (line 3)
+      - area        method     (line 4, inside interface)
+      - Color       enum       (line 7)
+      - Point       record     (line 13)
+      - Calculator  class      (line 16)
+      - Calculator  constructor (line 19)
+      - area        method     (line 23)
+      - add         method     (line 27)
+    """
+    src = _read(FIXTURES / "java" / "sample.java")
+    chunks = TreeSitterChunker().chunk(src, "Calculator.java")
+    assert chunks, "expected at least one chunk for java"
+
+    # Every chunk's snippet must round-trip correctly from the source lines.
+    lines = src.splitlines()
+    for c in chunks:
+        expected_snippet = "\n".join(lines[c.line_start - 1 : c.line_end])
+        assert c.snippet == expected_snippet, (
+            f"snippet mismatch at lines {c.line_start}-{c.line_end}"
+        )
+
+    # We expect class, interface, enum, record, constructor, and method chunks.
+    defs = TreeSitterChunker().extract_definitions(src, "Calculator.java")
+    names = {d.name for d in defs}
+    kinds = {d.kind for d in defs}
+
+    assert "Calculator" in names, "class 'Calculator' not found in defs"
+    assert "IShape" in names, "interface 'IShape' not found in defs"
+    assert "Color" in names, "enum 'Color' not found in defs"
+    assert "Point" in names, "record 'Point' not found in defs"
+
+    assert "class" in kinds, f"expected 'class' kind, got {kinds}"
+    assert "interface" in kinds, f"expected 'interface' kind, got {kinds}"
+    assert "enum" in kinds, f"expected 'enum' kind, got {kinds}"
+    assert "record" in kinds, f"expected 'record' kind, got {kinds}"
+    assert "constructor" in kinds, f"expected 'constructor' kind, got {kinds}"
+    assert "method" in kinds, f"expected 'method' kind, got {kinds}"
+
+    # All defs should have language == "java".
+    assert all(d.language == "java" for d in defs), "expected all defs language='java'"
+
+
+def test_extract_definitions_java_covers_all_kinds() -> None:
+    src = _read(FIXTURES / "java" / "sample.java")
+    defs = TreeSitterChunker().extract_definitions(src, "x.java")
+    names = {d.name for d in defs}
+    # Fixture: IShape, Color, Point, Calculator (class), Calculator (ctor),
+    # area (×2 — once in interface, once in class), add.
+    assert "Calculator" in names
+    assert "IShape" in names
+    assert "Color" in names
+    assert "Point" in names
+    kinds = {d.kind for d in defs}
+    assert kinds >= {"class", "interface", "enum", "record", "constructor", "method"}
 
 
 @pytest.mark.parametrize(
@@ -169,22 +231,19 @@ def test_extract_definitions_lines_are_one_indexed() -> None:
 
 
 # ---------------------------------------------------------------------------
-# T1 (Sprint 11) — Regression guard: pin exact supported language set (v1.2.0)
+# T1 (Sprint 11) — Regression guard: pin exact supported language set.
 #
-# The Sprint 1 plan said "5 languages" (Py/JS/TS/Go/Rust).
-# As of v1.2.0, C# was silently added (QUERIES_BY_LANG + _EXT_TO_LANG both
-# include "csharp"), making the true count 6.  This test pins the exact set
-# so that:
-#   - T2-T5 (C# / Java / C++ / Markdown) MUST update this assertion or CI
-#     breaks — uses == not >= so additions are caught immediately.
+# Originally v1.2.0 had 6 languages (Py/JS/TS/Go/Rust/C#).
+# T3 (Sprint 11) adds Java, making the count 7.  This test now pins v1.3.0.
+#
+#   - T4-T5 (C++ / Markdown) MUST update _EXPECTED_LANGUAGES and
+#     _EXPECTED_EXT_MAP or CI breaks — uses == not >= so additions are
+#     caught immediately.
 #   - Any accidental removal is equally visible.
-#
-# If you are landing T2 (C#) or later tasks, update _EXPECTED_LANGUAGES and
-# _EXPECTED_EXT_MAP to include the new language/extensions.
 # ---------------------------------------------------------------------------
 
 _EXPECTED_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "go", "rust", "csharp"}
+    {"python", "javascript", "typescript", "go", "rust", "csharp", "java"}
 )
 
 _EXPECTED_EXT_MAP: dict[str, str] = {
@@ -196,13 +255,14 @@ _EXPECTED_EXT_MAP: dict[str, str] = {
     ".go": "go",
     ".rs": "rust",
     ".cs": "csharp",
+    ".java": "java",
 }
 
 
-def test_supported_language_set_is_exactly_v1_2_0() -> None:
-    """QUERIES_BY_LANG must contain exactly the 6 languages wired in v1.2.0.
+def test_supported_language_set_is_exactly_v1_3_0() -> None:
+    """QUERIES_BY_LANG must contain exactly the 7 languages wired in v1.3.0.
 
-    Update _EXPECTED_LANGUAGES when a T2-T5 task adds a new language.
+    Update _EXPECTED_LANGUAGES when a T4-T5 task adds a new language.
     This test uses == (not >=) so both additions and removals break CI.
     """
     assert frozenset(QUERIES_BY_LANG.keys()) == _EXPECTED_LANGUAGES, (
@@ -213,10 +273,10 @@ def test_supported_language_set_is_exactly_v1_2_0() -> None:
     )
 
 
-def test_ext_to_lang_map_is_exactly_v1_2_0() -> None:
-    """_EXT_TO_LANG must contain exactly the 8 extension mappings wired in v1.2.0.
+def test_ext_to_lang_map_is_exactly_v1_3_0() -> None:
+    """_EXT_TO_LANG must contain exactly the 9 extension mappings wired in v1.3.0.
 
-    Update _EXPECTED_EXT_MAP when a T2-T5 task adds new file extensions.
+    Update _EXPECTED_EXT_MAP when a T4-T5 task adds new file extensions.
     This test uses == (not >=) so both additions and removals break CI.
     """
     assert _EXT_TO_LANG == _EXPECTED_EXT_MAP, (
