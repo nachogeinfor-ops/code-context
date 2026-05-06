@@ -307,7 +307,11 @@ def test_find_definition_works_from_non_main_thread() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_config(bm25_stop_words: str = "on", tmp_path: Path | None = None) -> Config:
+def _make_config(
+    bm25_stop_words: str = "on",
+    tmp_path: Path | None = None,
+    symbol_rank: str = "source-first",
+) -> Config:
     """Build a minimal Config for adapter construction tests."""
     from pathlib import Path as _Path
 
@@ -331,6 +335,7 @@ def _make_config(bm25_stop_words: str = "on", tmp_path: Path | None = None) -> C
         symbol_index_strategy="sqlite",
         trust_remote_code=False,
         bm25_stop_words=bm25_stop_words,
+        symbol_rank=symbol_rank,
     )
 
 
@@ -559,4 +564,106 @@ def test_load_does_not_set_source_tiers_directly(tmp_path: Path) -> None:
     # After load, _source_tiers must be the __init__ default (not mutated by load).
     assert loader._source_tiers == [], (
         "load() must not set _source_tiers; composition layer is responsible"
+    )
+
+
+# ---------------------------------------------------------------------------
+# T9 — CC_SYMBOL_RANK env var: natural vs source-first modes (Sprint 10)
+# ---------------------------------------------------------------------------
+
+
+def test_find_references_natural_mode_skips_tier_sort(tmp_path: Path) -> None:
+    """T9-TC1: symbol_rank='natural' returns refs in raw FTS5/insertion order.
+
+    Populate docs/foo.md THEN src/foo.cs. With source-first mode, src/ would come
+    first. With natural mode, the raw insertion order is preserved, so docs/ appears
+    before src/.
+    """
+    cfg = _make_config(symbol_rank="natural", tmp_path=tmp_path)
+    idx = SymbolIndexSqlite(cfg)
+    idx.set_source_tiers(["src"])
+    # Populate docs first, then src — natural mode must preserve this order.
+    idx.populate_references_for_test([
+        ("docs/foo.md", 1, "loadWidget is documented here"),
+        ("src/foo.cs", 5, "loadWidget() implementation call"),
+    ])
+    out = idx.find_references("loadWidget", max_count=10)
+    assert len(out) == 2
+    # In natural mode, FTS5 returns rows in insertion order: docs first, src second.
+    assert out[0].path == "docs/foo.md", (
+        f"natural mode: docs/foo.md (inserted first) must come before src/foo.cs, "
+        f"got order: {[r.path for r in out]}"
+    )
+    assert out[1].path == "src/foo.cs", (
+        f"natural mode: src/foo.cs must be second, got order: {[r.path for r in out]}"
+    )
+
+
+def test_find_references_source_first_mode_applies_tier_sort(tmp_path: Path) -> None:
+    """T9-TC2: symbol_rank='source-first' sorts source > tests > docs regardless of insertion order.
+
+    Populate docs/foo.md THEN src/foo.cs (reverse of expected tier order).
+    source-first must reorder to src/ first.
+    """
+    cfg = _make_config(symbol_rank="source-first", tmp_path=tmp_path)
+    idx = SymbolIndexSqlite(cfg)
+    idx.set_source_tiers(["src"])
+    # Populate docs first, then src — tier sort must override insertion order.
+    idx.populate_references_for_test([
+        ("docs/foo.md", 1, "loadWidget is documented here"),
+        ("src/foo.cs", 5, "loadWidget() implementation call"),
+    ])
+    out = idx.find_references("loadWidget", max_count=10)
+    assert len(out) == 2
+    # source-first: src/ (tier 0) must come before docs/ (tier 2).
+    assert out[0].path == "src/foo.cs", (
+        f"source-first: src/foo.cs must be first, got order: {[r.path for r in out]}"
+    )
+    assert out[1].path == "docs/foo.md", (
+        f"source-first: docs/foo.md must be second, got order: {[r.path for r in out]}"
+    )
+
+
+def test_find_references_default_when_no_config_uses_tier_sort() -> None:
+    """T9-TC3: SymbolIndexSqlite() with no config defaults to source-first (tier sort applied).
+
+    Backwards compat: callers that construct the adapter without a Config object
+    (e.g. tests, direct instantiation) must still get the v1.2.0 source-first behavior.
+    """
+    idx = SymbolIndexSqlite()  # no config — must default to _sort_by_tier=True
+    idx.set_source_tiers(["src"])
+    # Populate docs first, then src — tier sort must still apply.
+    idx.populate_references_for_test([
+        ("docs/readme.md", 1, "processData is described here"),
+        ("src/core.py", 3, "processData() used here"),
+    ])
+    out = idx.find_references("processData", max_count=10)
+    assert len(out) == 2
+    assert out[0].path == "src/core.py", (
+        f"no-config default must apply tier sort; src/core.py must be first, "
+        f"got order: {[r.path for r in out]}"
+    )
+
+
+def test_find_references_unknown_symbol_rank_value_falls_back_to_source_first(
+    tmp_path: Path,
+) -> None:
+    """T9-TC4: An unrecognised symbol_rank value (e.g. 'banana') is treated as source-first.
+
+    Defensive default: anything other than the literal string 'natural' enables
+    the tier sort, so unknown future values don't accidentally disable it.
+    """
+    cfg = _make_config(symbol_rank="banana", tmp_path=tmp_path)
+    idx = SymbolIndexSqlite(cfg)
+    idx.set_source_tiers(["src"])
+    # Populate docs first, then src.
+    idx.populate_references_for_test([
+        ("docs/notes.md", 1, "renderView is documented here"),
+        ("src/view.py", 2, "renderView() called here"),
+    ])
+    out = idx.find_references("renderView", max_count=10)
+    assert len(out) == 2
+    assert out[0].path == "src/view.py", (
+        f"unknown symbol_rank='banana' must fall back to source-first tier sort; "
+        f"src/view.py must be first, got order: {[r.path for r in out]}"
     )

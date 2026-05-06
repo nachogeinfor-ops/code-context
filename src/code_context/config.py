@@ -67,6 +67,12 @@ class Config:
     # opt in via CC_BM25_STOP_WORDS=on. Future tuning of the list may flip the
     # default if eval data justifies it.
     bm25_stop_words: str = "off"
+    # Sprint 10 T9 — find_references source-tier post-sort.
+    # "source-first" (default): apply 4-tier classification (source > tests > docs > other),
+    #   stable sort preserving BM25 order within tier (T8 behavior).
+    # "natural": skip the post-sort and return raw BM25 order (pre-T8 behavior).
+    # Any other value is treated as "source-first" (defensive default).
+    symbol_rank: str = "source-first"
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -122,4 +128,5 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         watch=os.environ.get("CC_WATCH", "off").lower() in ("on", "true", "1"),
         watch_debounce_ms=int(os.environ.get("CC_WATCH_DEBOUNCE_MS", "1000")),
         bm25_stop_words=os.environ.get("CC_BM25_STOP_WORDS", "off").lower(),
+        symbol_rank=os.environ.get("CC_SYMBOL_RANK", "source-first").lower(),
     )

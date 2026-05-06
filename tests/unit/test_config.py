@@ -194,3 +194,29 @@ def test_bm25_stop_words_comma_list_stored_as_string(tmp_path: Path) -> None:
     with patch.dict(os.environ, {"CC_BM25_STOP_WORDS": "foo,bar,baz"}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
     assert cfg.bm25_stop_words == "foo,bar,baz"
+
+
+# ---------------------------------------------------------------------------
+# T9 — CC_SYMBOL_RANK env var (Sprint 10)
+# ---------------------------------------------------------------------------
+
+
+def test_symbol_rank_defaults_to_source_first(tmp_path: Path) -> None:
+    """T9: env unset -> config field defaults to 'source-first'."""
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.symbol_rank == "source-first"
+
+
+def test_symbol_rank_reads_env_var_natural(tmp_path: Path) -> None:
+    """T9: CC_SYMBOL_RANK=natural -> config field is 'natural'."""
+    with patch.dict(os.environ, {"CC_SYMBOL_RANK": "natural"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.symbol_rank == "natural"
+
+
+def test_symbol_rank_env_var_is_lowercased(tmp_path: Path) -> None:
+    """T9: env var value is lowercased so NATURAL -> 'natural'."""
+    with patch.dict(os.environ, {"CC_SYMBOL_RANK": "NATURAL"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.symbol_rank == "natural"

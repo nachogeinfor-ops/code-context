@@ -230,6 +230,13 @@ class SymbolIndexSqlite:
             self._stop_words = _resolve_stop_words(config.bm25_stop_words)
         else:
             self._stop_words = _STOP_WORDS
+        # T9: pre-resolve whether find_references should apply the tier sort.
+        # True for everything except the literal string "natural"; unknown values
+        # default to True (defensive default — source-first is the safer choice).
+        if config is not None:
+            self._sort_by_tier: bool = config.symbol_rank != "natural"
+        else:
+            self._sort_by_tier = True  # default to source-first for direct instantiation
         # T8: source_tiers are NOT set at construction; the composition layer
         # calls set_source_tiers() after load() (option b). Default to [] so
         # find_references works even if set_source_tiers is never called —
@@ -368,13 +375,15 @@ class SymbolIndexSqlite:
                 seen.add(key)
                 trimmed = line_text.strip()[:200]
                 out.append(SymbolRef(path=path, line=actual_line, snippet=trimmed))
-        # T8: stable-sort by tier rank so source > tests > docs > other,
+        # T8/T9: conditionally stable-sort by tier rank so source > tests > docs > other,
         # preserving the original BM25 order within each tier. Python's
         # list.sort() is guaranteed stable, so equal-rank entries keep
         # their insertion (BM25 score) order. We sort ALL candidates first,
         # then truncate — this ensures the top-N returned is the highest-ranked
         # N after the tier sort, not a random BM25-ordered subset.
-        out.sort(key=lambda r: _classify_path(r.path, self._source_tiers))
+        # T9: skip the sort when symbol_rank="natural" to return raw BM25 order.
+        if self._sort_by_tier:
+            out.sort(key=lambda r: _classify_path(r.path, self._source_tiers))
         return out[:max_count]
 
     def persist(self, path: Path) -> None:
