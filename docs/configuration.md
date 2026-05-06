@@ -23,6 +23,8 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Override the cross-encoder model. Only consulted when `CC_RERANK=on`. |
 | `CC_SYMBOL_INDEX` | `sqlite` | Symbol-index strategy: `sqlite` (default, FTS5-backed) or `none` (disables `find_definition`/`find_references`). |
 | `CC_TRUST_REMOTE_CODE` | `off` | Set to `on`/`true`/`1` to allow `sentence-transformers` to execute custom Python from the HF model repo. Required for models like `jinaai/jina-embeddings-v2-base-code` that use custom architectures. **Off by default for safety.** |
+| `CC_BM25_STOP_WORDS` | `off` | `off` disables filtering; `on` uses built-in 52-word English list; comma-list sets a custom stop-word set. See "BM25 stop-word filtering" below. **Since v1.2.0.** |
+| `CC_SYMBOL_RANK` | `source-first` | `source-first` post-sorts `find_references` by source tier; `natural` reverts to raw BM25 order. See "`find_references` source-tier ranking" below. **Since v1.2.0.** |
 
 ## Examples
 
@@ -162,6 +164,93 @@ This wires a no-op adapter; both `find_definition` and `find_references`
 return `[]`. The MCP tools stay registered (so the contract holds) but
 they never produce results — Claude's smart enough to fall back to
 `Grep` when an MCP tool returns nothing.
+
+## BM25 stop-word filtering (`CC_BM25_STOP_WORDS`) — since v1.2.0
+
+Controls whether common English stop words are stripped from BM25 keyword
+queries before the tokens are AND-ed against the FTS5 index.
+
+**Values:**
+
+| Value | Behaviour |
+|---|---|
+| `off` (default) | No filtering — queries reach FTS5 verbatim (v1.1.x behaviour). |
+| `on` | Filter the built-in 52-word English stop-word list (`a`, `an`, `the`, `is`, `in`, `of`, … — all single and double-character words plus the most common English function words). |
+| `foo,bar,baz` | Use only the words in the comma-separated list as the stop-word set, overriding the built-in list. Useful for domain-specific filtering (e.g., `export CC_BM25_STOP_WORDS=async,await` on JS/TS repos). |
+
+**Why you might want this.** When a user asks a natural-language question
+(`"how is the configuration file loaded?"`), AND-semantics applied by FTS5
+means tokens like `is`, `the`, and `file` must all appear in the same chunk.
+Many chunks have the relevant code without those connecting words, so the
+keyword leg returns `[]` and the query degrades to vector-only. With stop-word
+filtering enabled, those connective tokens are stripped and FTS5 only sees
+the substantive terms.
+
+**Default is `off`.** Sprint 10 eval (T6) showed a small csharp NDCG@10
+regression (-0.005) with `on`, and zero gain on python/ts for the tested
+query set. The improvement is query-shape-dependent, so it is opt-in rather
+than the new default.
+
+**Edge case.** When filtering removes every token in the query (a query
+composed entirely of stop words — pathological but possible), the adapter
+falls back to the unfiltered token list so FTS5 always receives at least
+one token and never produces a vacuous `[]` result.
+
+```bash
+# Enable the built-in 52-word list
+export CC_BM25_STOP_WORDS=on
+
+# Use a custom list (useful for domain-specific vocabularies)
+export CC_BM25_STOP_WORDS=async,await,export,import
+
+code-context-server
+```
+
+---
+
+## `find_references` source-tier ranking (`CC_SYMBOL_RANK`) — since v1.2.0
+
+Controls how `find_references` orders results after BM25 retrieval.
+
+**Values:**
+
+| Value | Behaviour |
+|---|---|
+| `source-first` (default) | Apply a stable post-sort by source tier. Within each tier, BM25 rank is preserved. |
+| `natural` | Return results in raw BM25 order — identical to pre-v1.2.0 behaviour. |
+
+**Source-tier classification.** Each result path is assigned to one of four
+tiers in priority order:
+
+| Tier | Paths matched |
+|---|---|
+| `source` | First path segment is in the repo's auto-detected `source_tiers` list (top 3 chunk-dense top-level directories at index time, alphabetical tiebreaker; root-level files excluded). |
+| `tests` | Path under `tests/`, `test/`, `__tests__/`; or filename matches test conventions: `_test.py`, `_tests.py`, `.test.ts`, `.spec.ts`, `*Tests.cs`, `*Test.cs`, `Test*.cs`. |
+| `docs` | Path under `docs/` or `doc/`; or file extension `.md` or `.rst`. |
+| `other` | Everything else. |
+
+**Why this matters.** Before v1.2.0, `find_references("ExecuteAsync")` against
+a C# repo (WinServiceScheduler) returned 10/10 results from
+`docs/archive/*.md` because archived documentation contained the identifier
+more often than the production source code did. With `source-first`, the
+same query returns 10/10 results from production source files.
+
+**Source-tier detection** runs at index time and is stored in `metadata.json`
+(schema v3 `source_tiers` field). On first v1.2.0 startup the schema bump
+from v2 to v3 triggers an automatic full reindex via the existing `dirty_set`
+staleness check — no user action required.
+
+**`natural`** reverts to pre-v1.2.0 ordering if you want the old behavior
+(e.g., for repos where the auto-detected source tiers are incorrect).
+
+```bash
+# Disable source-first sort (revert to v1.1.x behaviour)
+export CC_SYMBOL_RANK=natural
+
+code-context-server
+```
+
+---
 
 ## Tree and diff tools
 

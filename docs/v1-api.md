@@ -81,6 +81,8 @@ All env vars use the `CC_` prefix.
 | `CC_BG_IDLE_SECONDS` | `1.0` | v0.9 | Coalesce window for trigger storms. |
 | `CC_WATCH` | `off` | v0.9 | Opt-in fs watcher (requires `[watch]` extra). |
 | `CC_WATCH_DEBOUNCE_MS` | `1000` | v0.9 | Watcher debounce window. |
+| `CC_BM25_STOP_WORDS` | `off` | v1.2 | `off` disables filtering; `on` uses built-in 52-word English list; comma-list overrides with a custom set. Filters stop words from BM25 keyword queries before AND-ing tokens. See `docs/configuration.md`. |
+| `CC_SYMBOL_RANK` | `source-first` | v1.2 | `source-first` post-sorts `find_references` results by source tier (source > tests > docs > other); `natural` reverts to raw BM25 order. See `docs/configuration.md`. |
 
 ## CLI
 
@@ -124,14 +126,14 @@ $CC_CACHE_DIR/
       chunks.parquet                    # path / lines / hash / snippet
       keyword.sqlite                    # since v0.4 (FTS5)
       symbols.sqlite                    # since v0.5 (defs + refs FTS5)
-      metadata.json                     # schema v2 since v0.8
+      metadata.json                     # schema v3 since v1.2
 ```
 
-`metadata.json` (v2) fields:
+`metadata.json` (v3) fields:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "head_sha": "...",
   "indexed_at": "2026-05-05T...",
   "embeddings_model": "...",
@@ -141,7 +143,8 @@ $CC_CACHE_DIR/
   "symbol_version": "...",
   "n_chunks": 2220,
   "n_files": 305,
-  "file_hashes": {"path/relative/to/repo": "sha256hex", ...}
+  "file_hashes": {"path/relative/to/repo": "sha256hex", ...},
+  "source_tiers": ["src", "lib", "core"]
 }
 ```
 
@@ -162,7 +165,8 @@ table:
 |---|---|---|
 | v0.5.x | v1.1 | v0.2.x |
 | v0.6.x – v0.9.x | v1.2 | v0.3.x |
-| **v1.0.x** | **v1.2** | **v0.3.x** |
+| v1.0.x – v1.1.x | v1.2 | v0.3.x |
+| **v1.2.x** | **v1.2** | **v0.3.x** |
 
 Bumping the protocol to v2 will require both repos to release in
 sync — see [`docs/release.md`](release.md) for the coordination

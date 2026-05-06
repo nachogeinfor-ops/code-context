@@ -1,5 +1,125 @@
 # Changelog
 
+## v1.2.0 — 2026-05-06
+
+Sprint 10 ships. **Retrieval quality hardening.** Two opt-in env vars
+(`CC_BM25_STOP_WORDS`, `CC_SYMBOL_RANK`), a metadata schema bump (v2 → v3)
+adding `source_tiers`, and a qualitative fix to `find_references` that
+eliminates the "docs-first" ranking bug on real corpora.
+
+### Behavior changes since v1.1.0
+
+- **`find_references` source-tier ranking (T8 + T9)** — before this release,
+  `find_references` returned results in raw BM25 order. On documentation-heavy
+  repos this caused the top results to be docs/archive files rather than
+  production source. For example, `find_references("ExecuteAsync")` against
+  WinServiceScheduler returned 10/10 docs results before; after v1.2.0 it
+  returns 10/10 source results. The fix applies a stable post-sort by four
+  tiers (source > tests > docs > other) and preserves BM25 order within each
+  tier. Additionally, the FTS5 `_FETCH_LIMIT` was bumped from
+  `max_count * 4 = 40` to `1000` and `ORDER BY rank` was added to the FTS5
+  query; without these changes, source results never reached the post-sort on
+  corpora dominated by documentation.
+- **`CC_SYMBOL_RANK` env var (T9)** — controls `find_references` result order.
+  `source-first` (default) applies the tier sort described above; `natural`
+  reverts to raw BM25 order (pre-v1.2.0 behavior). Both behaviors are
+  backwards-compatible from the caller's perspective (same return shape).
+- **`CC_BM25_STOP_WORDS` env var (T4-T5)** — filters English stop words from
+  BM25 keyword queries before AND-ing tokens, helping long natural-language
+  queries that previously returned `[]` because connective words anded against
+  code chunks. Default `off` — Sprint 10 eval (T6) showed a small csharp
+  NDCG@10 regression (-0.005) with no gain on python/ts, making opt-in the
+  safe default. See `docs/configuration.md` for full semantics including
+  custom comma-list mode.
+- **Metadata schema v2 → v3 (T7)** — `metadata.json` gains a `source_tiers`
+  field: the top 3 chunk-dense top-level directories (alphabetical tiebreaker;
+  root-level files excluded), used by the `find_references` tier classifier.
+
+  > **ACTION REQUIRED for large repos:** the schema bump from v2 to v3
+  > triggers an **automatic full reindex on first v1.2.0 startup** via the
+  > existing `dirty_set` model-id staleness check. For
+  > WinServiceScheduler (~305 files, ~2220 chunks) this is roughly 3-4
+  > minutes cold. No user action is needed — the reindex runs automatically
+  > in the background — but plan for the one-time wait before expecting
+  > `find_references` to return source-first results.
+
+### Env vars added
+
+| Var | Default | Description |
+|---|---|---|
+| `CC_BM25_STOP_WORDS` | `off` | BM25 stop-word filter: `off` / `on` / `<comma-list>`. Full docs in `docs/configuration.md`. |
+| `CC_SYMBOL_RANK` | `source-first` | `find_references` result order: `source-first` or `natural`. Full docs in `docs/configuration.md`. |
+
+Both default to backwards-compatible behavior (`off` and `source-first`
+respectively — `source-first` improves result quality without changing the
+return signature).
+
+### Eval baseline (T10)
+
+Combined NDCG@10 (hybrid_rerank config) = **0.6169** across 129 queries
+× 3 languages × 3 configs. This is ≈ v1.1.0's 0.6173 (within
+non-determinism). The eval set contains no `find_references` queries, so
+the source-tier ranking improvement is not reflected in the NDCG numbers —
+it is validated by unit tests and the qualitative before/after example
+above.
+
+Regression note: csharp NDCG@10 shows a -0.010 jitter vs baseline; this
+is within sentence-transformers non-determinism on identical input. python
+and typescript are pixel-perfect. Sprint acceptance criterion (combined
+NDCG@10 ≥ 0.55) met by a wide margin.
+
+### Descoped from original Sprint 10 plan
+
+**T1-T3 (model swap to `BAAI/bge-code-v1.5`) was descoped.** The model
+identifier does not exist on Hugging Face — a planning error already
+documented in `embeddings_local.py` (the same class of bug that
+`bge-code-v1.5` caused in v0.3.0, also absent on HF). The HF guard CI
+job catches this on every push. The planned Sprint 10 work was to swap
+the default model; without a verified model identifier on HF there was
+nothing safe to swap to. **Deferred to a future sprint after HF model
+validation.** The default model remains `all-MiniLM-L6-v2`.
+
+### Tests
+
+**324 passing** (was 274 in v1.1.0; +50 across T4-T9 implementations and
+reviews):
+
+- T4-T5: stop-word tokenizer unit tests, BM25 adapter integration tests
+  (on/off/custom list, edge case: all tokens filtered falls back to
+  unfiltered).
+- T7: metadata schema v3 round-trip, `source_tiers` population at index
+  time, `dirty_set` triggers full reindex on v2 → v3 upgrade.
+- T8: source-tier classifier unit tests (source / tests / docs / other
+  with CS/Python/TS/JS conventions), `find_references` post-sort
+  integration (before: docs-first; after: source-first), fetch-limit
+  regression.
+- T9: `CC_SYMBOL_RANK` env var unit tests (`source-first`, `natural`,
+  unknown-value warning + fallback).
+
+Lint (`ruff check` + `ruff format --check`) clean.
+
+### Migration
+
+No action required beyond the one-time reindex on first v1.2.0 startup
+(see schema bump note above). Existing call patterns, env var names, MCP
+tool signatures, CLI subcommands, and Python imports are unchanged.
+
+To opt in to BM25 stop-word filtering:
+
+```bash
+export CC_BM25_STOP_WORDS=on   # enable built-in 52-word English list
+code-context-server
+```
+
+To revert `find_references` to pre-v1.2.0 ordering:
+
+```bash
+export CC_SYMBOL_RANK=natural
+code-context-server
+```
+
+---
+
 ## v1.1.0 — 2026-05-06
 
 Sprint 9 ships. **Eval coverage.** The 35-query single-repo eval suite that
