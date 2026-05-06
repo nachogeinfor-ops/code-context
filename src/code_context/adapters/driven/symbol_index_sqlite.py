@@ -30,6 +30,81 @@ _REFS_TABLE = "symbol_refs_fts"
 _FTS_KEEP_RE = re.compile(r"[^\w\s]", flags=re.UNICODE)
 _FTS_BOOLEAN_RE = re.compile(r"\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
 
+# Stop words for BM25 query sanitisation (query-side only — indexing is unaffected).
+# Mirrors keyword_index_sqlite._STOP_WORDS exactly; duplicated here because both
+# adapters own their own _sanitise() and there is no shared FTS helper module.
+# Source: hand-curated subset of NLTK English stop words — see keyword_index_sqlite.py
+# for the full rationale and curation notes. T5 (future task) adds configurability.
+_STOP_WORDS: frozenset[str] = frozenset(
+    {
+        # Articles
+        "a",
+        "an",
+        "the",
+        # Common copulas / auxiliaries
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        # Prepositions / conjunctions (short, high-frequency)
+        "of",
+        "in",
+        "on",
+        "at",
+        "to",
+        "by",
+        "as",
+        "into",
+        "with",
+        "from",
+        "about",
+        "between",
+        # Interrogative / relative pronouns
+        "how",
+        "what",
+        "where",
+        "when",
+        "who",
+        "which",
+        "why",
+        # Personal pronouns
+        "i",
+        "we",
+        "you",
+        "he",
+        "she",
+        "they",
+        "it",
+        # Demonstrative / other determiners
+        "this",
+        "that",
+        "these",
+        "those",
+        # Common connectors (NOT "and"/"or" — handled by _FTS_BOOLEAN_RE already)
+        "but",
+        "so",
+        "yet",
+        "also",
+        # Misc high-frequency fillers
+        "can",
+        "will",
+        "would",
+        "should",
+        "could",
+        "may",
+        "might",
+    }
+)
+
 
 class SymbolIndexSqlite:
     """Default SymbolIndex adapter — definitions + references via SQLite + FTS5."""
@@ -258,7 +333,16 @@ class SymbolIndexSqlite:
 def _sanitise(query: str) -> str:
     """Strip FTS5 syntax so user input is bare tokens only. See
     keyword_index_sqlite._sanitise for the rationale (Sprint 8 fix
-    for the punctuation-crashes-FTS5-parser bug)."""
+    for the punctuation-crashes-FTS5-parser bug).
+
+    Sprint 10 T4: stop words are dropped from the token list before
+    joining so natural-language queries don't AND-require filler tokens
+    that are absent from code. If filtering removes every token, fall
+    back to the unfiltered list so FTS5 never receives empty input.
+    """
     cleaned = _FTS_KEEP_RE.sub(" ", query)
     cleaned = _FTS_BOOLEAN_RE.sub(" ", cleaned)
-    return " ".join(cleaned.split())
+    tokens = [t for t in cleaned.split() if t.lower() not in _STOP_WORDS]
+    if not tokens:
+        tokens = cleaned.split()
+    return " ".join(tokens)

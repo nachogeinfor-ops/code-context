@@ -34,6 +34,89 @@ _FTS_TABLE = "chunks_fts"
 _FTS_KEEP_RE = re.compile(r"[^\w\s]", flags=re.UNICODE)
 _FTS_BOOLEAN_RE = re.compile(r"\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
 
+# Stop words for BM25 query sanitisation (query-side only — indexing is unaffected).
+#
+# Source: hand-curated list derived from NLTK's English stop-word corpus
+# (https://www.nltk.org/book/ch02.html, stopwords.words("english")), trimmed
+# to ~40 high-frequency natural-language fillers that are virtually never
+# meaningful BM25 discriminators in a code corpus.
+#
+# Conservative by design: words that can appear as code identifiers or
+# keywords (e.g. "set", "get", "if", "for", "not") are intentionally
+# EXCLUDED to avoid over-stripping. Sprint 10 Risk doc: "over-stripping is
+# a known risk — pick a conservative initial list."
+#
+# T5 (future task) will add env-var configurability (CC_BM25_STOP_WORDS).
+_STOP_WORDS: frozenset[str] = frozenset(
+    {
+        # Articles
+        "a",
+        "an",
+        "the",
+        # Common copulas / auxiliaries
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        # Prepositions / conjunctions (short, high-frequency)
+        "of",
+        "in",
+        "on",
+        "at",
+        "to",
+        "by",
+        "as",
+        "into",
+        "with",
+        "from",
+        "about",
+        "between",
+        # Interrogative / relative pronouns
+        "how",
+        "what",
+        "where",
+        "when",
+        "who",
+        "which",
+        "why",
+        # Personal pronouns
+        "i",
+        "we",
+        "you",
+        "he",
+        "she",
+        "they",
+        "it",
+        # Demonstrative / other determiners
+        "this",
+        "that",
+        "these",
+        "those",
+        # Common connectors (NOT "and"/"or" — handled by _FTS_BOOLEAN_RE already)
+        "but",
+        "so",
+        "yet",
+        "also",
+        # Misc high-frequency fillers
+        "can",
+        "will",
+        "would",
+        "should",
+        "could",
+        "may",
+        "might",
+    }
+)
+
 
 class SqliteFTS5Index:
     @property
@@ -200,7 +283,18 @@ def _sanitise(query: str) -> str:
     the keyword leg, leaving the vector leg to drive the result.
     Sprint 8 eval confirmed that ORing tokens makes long-query
     BM25 too noisy and hurts NDCG@10 by ~0.13.
+
+    Sprint 10 T4: stop words are dropped from the TOKEN LIST before
+    joining, so natural-language queries like "how is settings.json
+    loaded" sanitise to "settings json loaded" rather than requiring
+    "how"/"is" to appear in indexed code (they never do). AND semantics
+    are preserved — we only shrink the token list, not change the join
+    operator. If filtering removes every token, we fall back to the
+    unfiltered list so we never send empty input to FTS5.
     """
     cleaned = _FTS_KEEP_RE.sub(" ", query)
     cleaned = _FTS_BOOLEAN_RE.sub(" ", cleaned)
-    return " ".join(cleaned.split())
+    tokens = [t for t in cleaned.split() if t.lower() not in _STOP_WORDS]
+    if not tokens:
+        tokens = cleaned.split()
+    return " ".join(tokens)

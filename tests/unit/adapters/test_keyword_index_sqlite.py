@@ -125,6 +125,83 @@ def test_delete_by_path_unknown_path_is_zero() -> None:
     assert idx.delete_by_path("never.py") == 0
 
 
+# ---------------------------------------------------------------------------
+# T4 — Stop-word filter tests (Sprint 10 Quality)
+# ---------------------------------------------------------------------------
+
+
+def test_stop_word_filter_recovers_natural_language_query() -> None:
+    """T4-TC1: A query like "how is settings.json loaded" used to return []
+    because BM25 AND-mode required ALL tokens (including "how"/"is") to appear
+    in candidate docs — but stop words are absent from real code corpora.
+
+    After the stop-word filter, the query sanitises to "settings json loaded"
+    (or a subset thereof), and BM25 matches docs that contain those content
+    tokens.
+    """
+    idx = SqliteFTS5Index()
+    idx.add(
+        [
+            _entry("config.py", "settings json loaded configuration reads file"),
+            _entry("parser.py", "xml parser streaming data reads input"),
+            _entry("utils.py", "utility helpers misc functions"),
+        ]
+    )
+    # Before T4, this returned [] because "how" and "is" were required by AND
+    # semantics and are absent from any doc. After T4, the filter drops "how"
+    # and "is", leaving "settings json loaded" which matches config.py.
+    out = idx.search("how is settings.json loaded", k=5)
+    paths = [e.chunk.path for e, _ in out]
+    assert "config.py" in paths, (
+        "stop-word filter should allow 'settings json loaded' to match config.py; "
+        f"got paths={paths!r}"
+    )
+
+
+def test_stop_words_in_indexed_content_are_still_matched_normally() -> None:
+    """T4-TC2: The filter only touches QUERY sanitisation — it must NOT affect
+    the indexing side. Documents containing the words "and" or "or" are still
+    tokenised normally by FTS5's unicode61 tokenizer and remain discoverable
+    via non-stop-word queries.
+
+    This ensures we haven't accidentally altered the add() path.
+    """
+    idx = SqliteFTS5Index()
+    idx.add(
+        [
+            _entry("logic.py", "branch and merge strategy for git workflow"),
+            _entry("ops.py", "read or write operation on the file system"),
+            _entry("other.py", "unrelated helper function definitions"),
+        ]
+    )
+    # Queries using content tokens (not stop words) still find correct docs.
+    out_branch = idx.search("branch merge strategy", k=5)
+    assert any(e.chunk.path == "logic.py" for e, _ in out_branch), (
+        "'and' in indexed content must not prevent BM25 from matching on other tokens"
+    )
+    out_read = idx.search("read write operation", k=5)
+    assert any(e.chunk.path == "ops.py" for e, _ in out_read), (
+        "'or' in indexed content must not prevent BM25 from matching on other tokens"
+    )
+
+
+def test_all_stop_words_query_falls_back_to_unfiltered_tokens() -> None:
+    """T4-TC3: If filtering removes ALL tokens (e.g. query "the a an"), we must
+    fall back to the original unfiltered token list — otherwise we produce empty
+    FTS5 input which either raises OperationalError or silently returns [].
+
+    The fallback preserves the original tokens so search() can return [] (empty
+    index or no match) rather than crashing. We only need the function NOT to
+    crash and NOT to return an error; the actual search result may be [] since
+    the stop-word tokens won't appear in any real doc.
+    """
+    idx = SqliteFTS5Index()
+    idx.add([_entry("a.py", "some normal python code here")])
+    # Must not raise — fallback ensures we pass valid (non-empty) FTS5 input.
+    result = idx.search("the a an", k=5)
+    assert isinstance(result, list), "all-stop-words query must return a list, not raise"
+
+
 def test_search_works_from_non_main_thread() -> None:
     """Regression for the v0.6.1 SQLite threading bug.
 
