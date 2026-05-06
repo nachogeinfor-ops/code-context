@@ -200,6 +200,14 @@ class SymbolIndex(Protocol):
         Returns the total row count removed across both tables. Used by
         incremental reindex (Sprint 6)."""
 
+    def set_source_tiers(self, tiers: list[str]) -> None:
+        """Set the source-tier directory names used to classify paths in find_references.
+
+        Called by the composition layer after load() so the adapter stays
+        schema-agnostic. Passing an empty list (the default) means no paths
+        classify as tier 0 (source). May be called multiple times; last call wins.
+        """
+
     def persist(self, path: Path) -> None: ...
 
     def load(self, path: Path) -> None: ...

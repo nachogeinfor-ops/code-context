@@ -97,6 +97,9 @@ class _NullSymbolIndex:
     def delete_by_path(self, path: str) -> int:
         return 0
 
+    def set_source_tiers(self, tiers: list[str]) -> None:
+        pass  # null adapter — tiers are not used
+
     def persist(self, path) -> None:
         pass
 
@@ -293,8 +296,7 @@ def make_reload_callback(
             symbol_index.load(active)
             # T8: wire source_tiers after load so find_references can rank
             # source paths above tests/docs (option b — composition reads metadata).
-            if hasattr(symbol_index, "set_source_tiers"):
-                symbol_index.set_source_tiers(_load_source_tiers(active))
+            symbol_index.set_source_tiers(_load_source_tiers(active))
         except FileNotFoundError:
             # Reindex was published but one of the stores' files isn't
             # there yet (race between persist + swap); next bus tick
@@ -327,8 +329,7 @@ def fast_load_existing_index(
         keyword_index.load(active)
         symbol_index.load(active)
         # T8: wire source_tiers after load (option b).
-        if hasattr(symbol_index, "set_source_tiers"):
-            symbol_index.set_source_tiers(_load_source_tiers(active))
+        symbol_index.set_source_tiers(_load_source_tiers(active))
     except FileNotFoundError:
         return False
     return True
@@ -423,8 +424,7 @@ def ensure_index(
                 keyword_index.load(current)
                 symbol_index.load(current)
                 # T8: wire source_tiers after load (option b).
-                if hasattr(symbol_index, "set_source_tiers"):
-                    symbol_index.set_source_tiers(_load_source_tiers(current))
+                symbol_index.set_source_tiers(_load_source_tiers(current))
             except FileNotFoundError:
                 log.info(
                     "keyword or symbol index missing in %s; reindexing to backfill",
@@ -435,8 +435,7 @@ def ensure_index(
                 keyword_index.load(new_dir)
                 symbol_index.load(new_dir)
                 # T8: wire source_tiers after reindex-backfill load (option b).
-                if hasattr(symbol_index, "set_source_tiers"):
-                    symbol_index.set_source_tiers(_load_source_tiers(new_dir))
+                symbol_index.set_source_tiers(_load_source_tiers(new_dir))
             return
     log.info(
         "ensure_index: %s — running %s reindex",
@@ -448,8 +447,7 @@ def ensure_index(
     keyword_index.load(new_dir)
     symbol_index.load(new_dir)
     # T8: wire source_tiers after fresh reindex load (option b).
-    if hasattr(symbol_index, "set_source_tiers"):
-        symbol_index.set_source_tiers(_load_source_tiers(new_dir))
+    symbol_index.set_source_tiers(_load_source_tiers(new_dir))
 
 
 def setup_logging(cfg: Config) -> None:

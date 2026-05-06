@@ -85,6 +85,9 @@ class _FakeSymbolIndex:
     def delete_by_path(self, path: str) -> int:
         return 0
 
+    def set_source_tiers(self, tiers: list) -> None:
+        pass  # test stub — tiers not used
+
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
