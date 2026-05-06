@@ -35,6 +35,9 @@ _FTS_BOOLEAN_RE = re.compile(r"\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
 # adapters own their own _sanitise() and there is no shared FTS helper module.
 # Source: hand-curated subset of NLTK English stop words — see keyword_index_sqlite.py
 # for the full rationale and curation notes. T5 (future task) adds configurability.
+#
+# Conservative by design: Python keywords/operators ("in", "is", "as", "from",
+# "with") are intentionally EXCLUDED alongside "set", "get", "if", "for", "not".
 _STOP_WORDS: frozenset[str] = frozenset(
     {
         # Articles
@@ -42,7 +45,6 @@ _STOP_WORDS: frozenset[str] = frozenset(
         "an",
         "the",
         # Common copulas / auxiliaries
-        "is",
         "are",
         "was",
         "were",
@@ -56,16 +58,13 @@ _STOP_WORDS: frozenset[str] = frozenset(
         "does",
         "did",
         # Prepositions / conjunctions (short, high-frequency)
+        # Note: "in", "as", "with", "from" excluded — Python keywords/operators.
         "of",
-        "in",
         "on",
         "at",
         "to",
         "by",
-        "as",
         "into",
-        "with",
-        "from",
         "about",
         "between",
         # Interrogative / relative pronouns

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from code_context.adapters.driven.keyword_index_sqlite import SqliteFTS5Index
+from code_context.adapters.driven.keyword_index_sqlite import SqliteFTS5Index, _sanitise
 from code_context.domain.models import Chunk, IndexEntry
 
 
@@ -131,8 +131,8 @@ def test_delete_by_path_unknown_path_is_zero() -> None:
 
 
 def test_stop_word_filter_recovers_natural_language_query() -> None:
-    """T4-TC1: A query like "how is settings.json loaded" used to return []
-    because BM25 AND-mode required ALL tokens (including "how"/"is") to appear
+    """T4-TC1: A query like "how are settings.json loaded" used to return []
+    because BM25 AND-mode required ALL tokens (including "how"/"are") to appear
     in candidate docs — but stop words are absent from real code corpora.
 
     After the stop-word filter, the query sanitises to "settings json loaded"
@@ -147,10 +147,10 @@ def test_stop_word_filter_recovers_natural_language_query() -> None:
             _entry("utils.py", "utility helpers misc functions"),
         ]
     )
-    # Before T4, this returned [] because "how" and "is" were required by AND
+    # Before T4, this returned [] because "how" and "are" were required by AND
     # semantics and are absent from any doc. After T4, the filter drops "how"
-    # and "is", leaving "settings json loaded" which matches config.py.
-    out = idx.search("how is settings.json loaded", k=5)
+    # and "are", leaving "settings json loaded" which matches config.py.
+    out = idx.search("how are settings.json loaded", k=5)
     paths = [e.chunk.path for e, _ in out]
     assert "config.py" in paths, (
         "stop-word filter should allow 'settings json loaded' to match config.py; "
@@ -200,6 +200,24 @@ def test_all_stop_words_query_falls_back_to_unfiltered_tokens() -> None:
     # Must not raise — fallback ensures we pass valid (non-empty) FTS5 input.
     result = idx.search("the a an", k=5)
     assert isinstance(result, list), "all-stop-words query must return a list, not raise"
+
+
+def test_sanitise_fallback_preserves_unfiltered_tokens() -> None:
+    """T4-M2: Direct contract test for _sanitise() fallback and stop-word filtering.
+
+    Two assertions:
+    1. All-stop-words query → fallback returns the unfiltered tokens (non-empty
+       string), so FTS5 never receives empty input.
+    2. Mixed query → stop words dropped, content tokens kept.
+
+    This is the legitimate place to import the private helper; the test is
+    explicitly verifying the helper's contract, not probing internals.
+    """
+    # All-stop-words → fallback returns the unfiltered tokens (non-empty)
+    assert _sanitise("the a an") == "the a an"
+    # Mixed → stop words dropped, content tokens kept
+    # "how" and "are" are stop words; "settings", "json", "loaded" are not.
+    assert _sanitise("how are settings json loaded") == "settings json loaded"
 
 
 def test_search_works_from_non_main_thread() -> None:

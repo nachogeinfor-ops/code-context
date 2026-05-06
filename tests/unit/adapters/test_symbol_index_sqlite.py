@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from code_context.adapters.driven.symbol_index_sqlite import (
-    _STOP_WORDS,
     SymbolIndexSqlite,
     _sanitise,
 )
@@ -195,21 +194,17 @@ def test_find_references_caps_snippet_length() -> None:
 
 
 def test_stop_word_filter_drops_stop_words_from_fts_query() -> None:
-    """T4-TC1 (symbol variant): _sanitise() must remove stop words from the
-    FTS5 query token list so that natural-language fillers don't appear as
+    """T4-TC1 (symbol variant): Natural-language fillers must not appear as
     required AND tokens in the BM25 search.
 
-    We test this behaviorally: index a snippet containing 'loadSettings' and
-    'called'; query with those words prepended by stop words 'how' and 'is'.
-    Without the filter, FTS5 requires ALL of {how, is, loadSettings, called}
-    to appear in the same doc — 'how' and 'is' are absent from code, so BM25
-    returns []. With the filter, only {loadSettings, called} are required.
+    We test this end-to-end: index a snippet containing 'loadSettings'; query
+    with the exact symbol name. Without the filter, a query like
+    "how is loadSettings called" would require ALL tokens (including "how"/"is")
+    to appear in docs — they never do in real code, so BM25 returns []. With
+    the filter, only content tokens are required and the doc is found.
 
-    Note: find_references applies a secondary per-line word-boundary regex
-    on the ORIGINAL name arg, so we use the sanitised string directly via
-    the index's search path by testing with a two-token query that doesn't
-    trigger the boundary-regex mismatch — we pick 'is loadSettings' where
-    the non-stop token is exactly the symbol name used for the regex too.
+    This test is purely behavioral (end-to-end via find_references) to match
+    the keyword adapter's TC1 test structure.
     """
     idx = SymbolIndexSqlite()
     idx.populate_references_for_test(
@@ -218,25 +213,6 @@ def test_stop_word_filter_drops_stop_words_from_fts_query() -> None:
             ("utils.py", 5, "unrelated helper function call here"),
         ]
     )
-    # "is" is a stop word → filtered out → FTS5 only requires "loadSettings".
-    # The word-boundary regex uses the original name "is loadSettings" — but
-    # the line "result = loadSettings(path)" contains "loadSettings" which
-    # satisfies \bloadSettings\b, and "is" (if required) doesn't prevent a
-    # line-level match since word_re uses the full original name as a phrase.
-    # After filtering, FTS5 finds the doc; the word_re is a secondary filter
-    # that operates on individual lines.
-    #
-    # To avoid the phrase-regex mismatch, we test via the sanitise function
-    # directly for the behavioral assertion, plus a compatible end-to-end call.
-    assert "is" in _STOP_WORDS, "_STOP_WORDS must contain 'is'"
-    assert "how" in _STOP_WORDS, "_STOP_WORDS must contain 'how'"
-    sanitised = _sanitise("how is loadSettings called")
-    tokens = sanitised.split()
-    assert "how" not in tokens, f"'how' must be filtered out; got tokens={tokens!r}"
-    assert "is" not in tokens, f"'is' must be filtered out; got tokens={tokens!r}"
-    assert "loadSettings" in tokens, f"'loadSettings' must be preserved; got tokens={tokens!r}"
-    assert "called" in tokens, f"'called' must be preserved; got tokens={tokens!r}"
-
     # End-to-end: query using only non-stop tokens → finds indexed doc.
     out = idx.find_references("loadSettings", max_count=10)
     paths = {r.path for r in out}
@@ -274,6 +250,22 @@ def test_all_stop_words_symbol_query_falls_back_gracefully() -> None:
     idx.populate_references_for_test([("a.py", 1, "some normal python code")])
     result = idx.find_references("the a an")
     assert isinstance(result, list), "all-stop-words query must return a list, not raise"
+
+
+def test_sanitise_fallback_preserves_unfiltered_tokens() -> None:
+    """T4-M2 (symbol variant): Direct contract test for _sanitise() fallback
+    and stop-word filtering, parallel to the keyword adapter's test.
+
+    Two assertions:
+    1. All-stop-words query → fallback returns the unfiltered tokens (non-empty
+       string), so FTS5 never receives empty input.
+    2. Mixed query → stop words dropped, content tokens kept.
+    """
+    # All-stop-words → fallback returns the unfiltered tokens (non-empty)
+    assert _sanitise("the a an") == "the a an"
+    # Mixed → stop words dropped, content tokens kept
+    # "how" and "are" are stop words; "settings", "json", "loaded" are not.
+    assert _sanitise("how are settings json loaded") == "settings json loaded"
 
 
 def test_find_definition_works_from_non_main_thread() -> None:

@@ -38,13 +38,14 @@ _FTS_BOOLEAN_RE = re.compile(r"\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
 #
 # Source: hand-curated list derived from NLTK's English stop-word corpus
 # (https://www.nltk.org/book/ch02.html, stopwords.words("english")), trimmed
-# to ~40 high-frequency natural-language fillers that are virtually never
+# to ~52 high-frequency natural-language fillers that are virtually never
 # meaningful BM25 discriminators in a code corpus.
 #
 # Conservative by design: words that can appear as code identifiers or
-# keywords (e.g. "set", "get", "if", "for", "not") are intentionally
-# EXCLUDED to avoid over-stripping. Sprint 10 Risk doc: "over-stripping is
-# a known risk — pick a conservative initial list."
+# Python keywords (e.g. "set", "get", "if", "for", "not", "in", "is",
+# "as", "from", "with") are intentionally EXCLUDED to avoid over-stripping.
+# Sprint 10 Risk doc: "over-stripping is a known risk — pick a conservative
+# initial list."
 #
 # T5 (future task) will add env-var configurability (CC_BM25_STOP_WORDS).
 _STOP_WORDS: frozenset[str] = frozenset(
@@ -54,7 +55,6 @@ _STOP_WORDS: frozenset[str] = frozenset(
         "an",
         "the",
         # Common copulas / auxiliaries
-        "is",
         "are",
         "was",
         "were",
@@ -68,16 +68,13 @@ _STOP_WORDS: frozenset[str] = frozenset(
         "does",
         "did",
         # Prepositions / conjunctions (short, high-frequency)
+        # Note: "in", "as", "with", "from" excluded — Python keywords/operators.
         "of",
-        "in",
         "on",
         "at",
         "to",
         "by",
-        "as",
         "into",
-        "with",
-        "from",
         "about",
         "between",
         # Interrogative / relative pronouns
@@ -285,9 +282,9 @@ def _sanitise(query: str) -> str:
     BM25 too noisy and hurts NDCG@10 by ~0.13.
 
     Sprint 10 T4: stop words are dropped from the TOKEN LIST before
-    joining, so natural-language queries like "how is settings.json
+    joining, so natural-language queries like "how are settings.json
     loaded" sanitise to "settings json loaded" rather than requiring
-    "how"/"is" to appear in indexed code (they never do). AND semantics
+    "how"/"are" to appear in indexed code (they never do). AND semantics
     are preserved — we only shrink the token list, not change the join
     operator. If filtering removes every token, we fall back to the
     unfiltered list so we never send empty input to FTS5.
