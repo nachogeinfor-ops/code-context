@@ -1,0 +1,167 @@
+[
+  {
+    "query": "verifyToken",
+    "expected_top1_path": "src/services/authService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "errorHandler",
+    "expected_top1_path": "src/middleware/errorHandler.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JwtPayload",
+    "expected_top1_path": "src/types/jwt.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "login endpoint route post credentials",
+    "expected_top1_path": "src/routes/auth.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refresh token route exchange token pair",
+    "expected_top1_path": "src/routes/auth.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create user route POST endpoint",
+    "expected_top1_path": "src/routes/users.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete user endpoint by id",
+    "expected_top1_path": "src/routes/users.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users route protected",
+    "expected_top1_path": "src/routes/users.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create item endpoint owned by user",
+    "expected_top1_path": "src/routes/items.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete item endpoint route",
+    "expected_top1_path": "src/routes/items.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update item partial patch route",
+    "expected_top1_path": "src/routes/items.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "auth controller login handler email password",
+    "expected_top1_path": "src/controllers/authController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "user controller create handler 201 response",
+    "expected_top1_path": "src/controllers/usersController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item controller list items by authenticated owner",
+    "expected_top1_path": "src/controllers/itemsController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "auth service JWT sign verify bcrypt",
+    "expected_top1_path": "src/services/authService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "hash password bcrypt rounds",
+    "expected_top1_path": "src/services/authService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "user service create account business logic",
+    "expected_top1_path": "src/services/userService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get user by email lookup function",
+    "expected_top1_path": "src/services/userService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item service list items by owner id",
+    "expected_top1_path": "src/services/itemService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "zod schema user validation email username password",
+    "expected_top1_path": "src/validators/userValidators.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item create validator zod schema title description",
+    "expected_top1_path": "src/validators/itemValidators.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "User interface TypeScript email username passwordHash",
+    "expected_top1_path": "src/types/user.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JWT payload interface sub type access refresh",
+    "expected_top1_path": "src/types/jwt.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Item interface TypeScript ownerId title description",
+    "expected_top1_path": "src/types/item.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JWT auth middleware Bearer token verification",
+    "expected_top1_path": "src/middleware/authMiddleware.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "global error handler Express ZodError status",
+    "expected_top1_path": "src/middleware/errorHandler.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "request logger middleware response time log",
+    "expected_top1_path": "src/middleware/requestLogger.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "test login endpoint returns access token",
+    "expected_top1_path": "tests/auth.test.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "test create user endpoint 201 status",
+    "expected_top1_path": "tests/users.test.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "test create item owned by authenticated user",
+    "expected_top1_path": "tests/items.test.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "express app initialization mount routers",
+    "expected_top1_path": "src/app.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "server listen port entry point",
+    "expected_top1_path": "src/server.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "zod env config validated environment variables",
+    "expected_top1_path": "src/config.ts",
+    "kind": "search_repo"
+  }
+]
