@@ -13,7 +13,7 @@ Single-repo mode (original, unchanged):
         $env:CC_RERANK = "off"
         & .\\.venv\\Scripts\\python.exe -m benchmarks.eval.runner `
             --repo C:\\path\\to\\repo `
-            --queries benchmarks\\eval\\queries.json `
+            --queries benchmarks\\eval\\queries\\csharp.json `
             --output benchmarks\\eval\\results\\hybrid.csv
 
 Multi-repo mode (Sprint 9, T1):

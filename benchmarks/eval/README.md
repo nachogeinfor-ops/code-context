@@ -10,8 +10,8 @@
 - **Repo**: `WinServiceScheduler` (305 source files, mostly C# /
   Razor). Same fixture used in the per-sprint benchmarks for
   cross-comparability.
-- **Query set**: 35 hand-curated queries in
-  [`queries.json`](queries.json). Most are `search_repo` style
+- **Query set**: 60 hand-curated queries in
+  [`queries/csharp.json`](queries/csharp.json). Most are `search_repo` style
   ("scheduler worker main loop", "task execution history
   maintenance"); a few target specific symbol files ("global
   usings for the GeinforScheduler project").
@@ -121,7 +121,7 @@ $env:CC_RERANK = "off"             # or "on"
 
 & .\.venv\Scripts\python.exe -m benchmarks.eval.runner `
     --repo "C:\path\to\WinServiceScheduler" `
-    --queries benchmarks\eval\queries.json `
+    --queries benchmarks\eval\queries\csharp.json `
     --output benchmarks\eval\results\v0.9.0_<config>.csv
 ```
 

@@ -173,5 +173,130 @@
     "query": "sample config cron format integration",
     "expected_top1_path": "SampleConfigCronFormat",
     "kind": "search_repo"
+  },
+  {
+    "query": "where are exceptions logged in the scheduler",
+    "expected_top1_path": "ExceptionHandlingHelper.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "invalid task policy custom exception",
+    "expected_top1_path": "InvalidTaskPolicyException.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "system error category mapper infrastructure",
+    "expected_top1_path": "SystemErrorCategoryMapper.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "BushidoErrorNotifier error notification flow",
+    "expected_top1_path": "BushidoErrorNotifier.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "system error email sink notification",
+    "expected_top1_path": "SystemErrorEmailSink.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "BushidoLineParser",
+    "expected_top1_path": "BushidoLineParser.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "BushidoLogMonitor background scanning",
+    "expected_top1_path": "BushidoLogMonitor.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "BushidoLogStore in-memory log entries",
+    "expected_top1_path": "BushidoLogStore.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "bushido log entry domain entity",
+    "expected_top1_path": "BushidoLogEntry.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "query bushido logs use case",
+    "expected_top1_path": "QueryBushidoLogsUseCase.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "how is configuration written back to disk atomically",
+    "expected_top1_path": "AtomicFileConfigurationWriter.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ConfigurationProviderAdapter settings reload",
+    "expected_top1_path": "ConfigurationProviderAdapter.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "how does file change trigger config reload",
+    "expected_top1_path": "ConfigFileChangeHandler.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "application settings domain model",
+    "expected_top1_path": "ApplicationSettings.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update settings configuration use case",
+    "expected_top1_path": "UpdateSettingsConfigurationUseCase.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CronTaskScheduler next fire time",
+    "expected_top1_path": "CronTaskScheduler.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "cron expression evaluator parse validate",
+    "expected_top1_path": "CronExpressionEvaluator.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "SchedulingOrchestrator worker dispatch loop",
+    "expected_top1_path": "SchedulingOrchestrator.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "how is a task triggered manually on demand",
+    "expected_top1_path": "TriggerTaskNowUseCase.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "InMemoryTaskStateManager task lifecycle state",
+    "expected_top1_path": "InMemoryTaskStateManager.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "how does the watchdog detect a stuck task",
+    "expected_top1_path": "WatchdogMonitor.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "home page Blazor dashboard component",
+    "expected_top1_path": "Home.razor",
+    "kind": "search_repo"
+  },
+  {
+    "query": "task edit razor page form bindings",
+    "expected_top1_path": "TaskEdit.razor",
+    "kind": "search_repo"
+  },
+  {
+    "query": "logs page Blazor tail log viewer",
+    "expected_top1_path": "Logs.razor",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ServiceStatusBadge component web UI",
+    "expected_top1_path": "ServiceStatusBadge.razor",
+    "kind": "search_repo"
   }
 ]
