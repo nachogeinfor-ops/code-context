@@ -148,5 +148,20 @@
     "query": "ItemRepository class SQLAlchemy CRUD operations",
     "expected_top1_path": "repositories/item_repository.py",
     "kind": "search_repo"
+  },
+  {
+    "query": "get_settings",
+    "expected_top1_path": "config.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TokenPayload",
+    "expected_top1_path": "schemas/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "hash_password",
+    "expected_top1_path": "services/auth_service.py",
+    "kind": "search_repo"
   }
 ]
