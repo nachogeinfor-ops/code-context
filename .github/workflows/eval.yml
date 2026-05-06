@@ -1,0 +1,83 @@
+name: Eval (opt-in)
+
+# Informational — does NOT block merge. Triggered manually OR by adding the
+# `run-eval` label to a PR. Runs the multi-repo eval against the small Python
+# fixture under tests/fixtures/python_repo, in `hybrid` mode, and posts the
+# NDCG@10 delta vs the latest baseline in benchmarks/eval/results/baseline.json
+# as a PR comment.
+#
+# Retrieval mode: hybrid
+# Rationale: fastest mode that exercises both the vector AND BM25 legs
+# (~30 s on the Python fixture vs ~3.5 min for hybrid_rerank). A regression
+# in either leg shows up here. NDCG@10 baseline = 0.8493 (highest of the
+# three modes on the Python fixture).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+
+jobs:
+  eval:
+    name: Eval Python fixture (hybrid)
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-eval')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write   # for posting PR comments
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install (deps + project)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run eval (hybrid against Python fixture)
+        env:
+          CC_CACHE_DIR: ${{ runner.temp }}/cc-eval-cache
+          CC_KEYWORD_INDEX: sqlite
+          CC_RERANK: "off"
+          CC_LOG_LEVEL: WARNING
+        run: |
+          mkdir -p eval-out
+          python -m benchmarks.eval.runner \
+            --repo tests/fixtures/python_repo \
+            --queries benchmarks/eval/queries/python.json \
+            --output eval-out/python.csv
+
+      - name: Compute deltas + render comment
+        run: |
+          python -m benchmarks.eval.ci_baseline \
+            --csv eval-out/python.csv \
+            --baseline benchmarks/eval/results/baseline.json \
+            --config hybrid \
+            --repo python \
+            --output eval-out/comment.md
+          cat eval-out/comment.md
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('eval-out/comment.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+      - name: Upload eval CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-result
+          path: eval-out/
