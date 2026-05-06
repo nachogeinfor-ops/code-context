@@ -1,0 +1,130 @@
+repo,query,expected,top1,hit_at_1,hit_at_10,ndcg10,rr,latency_ms
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,where is BushidoLogScannerAdapter defined,BushidoLogScannerAdapter.cs,GeinforScheduler.Tests/Unit/Infrastructure/BushidoLogs/BushidoLogScannerAdapterTests.cs,0,1,0.4307,0.25,28.01
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,how is settings.json loaded,Settings,GeinforScheduler/Infrastructure/Configuration/ConfigurationService.cs,0,1,0.6653,0.5,27.35
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,scheduler worker main loop,Worker.cs,docs/archive/HEXAGONAL_ARCHITECTURE.md,0,0,0.0,0.0,29.13
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,task execution history maintenance,HistoryMaintenance,GeinforScheduler/Domain/Ports/IExecutionHistoryRepository.cs,0,1,0.3155,0.125,25.24
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,send a test notification,SendTestNotification,docs/superpowers/plans/2026-04-24-notification-type-routing.md,0,1,0.3869,0.2,25.35
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,delete a bat file,DeleteBatFile,GeinforScheduler/Common/Exceptions.cs,0,0,0.0,0.0,27.29
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,list all bat files,ListBatFiles,GeinforScheduler/Common/Exceptions.cs,0,0,0.0,0.0,21.94
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,read a bat file content,ReadBatFile,GeinforScheduler/Common/Exceptions.cs,0,1,0.3333,0.1429,26.89
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,save a bat file,SaveBatFile,GeinforScheduler/Application/UseCases/Bats/SaveBatFileUseCase.cs,1,1,0.8066,1.0,25.92
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,retry policy validation rules,RetryPolicy,GeinforScheduler/Models/TaskConfiguration.cs,0,1,0.6948,0.5,25.07
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,scheduler logger adapter implementation,SchedulerLoggerAdapter.cs,GeinforScheduler/Infrastructure/Adapters/SchedulerLoggerAdapter.cs,1,1,0.8316,1.0,28.2
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,execution history repository port,IExecutionHistoryRepository,GeinforScheduler/Infrastructure/Persistence/HistoryMaintenanceHostedService.cs,0,0,0.0,0.0,25.97
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,bushido log scanner port interface,IBushidoLogScanner.cs,GeinforScheduler/Application/UseCases/BushidoLogs/QueryBushidoLogsUseCase.cs,0,1,0.3333,0.1429,28.43
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,scheduler logger port interface,ISchedulerLogger.cs,GeinforScheduler/Infrastructure/Adapters/SchedulerLoggerAdapter.cs,0,1,0.6309,0.5,27.41
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,service install powershell script,install.ps1,docs/archive/GETTING_STARTED.md,0,0,0.0,0.0,24.1
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,global usings for the GeinforScheduler project,GlobalUsings.cs,GeinforScheduler/GlobalUsings.cs,1,1,1.0,1.0,32.09
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,Program startup entry point,Program.cs,GeinforScheduler/Infrastructure/Logging/ILogService.cs,0,0,0.0,0.0,28.67
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,settings dto builder mapping,SettingsDtoBuilder,GeinforScheduler/Infrastructure/Configuration/ConfigFileChangeHandler.cs,0,1,0.7336,0.5,27.01
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,history paging helper logic,HistoryPagingHelper,GeinforScheduler.Tests/Unit/Web/Components/Pages/HistoryPagingHelperTests.cs,1,1,0.9797,1.0,25.39
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,task edit config builder,TaskEditConfigBuilder,GeinforScheduler.Tests/Unit/Infrastructure/Configuration/ConfigFileChangeHandlerTests.cs,0,0,0.0,0.0,25.08
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,schedule builder web component,ScheduleBuilder,docs/superpowers/plans/2026-04-23-panel-redesign-fase-2.md,0,1,0.4413,0.25,22.43
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,exception handling helper centralized errors,ExceptionHandlingHelper,GeinforScheduler/Common/ExceptionHandlingHelper.cs,1,1,0.8775,1.0,28.8
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,host builder extensions registration,HostBuilderExtensions,GeinforScheduler.Tests/Integration/WebPanel/WebPanelHttpTests.cs,0,1,0.3333,0.1429,27.94
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,navigation menu component,NavMenu,docs/superpowers/plans/2026-04-20-web-panel.md,0,1,0.4306,0.2,27.08
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,main layout error boundary,MainLayoutErrorBoundary,docs/superpowers/plans/2026-04-23-panel-redesign-fase-1.md,0,0,0.0,0.0,24.55
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,confirm dialog reusable component,ConfirmDialog,GeinforScheduler.Tests/Unit/Web/Components/Shared/ConfirmDialogTests.cs,1,1,0.9683,1.0,27.11
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,history filter with dates and status,HistoryFilter,docs/superpowers/plans/2026-04-23-panel-redesign-fase-4.md,0,0,0.0,0.0,27.09
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,tasks page double-click handling,TasksDoubleClick,docs/superpowers/plans/2026-04-23-panel-redesign-fase-2.md,0,1,0.2891,0.1,25.23
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,periodic refresh loop component,PeriodicRefreshLoop,GeinforScheduler/Web/Components/Pages/PeriodicRefreshLoop.cs,1,1,0.9877,1.0,31.62
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,task configuration JSON serialization,TaskConfigurationSerialization,GeinforScheduler/Infrastructure/Configuration/ConfigurationService.cs,0,1,0.4307,0.25,31.42
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,settings configuration loading rules,SettingsConfigurationLoading,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,0,0.0,0.0,30.75
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,appsettings defaults for the web project,AppSettingsDefaults,GeinforScheduler/Infrastructure/Configuration/ConfigurationService.cs,0,1,0.6934,0.5,28.25
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,bushido logs v1.11.0 debug regression,BushidoLogV1110Debug,GeinforScheduler.Tests/Integration/BushidoLogs/BushidoLogCoverageAuditTest.cs,0,1,0.4307,0.25,28.25
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,json backward compatibility integration,JsonBackwardCompatibility,docs/superpowers/plans/2026-04-22-task-scheduler-features.md,0,1,0.5714,0.5,28.78
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,sample config cron format integration,SampleConfigCronFormat,docs/superpowers/plans/2026-04-23-panel-redesign-fase-2.md,0,0,0.0,0.0,30.91
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,where are exceptions logged in the scheduler,ExceptionHandlingHelper.cs,docs/superpowers/plans/2026-05-05-system-error-email-notifications.md,0,0,0.0,0.0,26.48
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,invalid task policy custom exception,InvalidTaskPolicyException.cs,GeinforScheduler/Common/Exceptions/InvalidTaskPolicyException.cs,1,1,1.0,1.0,23.44
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,system error category mapper infrastructure,SystemErrorCategoryMapper.cs,docs/superpowers/plans/2026-05-05-system-error-email-notifications.md,0,1,0.3155,0.125,30.52
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,BushidoErrorNotifier error notification flow,BushidoErrorNotifier.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoErrorNotifier.cs,1,1,1.0,1.0,29.22
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,system error email sink notification,SystemErrorEmailSink.cs,docs/superpowers/plans/2026-05-05-system-error-email-notifications.md,0,0,0.0,0.0,30.2
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,BushidoLineParser,BushidoLineParser.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogScannerAdapter.cs,0,1,0.5591,0.2,29.1
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,BushidoLogMonitor background scanning,BushidoLogMonitor.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogMonitor.cs,1,1,0.8175,1.0,29.5
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,BushidoLogStore in-memory log entries,BushidoLogStore.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogMonitor.cs,0,1,0.6309,0.5,30.66
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,bushido log entry domain entity,BushidoLogEntry.cs,GeinforScheduler.Tests/Unit/Infrastructure/BushidoLogs/BushidoErrorNotifierTests.cs,0,0,0.0,0.0,26.93
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,query bushido logs use case,QueryBushidoLogsUseCase.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogScannerAdapter.cs,0,1,0.3155,0.125,28.16
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,how is configuration written back to disk atomically,AtomicFileConfigurationWriter.cs,GeinforScheduler/Infrastructure/Adapters/AtomicFileConfigurationWriter.cs,1,1,0.8855,1.0,24.92
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,ConfigurationProviderAdapter settings reload,ConfigurationProviderAdapter.cs,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,1,0.4118,0.1667,24.36
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,how does file change trigger config reload,ConfigFileChangeHandler.cs,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,1,0.5883,0.25,29.62
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,application settings domain model,ApplicationSettings.cs,GeinforScheduler/Infrastructure/Configuration/ConfigurationService.cs,0,1,0.3562,0.1667,22.18
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,update settings configuration use case,UpdateSettingsConfigurationUseCase.cs,GeinforScheduler/Application/UseCases/Configuration/IGetSettingsUseCase.cs,0,1,0.5,0.3333,22.8
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,CronTaskScheduler next fire time,CronTaskScheduler.cs,GeinforScheduler.Tests/Unit/Application/Scheduling/CronTaskSchedulerTests.cs,0,1,0.4413,0.25,29.46
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,cron expression evaluator parse validate,CronExpressionEvaluator.cs,GeinforScheduler/Application/UseCases/Scheduling/IValidateCronExpressionUseCase.cs,0,1,0.3155,0.125,21.12
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,SchedulingOrchestrator worker dispatch loop,SchedulingOrchestrator.cs,GeinforScheduler.Tests/Integration/SystemErrorEmailSinkIntegrationTests.cs,0,0,0.0,0.0,21.42
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,how is a task triggered manually on demand,TriggerTaskNowUseCase.cs,GeinforScheduler.Tests/Unit/Application/Scheduling/InMemoryTaskStateManagerInitTests.cs,0,0,0.0,0.0,26.54
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,InMemoryTaskStateManager task lifecycle state,InMemoryTaskStateManager.cs,GeinforScheduler/Application/Scheduling/ITaskStateManager.cs,0,1,0.3707,0.125,31.65
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,how does the watchdog detect a stuck task,WatchdogMonitor.cs,GeinforScheduler/Application/Scheduling/IWatchdogMonitor.cs,1,1,0.9134,1.0,28.08
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,home page Blazor dashboard component,Home.razor,docs/superpowers/plans/2026-04-20-web-panel.md,0,0,0.0,0.0,26.0
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,task edit razor page form bindings,TaskEdit.razor,docs/superpowers/plans/2026-04-22-task-scheduler-features.md,0,0,0.0,0.0,25.37
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,logs page Blazor tail log viewer,Logs.razor,GeinforScheduler/Application/UseCases/Logs/TailLogFileUseCase.cs,0,0,0.0,0.0,20.67
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,ServiceStatusBadge component web UI,ServiceStatusBadge.razor,GeinforScheduler/Application/UseCases/Scheduler/IGetServiceStatusUseCase.cs,0,0,0.0,0.0,24.62
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,BushidoLogSource,BushidoLogSource.cs,GeinforScheduler/Domain/Ports/IBushidoLogScanner.cs,0,0,0.0,0.0,32.92
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,TaskExecutor,TaskExecutor.cs,GeinforScheduler/Application/Scheduling/TaskExecutor.cs,1,1,0.9709,1.0,28.23
+C:\Users\Practicas\Downloads\WinServiceScheduler\WinServiceScheduler,WebPanelServiceCollectionExtensions,WebPanelServiceCollectionExtensions.cs,docs/superpowers/plans/2026-04-20-web-panel.md,0,1,0.6241,0.5,30.51
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,create user endpoint POST route,routers/users.py,src/app/routers/users.py,1,1,0.8036,1.0,26.2
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,list users endpoint pagination,routers/users.py,src/app/routers/users.py,1,1,0.7977,1.0,25.6
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,delete user by id route,routers/users.py,src/app/routers/users.py,1,1,0.7904,1.0,25.98
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,get user by id endpoint handler,routers/users.py,src/app/routers/users.py,1,1,0.8385,1.0,18.99
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,create item endpoint with owner,routers/items.py,src/app/routers/items.py,1,1,1.0,1.0,23.66
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,list items route with skip and limit,routers/items.py,src/app/routers/items.py,1,1,1.0,1.0,23.66
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,update item partial patch endpoint,routers/items.py,src/app/routers/items.py,1,1,0.7904,1.0,23.11
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,login endpoint username password authentication,routers/auth.py,src/app/schemas/auth.py,0,1,0.5,0.3333,21.41
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,refresh token route exchange token pair,routers/auth.py,src/app/routers/auth.py,1,1,0.7904,1.0,25.06
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,pydantic UserCreate schema with email and password,schemas/user.py,src/app/schemas/user.py,1,1,1.0,1.0,26.09
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,UserRead response model pydantic,schemas/user.py,src/app/schemas/user.py,1,1,0.8711,1.0,23.66
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,ItemCreate pydantic schema for new items,schemas/item.py,src/app/services/item_service.py,0,1,0.4144,0.2,23.56
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,ItemUpdate schema optional title description,schemas/item.py,src/app/schemas/item.py,1,1,0.9675,1.0,17.26
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,TokenResponse schema access refresh token fields,schemas/auth.py,src/app/schemas/auth.py,1,1,0.9197,1.0,17.79
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,SQLAlchemy User model table columns,models/user.py,src/app/database.py,0,1,0.6309,0.5,22.82
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,Item SQLAlchemy database model owner foreign key,models/item.py,src/app/models/item.py,1,1,1.0,1.0,22.02
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,password hashing function bcrypt,services/auth_service.py,src/app/services/auth_service.py,1,1,0.9197,1.0,24.63
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,JWT access token encoding function,services/auth_service.py,src/app/services/auth_service.py,1,1,1.0,1.0,25.29
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,verify token decode JWT payload,services/auth_service.py,src/app/services/auth_service.py,1,1,1.0,1.0,21.26
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,create refresh token long lived JWT,services/auth_service.py,src/app/services/auth_service.py,1,1,0.9218,1.0,22.77
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,user service business logic create account,services/user_service.py,src/app/routers/users.py,0,1,0.6934,0.5,21.23
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,item service list items by owner,services/item_service.py,src/app/services/item_service.py,1,1,0.9134,1.0,25.05
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,user database queries find by email,repositories/user_repository.py,src/app/repositories/user_repository.py,1,1,0.927,1.0,27.68
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,get user by email SQLAlchemy query,repositories/user_repository.py,src/app/repositories/user_repository.py,1,1,0.9512,1.0,25.79
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,item repository list items by owner id,repositories/item_repository.py,src/app/repositories/item_repository.py,1,1,1.0,1.0,19.97
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,SQLAlchemy session factory database engine setup,database.py,src/app/database.py,1,1,0.818,1.0,18.79
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,test create user endpoint 201 response,tests/test_users.py,tests/test_users.py,1,1,0.9797,1.0,27.82
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,test login flow returns access token,tests/test_auth.py,tests/test_auth.py,1,1,1.0,1.0,24.04
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,UserService class create_user method,services/user_service.py,src/app/routers/users.py,0,1,0.6241,0.5,26.98
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,ItemRepository class SQLAlchemy CRUD operations,repositories/item_repository.py,src/app/services/item_service.py,0,1,0.6559,0.3333,25.83
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,get_settings,config.py,src/app/config.py,1,1,0.8503,1.0,21.08
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,TokenPayload,schemas/auth.py,src/app/schemas/auth.py,1,1,0.8396,1.0,18.88
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\python_repo,hash_password,services/auth_service.py,src/app/services/auth_service.py,1,1,0.8175,1.0,22.0
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,verifyToken,src/services/authService.ts,src/services/authService.ts,1,1,0.8486,1.0,29.66
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,errorHandler,src/middleware/errorHandler.ts,src/middleware/errorHandler.ts,1,1,1.0,1.0,20.93
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,JwtPayload,src/types/jwt.ts,src/middleware/authMiddleware.ts,0,1,0.5803,0.5,22.56
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,login endpoint route post credentials,src/routes/auth.ts,src/routes/auth.ts,1,1,1.0,1.0,26.96
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,refresh token route exchange token pair,src/routes/auth.ts,src/types/jwt.ts,0,1,0.6309,0.5,23.77
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,create user route POST endpoint,src/routes/users.ts,src/routes/users.ts,1,1,1.0,1.0,22.17
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,delete user endpoint by id,src/routes/users.ts,src/controllers/usersController.ts,0,1,0.5,0.3333,23.3
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,list users route protected,src/routes/users.ts,src/routes/users.ts,1,1,1.0,1.0,23.83
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,create item endpoint owned by user,src/routes/items.ts,src/controllers/itemsController.ts,0,1,0.6309,0.5,23.82
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,delete item endpoint route,src/routes/items.ts,src/controllers/itemsController.ts,0,1,0.5,0.3333,18.18
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,update item partial patch route,src/routes/items.ts,src/services/itemService.ts,0,1,0.5,0.3333,18.12
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,auth controller login handler email password,src/controllers/authController.ts,src/routes/auth.ts,0,1,0.3562,0.1667,22.54
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,user controller create handler 201 response,src/controllers/usersController.ts,src/controllers/usersController.ts,1,1,0.867,1.0,20.98
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,item controller list items by authenticated owner,src/controllers/itemsController.ts,src/services/itemService.ts,0,1,0.4825,0.25,22.06
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,auth service JWT sign verify bcrypt,src/services/authService.ts,src/services/authService.ts,1,1,0.9709,1.0,22.58
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,hash password bcrypt rounds,src/services/authService.ts,src/services/authService.ts,1,1,1.0,1.0,39.41
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,user service create account business logic,src/services/userService.ts,tests/users.test.ts,0,1,0.3562,0.1667,57.98
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,get user by email lookup function,src/services/userService.ts,src/services/userService.ts,1,1,0.9651,1.0,60.75
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,item service list items by owner id,src/services/itemService.ts,src/services/itemService.ts,1,1,1.0,1.0,32.05
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,zod schema user validation email username password,src/validators/userValidators.ts,src/types/user.ts,0,1,0.5706,0.3333,24.93
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,item create validator zod schema title description,src/validators/itemValidators.ts,src/types/item.ts,0,1,0.4825,0.25,23.14
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,User interface TypeScript email username passwordHash,src/types/user.ts,src/types/user.ts,1,1,1.0,1.0,23.02
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,JWT payload interface sub type access refresh,src/types/jwt.ts,src/types/jwt.ts,1,1,1.0,1.0,25.78
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,Item interface TypeScript ownerId title description,src/types/item.ts,src/types/item.ts,1,1,1.0,1.0,30.0
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,JWT auth middleware Bearer token verification,src/middleware/authMiddleware.ts,src/services/authService.ts,0,1,0.4144,0.2,22.94
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,global error handler Express ZodError status,src/middleware/errorHandler.ts,src/middleware/errorHandler.ts,1,1,1.0,1.0,20.04
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,request logger middleware response time log,src/middleware/requestLogger.ts,src/middleware/requestLogger.ts,1,1,1.0,1.0,19.83
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,test login endpoint returns access token,tests/auth.test.ts,tests/auth.test.ts,1,1,0.8503,1.0,19.53
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,test create user endpoint 201 status,tests/users.test.ts,tests/users.test.ts,1,1,0.8772,1.0,22.54
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,test create item owned by authenticated user,tests/items.test.ts,tests/items.test.ts,1,1,0.9197,1.0,24.59
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,express app initialization mount routers,src/app.ts,src/routes/auth.ts,0,1,0.5,0.3333,32.71
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,server listen port entry point,src/server.ts,src/server.ts,1,1,1.0,1.0,32.1
+C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context\tests\fixtures\ts_repo,zod env config validated environment variables,src/config.ts,src/config.ts,1,1,1.0,1.0,38.18

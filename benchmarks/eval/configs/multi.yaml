@@ -1,0 +1,14 @@
+# Multi-repo eval config for v1.1.0 baseline runs.
+# Used by `python -m benchmarks.eval.runner --config benchmarks/eval/configs/multi.yaml --output-dir <out>`
+# Retrieval-mode env vars (CC_KEYWORD_INDEX, CC_RERANK) come from the process environment;
+# this YAML only sets per-repo paths and per-repo cache_dir overrides.
+runs:
+  - name: csharp
+    repo: C:/Users/Practicas/Downloads/WinServiceScheduler/WinServiceScheduler
+    queries: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/benchmarks/eval/queries/csharp.json
+  - name: python
+    repo: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/tests/fixtures/python_repo
+    queries: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/benchmarks/eval/queries/python.json
+  - name: typescript
+    repo: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/tests/fixtures/ts_repo
+    queries: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/benchmarks/eval/queries/typescript.json

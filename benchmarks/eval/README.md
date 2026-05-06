@@ -35,7 +35,58 @@
 
 Switch with env vars; the runner reads them at composition time.
 
+## Results — v1.1.0 baseline
+
+Run on **2026-05-06** (Sprint 9), all-MiniLM-L6-v2 (384-dim) on CPU,
+129 hand-curated queries across 3 repos.
+
+| Repo | Queries | Config | hit@1 | hit@10 | NDCG@10 | MRR | latency p50 | latency p95 |
+|---|--:|---|--:|--:|--:|--:|--:|--:|
+| C# (WinServiceScheduler) | 63 | vector_only | 14 / 63 | 44 / 63 | 0.4313 | 0.3588 | 13 ms | 16 ms |
+| | | hybrid | 13 / 63 | 42 / 63 | 0.4065 | 0.3321 | 27 ms | 32 ms |
+| | | **hybrid_rerank** | **16 / 63** | 42 / 63 | **0.4330** | 0.3580 | 3 213 ms | 5 244 ms |
+| Python (python_repo) | 33 | vector_only | 25 / 33 | 33 / 33 | 0.8317 | 0.8545 | 10 ms | 13 ms |
+| | | **hybrid** | **27 / 33** | 33 / 33 | **0.8493** | **0.8899** | 24 ms | 28 ms |
+| | | hybrid_rerank | 24 / 33 | 33 / 33 | 0.8265 | 0.8485 | 3 179 ms | 5 556 ms |
+| TypeScript (ts_repo) | 33 | vector_only | 20 / 33 | 33 / 33 | 0.7865 | 0.7333 | 10 ms | 12 ms |
+| | | hybrid | 20 / 33 | 33 / 33 | 0.7819 | 0.7333 | 23 ms | 58 ms |
+| | | **hybrid_rerank** | **23 / 33** | 31 / 33 | **0.7783** | **0.7653** | 3 729 ms | 9 527 ms |
+| **Combined** | **129** | **hybrid_rerank** | **63 / 129** | **106 / 129** | **0.6220** | **0.5876** | 3 308 ms | 5 556 ms |
+
+Per-run CSVs in [`benchmarks/eval/results/v1.1.0/`](results/v1.1.0/).
+
+### Cold-cache reindex times (one-time, first run on a fresh cache)
+
+| Repo | Files | Cold reindex (vector + symbol) |
+|---|--:|--:|
+| WinServiceScheduler | 305 | ~220 s |
+| python_repo | 16 | ~3 s |
+| ts_repo | 20 | ~3 s |
+
+Subsequent runs hit warm cache and skip reindex unless the keyword index version drifts
+(vector_only ↔ hybrid switch forces a full reindex per repo; rerank is query-time only
+and does not trigger reindex).
+
+### Reading the v1.1.0 numbers
+
+- **Python and TypeScript score dramatically higher than C#.** hit@10 is 33/33 (100%) for
+  Python (all configs) and for TypeScript vector/hybrid. The fixture repos are small (16
+  and 20 files respectively), so nearly every relevant file is in the top-10. C# hits a
+  harder ceiling because the 305-file WinServiceScheduler has many similar files.
+- **Hybrid lifts Python hit@1 by +8% vs vector_only** (27 vs 25) — BM25 is most useful
+  for short, symbol-flavoured queries in Python where identifiers are distinctive.
+- **Rerank wins on hit@1 for C# (+14% vs hybrid, 16 vs 13) and TypeScript (+15%, 23 vs 20).**
+  On Python, rerank slightly regresses hit@1 (24 vs 27 hybrid) — the cross-encoder can
+  over-rank long prose chunks ahead of the direct-match file.
+- **C# hybrid_rerank p50 = 3.2 s vs 6.3 s in v1.0.0 baseline.** The improvement is
+  because the hybrid cache is warm (hybrid run came first), so no reindex cost bleeds
+  into the first query.
+- **TypeScript p95 = 9.5 s (hybrid_rerank)** is an outlier — a handful of long queries
+  hit the cross-encoder's tail path. Median (3.7 s) is more representative.
+
 ## Results — v1.0.0 baseline
+
+_(v1.0.0 baseline numbers from the original 35-query C# set, retained for historical comparison.)_
 
 Run on **2026-05-05**, all-MiniLM-L6-v2 (384-dim) on CPU,
 WinServiceScheduler @ HEAD `9b4762b2ad7a` (305 files, 2220 chunks),

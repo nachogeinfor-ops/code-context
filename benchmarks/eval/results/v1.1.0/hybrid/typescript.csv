@@ -1,0 +1,34 @@
+query,expected,top1,hit_at_1,hit_at_10,ndcg10,rr,latency_ms
+verifyToken,src/services/authService.ts,src/services/authService.ts,1,1,0.8486,1.0,29.66
+errorHandler,src/middleware/errorHandler.ts,src/middleware/errorHandler.ts,1,1,1.0,1.0,20.93
+JwtPayload,src/types/jwt.ts,src/middleware/authMiddleware.ts,0,1,0.5803,0.5,22.56
+login endpoint route post credentials,src/routes/auth.ts,src/routes/auth.ts,1,1,1.0,1.0,26.96
+refresh token route exchange token pair,src/routes/auth.ts,src/types/jwt.ts,0,1,0.6309,0.5,23.77
+create user route POST endpoint,src/routes/users.ts,src/routes/users.ts,1,1,1.0,1.0,22.17
+delete user endpoint by id,src/routes/users.ts,src/controllers/usersController.ts,0,1,0.5,0.3333,23.3
+list users route protected,src/routes/users.ts,src/routes/users.ts,1,1,1.0,1.0,23.83
+create item endpoint owned by user,src/routes/items.ts,src/controllers/itemsController.ts,0,1,0.6309,0.5,23.82
+delete item endpoint route,src/routes/items.ts,src/controllers/itemsController.ts,0,1,0.5,0.3333,18.18
+update item partial patch route,src/routes/items.ts,src/services/itemService.ts,0,1,0.5,0.3333,18.12
+auth controller login handler email password,src/controllers/authController.ts,src/routes/auth.ts,0,1,0.3562,0.1667,22.54
+user controller create handler 201 response,src/controllers/usersController.ts,src/controllers/usersController.ts,1,1,0.867,1.0,20.98
+item controller list items by authenticated owner,src/controllers/itemsController.ts,src/services/itemService.ts,0,1,0.4825,0.25,22.06
+auth service JWT sign verify bcrypt,src/services/authService.ts,src/services/authService.ts,1,1,0.9709,1.0,22.58
+hash password bcrypt rounds,src/services/authService.ts,src/services/authService.ts,1,1,1.0,1.0,39.41
+user service create account business logic,src/services/userService.ts,tests/users.test.ts,0,1,0.3562,0.1667,57.98
+get user by email lookup function,src/services/userService.ts,src/services/userService.ts,1,1,0.9651,1.0,60.75
+item service list items by owner id,src/services/itemService.ts,src/services/itemService.ts,1,1,1.0,1.0,32.05
+zod schema user validation email username password,src/validators/userValidators.ts,src/types/user.ts,0,1,0.5706,0.3333,24.93
+item create validator zod schema title description,src/validators/itemValidators.ts,src/types/item.ts,0,1,0.4825,0.25,23.14
+User interface TypeScript email username passwordHash,src/types/user.ts,src/types/user.ts,1,1,1.0,1.0,23.02
+JWT payload interface sub type access refresh,src/types/jwt.ts,src/types/jwt.ts,1,1,1.0,1.0,25.78
+Item interface TypeScript ownerId title description,src/types/item.ts,src/types/item.ts,1,1,1.0,1.0,30.0
+JWT auth middleware Bearer token verification,src/middleware/authMiddleware.ts,src/services/authService.ts,0,1,0.4144,0.2,22.94
+global error handler Express ZodError status,src/middleware/errorHandler.ts,src/middleware/errorHandler.ts,1,1,1.0,1.0,20.04
+request logger middleware response time log,src/middleware/requestLogger.ts,src/middleware/requestLogger.ts,1,1,1.0,1.0,19.83
+test login endpoint returns access token,tests/auth.test.ts,tests/auth.test.ts,1,1,0.8503,1.0,19.53
+test create user endpoint 201 status,tests/users.test.ts,tests/users.test.ts,1,1,0.8772,1.0,22.54
+test create item owned by authenticated user,tests/items.test.ts,tests/items.test.ts,1,1,0.9197,1.0,24.59
+express app initialization mount routers,src/app.ts,src/routes/auth.ts,0,1,0.5,0.3333,32.71
+server listen port entry point,src/server.ts,src/server.ts,1,1,1.0,1.0,32.1
+zod env config validated environment variables,src/config.ts,src/config.ts,1,1,1.0,1.0,38.18
