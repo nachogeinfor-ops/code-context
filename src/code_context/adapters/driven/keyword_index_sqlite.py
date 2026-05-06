@@ -13,10 +13,14 @@ import re
 import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from code_context.domain.models import Chunk, IndexEntry
+
+if TYPE_CHECKING:
+    from code_context.config import Config
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +51,7 @@ _FTS_BOOLEAN_RE = re.compile(r"\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
 # Sprint 10 Risk doc: "over-stripping is a known risk — pick a conservative
 # initial list."
 #
-# T5 (future task) will add env-var configurability (CC_BM25_STOP_WORDS).
+# T5 adds env-var configurability (CC_BM25_STOP_WORDS) via _resolve_stop_words().
 _STOP_WORDS: frozenset[str] = frozenset(
     {
         # Articles
@@ -115,14 +119,34 @@ _STOP_WORDS: frozenset[str] = frozenset(
 )
 
 
+def _resolve_stop_words(spec: str) -> frozenset[str]:
+    """Resolve the CC_BM25_STOP_WORDS config string to a frozenset.
+
+    - "on"  -> _STOP_WORDS (the hard-coded 52-word set)
+    - "off" -> frozenset() (no filtering)
+    - "a,b,c" -> frozenset({"a", "b", "c"}) (lowercased, stripped, empty entries ignored)
+    """
+    if spec == "on":
+        return _STOP_WORDS
+    if spec == "off":
+        return frozenset()
+    return frozenset(word.strip().lower() for word in spec.split(",") if word.strip())
+
+
 class SqliteFTS5Index:
     @property
     def version(self) -> str:
         return f"sqlite-fts5-{sqlite3.sqlite_version}-v1"
 
-    def __init__(self) -> None:
+    def __init__(self, config: Config | None = None) -> None:
         self._conn: sqlite3.Connection | None = None
         self._db_path: Path | None = None
+        # Resolve the stop-word set once at construction from config.
+        # Defaults to _STOP_WORDS when no config is provided (backwards compat).
+        if config is not None:
+            self._stop_words = _resolve_stop_words(config.bm25_stop_words)
+        else:
+            self._stop_words = _STOP_WORDS
         self._open_inmem()
 
     def _open_inmem(self) -> None:
@@ -175,7 +199,7 @@ class SqliteFTS5Index:
 
     def search(self, query: str, k: int) -> list[tuple[IndexEntry, float]]:
         assert self._conn is not None
-        sanitised = _sanitise(query)
+        sanitised = _sanitise(query, self._stop_words)
         if not sanitised.strip():
             return []
         try:
@@ -257,7 +281,7 @@ class SqliteFTS5Index:
         self._db_path = target
 
 
-def _sanitise(query: str) -> str:
+def _sanitise(query: str, stop_words: frozenset[str] = _STOP_WORDS) -> str:
     """Strip FTS5 syntax so user input never reaches the query parser
     as anything other than bare whitespace-separated tokens.
 
@@ -288,10 +312,15 @@ def _sanitise(query: str) -> str:
     are preserved — we only shrink the token list, not change the join
     operator. If filtering removes every token, we fall back to the
     unfiltered list so we never send empty input to FTS5.
+
+    Sprint 10 T5: the stop_words set is injected (from _resolve_stop_words
+    at class construction time) rather than always using the module-level
+    _STOP_WORDS. Default arg preserves backwards compat for direct callers.
+    Pass frozenset() for "off" mode (no filtering) or a custom set.
     """
     cleaned = _FTS_KEEP_RE.sub(" ", query)
     cleaned = _FTS_BOOLEAN_RE.sub(" ", cleaned)
-    tokens = [t for t in cleaned.split() if t.lower() not in _STOP_WORDS]
+    tokens = [t for t in cleaned.split() if t.lower() not in stop_words]
     if not tokens:
         tokens = cleaned.split()
     return " ".join(tokens)

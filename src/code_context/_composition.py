@@ -142,24 +142,24 @@ def build_keyword_index(cfg: Config) -> KeywordIndex:
     if cfg.keyword_strategy == "none":
         return _NullKeywordIndex()
     if cfg.keyword_strategy == "sqlite":
-        return SqliteFTS5Index()
+        return SqliteFTS5Index(cfg)
     log.error(
         "unknown CC_KEYWORD_INDEX=%r; falling back to sqlite",
         cfg.keyword_strategy,
     )
-    return SqliteFTS5Index()
+    return SqliteFTS5Index(cfg)
 
 
 def build_symbol_index(cfg: Config) -> SymbolIndex:
     if cfg.symbol_index_strategy == "none":
         return _NullSymbolIndex()
     if cfg.symbol_index_strategy == "sqlite":
-        return SymbolIndexSqlite()
+        return SymbolIndexSqlite(cfg)
     log.error(
         "unknown CC_SYMBOL_INDEX=%r; falling back to sqlite",
         cfg.symbol_index_strategy,
     )
-    return SymbolIndexSqlite()
+    return SymbolIndexSqlite(cfg)
 
 
 def build_reranker(cfg: Config) -> Reranker | None:

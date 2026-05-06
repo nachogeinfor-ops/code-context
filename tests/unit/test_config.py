@@ -160,3 +160,36 @@ def test_all_treesitter_extensions_are_in_default_includes(tmp_path: Path) -> No
         f"out of the box. Add the extension(s) to _DEFAULT_EXTENSIONS in "
         f"src/code_context/config.py."
     )
+
+
+# ---------------------------------------------------------------------------
+# T5 — CC_BM25_STOP_WORDS env var (Sprint 10)
+# ---------------------------------------------------------------------------
+
+
+def test_bm25_stop_words_defaults_to_on(tmp_path: Path) -> None:
+    """T5: when CC_BM25_STOP_WORDS is unset, bm25_stop_words defaults to 'on'."""
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.bm25_stop_words == "on"
+
+
+def test_bm25_stop_words_reads_env_var(tmp_path: Path) -> None:
+    """T5: CC_BM25_STOP_WORDS=off -> config field is 'off'."""
+    with patch.dict(os.environ, {"CC_BM25_STOP_WORDS": "off"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.bm25_stop_words == "off"
+
+
+def test_bm25_stop_words_env_var_is_lowercased(tmp_path: Path) -> None:
+    """T5: env var is lowercased for case-insensitive on/off matching."""
+    with patch.dict(os.environ, {"CC_BM25_STOP_WORDS": "OFF"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.bm25_stop_words == "off"
+
+
+def test_bm25_stop_words_comma_list_stored_as_string(tmp_path: Path) -> None:
+    """T5: comma list is stored verbatim (lowercased) for later resolution."""
+    with patch.dict(os.environ, {"CC_BM25_STOP_WORDS": "foo,bar,baz"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.bm25_stop_words == "foo,bar,baz"

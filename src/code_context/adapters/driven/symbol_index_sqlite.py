@@ -14,8 +14,12 @@ import re
 import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from code_context.domain.models import SymbolDef, SymbolRef
+
+if TYPE_CHECKING:
+    from code_context.config import Config
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +38,7 @@ _FTS_BOOLEAN_RE = re.compile(r"\b(AND|OR|NOT|NEAR)\b", re.IGNORECASE)
 # Mirrors keyword_index_sqlite._STOP_WORDS exactly; duplicated here because both
 # adapters own their own _sanitise() and there is no shared FTS helper module.
 # Source: hand-curated subset of NLTK English stop words — see keyword_index_sqlite.py
-# for the full rationale and curation notes. T5 (future task) adds configurability.
+# for the full rationale and curation notes. T5 adds configurability via _resolve_stop_words().
 #
 # Conservative by design: Python keywords/operators ("in", "is", "as", "from",
 # "with") are intentionally EXCLUDED alongside "set", "get", "if", "for", "not".
@@ -105,6 +109,23 @@ _STOP_WORDS: frozenset[str] = frozenset(
 )
 
 
+def _resolve_stop_words(spec: str) -> frozenset[str]:
+    """Resolve the CC_BM25_STOP_WORDS config string to a frozenset.
+
+    - "on"  -> _STOP_WORDS (the hard-coded 52-word set)
+    - "off" -> frozenset() (no filtering)
+    - "a,b,c" -> frozenset({"a", "b", "c"}) (lowercased, stripped, empty entries ignored)
+
+    Duplicated from keyword_index_sqlite — see comment on _STOP_WORDS above
+    for why there is no shared FTS helper module.
+    """
+    if spec == "on":
+        return _STOP_WORDS
+    if spec == "off":
+        return frozenset()
+    return frozenset(word.strip().lower() for word in spec.split(",") if word.strip())
+
+
 class SymbolIndexSqlite:
     """Default SymbolIndex adapter — definitions + references via SQLite + FTS5."""
 
@@ -112,9 +133,15 @@ class SymbolIndexSqlite:
     def version(self) -> str:
         return f"symbols-sqlite-{sqlite3.sqlite_version}-v1"
 
-    def __init__(self) -> None:
+    def __init__(self, config: Config | None = None) -> None:
         self._conn: sqlite3.Connection | None = None
         self._db_path: Path | None = None
+        # Resolve the stop-word set once at construction from config.
+        # Defaults to _STOP_WORDS when no config is provided (backwards compat).
+        if config is not None:
+            self._stop_words = _resolve_stop_words(config.bm25_stop_words)
+        else:
+            self._stop_words = _STOP_WORDS
         self._open_inmem()
 
     # ---------- public ----------
@@ -208,7 +235,7 @@ class SymbolIndexSqlite:
            `name` only appears as part of a longer identifier.
         """
         assert self._conn is not None
-        sanitised = _sanitise(name)
+        sanitised = _sanitise(name, self._stop_words)
         if not sanitised:
             return []
         try:
@@ -329,7 +356,7 @@ class SymbolIndexSqlite:
         )
 
 
-def _sanitise(query: str) -> str:
+def _sanitise(query: str, stop_words: frozenset[str] = _STOP_WORDS) -> str:
     """Strip FTS5 syntax so user input is bare tokens only. See
     keyword_index_sqlite._sanitise for the rationale (Sprint 8 fix
     for the punctuation-crashes-FTS5-parser bug).
@@ -338,10 +365,15 @@ def _sanitise(query: str) -> str:
     joining so natural-language queries don't AND-require filler tokens
     that are absent from code. If filtering removes every token, fall
     back to the unfiltered list so FTS5 never receives empty input.
+
+    Sprint 10 T5: the stop_words set is injected (from _resolve_stop_words
+    at class construction time) rather than always using the module-level
+    _STOP_WORDS. Default arg preserves backwards compat for direct callers.
+    Pass frozenset() for "off" mode (no filtering) or a custom set.
     """
     cleaned = _FTS_KEEP_RE.sub(" ", query)
     cleaned = _FTS_BOOLEAN_RE.sub(" ", cleaned)
-    tokens = [t for t in cleaned.split() if t.lower() not in _STOP_WORDS]
+    tokens = [t for t in cleaned.split() if t.lower() not in stop_words]
     if not tokens:
         tokens = cleaned.split()
     return " ".join(tokens)

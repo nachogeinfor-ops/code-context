@@ -7,7 +7,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from code_context.adapters.driven.keyword_index_sqlite import SqliteFTS5Index, _sanitise
+from code_context.adapters.driven.keyword_index_sqlite import (
+    _STOP_WORDS,
+    SqliteFTS5Index,
+    _resolve_stop_words,
+    _sanitise,
+)
+from code_context.config import Config
 from code_context.domain.models import Chunk, IndexEntry
 
 
@@ -247,3 +253,87 @@ def test_search_works_from_non_main_thread() -> None:
     t.join(timeout=5)
     assert not error, f"cross-thread query raised: {error[0]!r}"
     assert captured and captured[0] and captured[0][0][0].chunk.path == "a.py"
+
+
+# ---------------------------------------------------------------------------
+# T5 — CC_BM25_STOP_WORDS env var tests (Sprint 10)
+# ---------------------------------------------------------------------------
+
+
+def _make_config(bm25_stop_words: str = "on", tmp_path: Path | None = None) -> Config:
+    """Build a minimal Config for adapter construction tests."""
+    from pathlib import Path as _Path
+
+    root = tmp_path or _Path("/tmp/test-repo")
+    return Config(
+        repo_root=root,
+        embeddings_provider="local",
+        embeddings_model="all-MiniLM-L6-v2",
+        openai_api_key=None,
+        include_extensions=[".py"],
+        max_file_bytes=1048576,
+        cache_dir=root / ".cache",
+        log_level="WARNING",
+        top_k_default=5,
+        chunk_lines=50,
+        chunk_overlap=10,
+        chunker_strategy="line",
+        keyword_strategy="sqlite",
+        rerank=False,
+        rerank_model=None,
+        symbol_index_strategy="sqlite",
+        trust_remote_code=False,
+        bm25_stop_words=bm25_stop_words,
+    )
+
+
+def test_resolve_stop_words_on_returns_default() -> None:
+    """T5: 'on' -> returns the hard-coded _STOP_WORDS frozenset."""
+    assert _resolve_stop_words("on") == _STOP_WORDS
+
+
+def test_resolve_stop_words_off_returns_empty() -> None:
+    """T5: 'off' -> returns an empty frozenset (no filtering)."""
+    assert _resolve_stop_words("off") == frozenset()
+
+
+def test_resolve_stop_words_comma_list_parses_words() -> None:
+    """T5: comma list -> frozenset of those words, whitespace-tolerant."""
+    assert _resolve_stop_words("foo, bar ,baz") == frozenset({"foo", "bar", "baz"})
+
+
+def test_resolve_stop_words_empty_entries_ignored() -> None:
+    """T5: empty entries from double-commas or trailing comma are ignored."""
+    assert _resolve_stop_words("foo,,bar,") == frozenset({"foo", "bar"})
+
+
+def test_index_with_stop_words_off_does_not_filter_query(tmp_path: Path) -> None:
+    """T5: CC_BM25_STOP_WORDS=off reverts to v1.1 behavior.
+
+    When stop words are disabled, a query consisting entirely of stop words
+    is passed through to FTS5 unchanged (same as the unfiltered fallback in T4,
+    but here it's by design — no fallback logic; the whole token list is kept).
+    With no indexed content matching those stop words, the result is [].
+    We assert no crash and a list is returned.
+    """
+    cfg = _make_config("off", tmp_path)
+    idx = SqliteFTS5Index(cfg)
+    idx.add([_entry("a.py", "some normal python code here")])
+    # All tokens are stop words; with 'off' they go through unfiltered.
+    result = idx.search("the a an", k=5)
+    assert isinstance(result, list), "off-mode must return a list, not raise"
+
+
+def test_index_with_custom_stop_words_only_filters_those(tmp_path: Path) -> None:
+    """T5: custom comma list -> only those words are filtered; others pass through."""
+    cfg = _make_config("foo,bar", tmp_path)
+    idx = SqliteFTS5Index(cfg)
+    idx.add([_entry("result.py", "function implementing baz logic here")])
+    # "foo" and "bar" are custom stop words, "baz" is NOT in the custom list.
+    # The query "foo bar baz" should sanitise to "baz" and find result.py.
+    result = idx.search("foo bar baz", k=5)
+    paths = [e.chunk.path for e, _ in result]
+    assert "result.py" in paths, (
+        "custom stop words should filter 'foo' and 'bar' but keep 'baz'; "
+        f"got paths={paths!r}"
+    )
