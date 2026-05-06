@@ -29,6 +29,16 @@ _EXT_TO_LANG: dict[str, str] = {
     ".rs": "rust",
     ".cs": "csharp",
     ".java": "java",
+    # C++ source and header extensions.
+    # .h is treated as cpp: C is a subset of C++ for parsing purposes; the grammar
+    # still parses correctly. C-only constructs simply won't match any chunk patterns.
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".hpp": "cpp",
+    ".hh": "cpp",
+    ".hxx": "cpp",
+    ".h": "cpp",
 }
 
 
@@ -94,6 +104,8 @@ def _chunk_via_treesitter(content: str, path: str, lang: str) -> list[Chunk]:
     # QueryCursor.captures returns dict[capture_name, list[Node]] in tree-sitter ≥0.24.
     # Older fallback: list of (Node, capture_name) tuples.
     chunk_nodes = _flatten_chunk_nodes(captures)
+    # Remove inner nodes contained within an outer @chunk (C++ template dedup).
+    chunk_nodes = _dedup_contained_nodes(chunk_nodes)
     # Sort by start line for stable, document-order output.
     chunk_nodes.sort(key=lambda n: (n.start_point[0], n.start_point[1]))
     source_lines = content.splitlines()
@@ -129,6 +141,11 @@ def _extract_via_treesitter(content: str, path: str, lang: str) -> list[SymbolDe
     name_nodes = list(captures.get("name", [])) if isinstance(captures, dict) else []
     if not chunk_nodes or not name_nodes:
         return []
+
+    # Remove inner nodes contained within an outer @chunk (C++ template dedup).
+    # Must be applied before building chunk_set so that name-pairing walks up to
+    # the outer template_declaration, not the removed inner class_specifier.
+    chunk_nodes = _dedup_contained_nodes(chunk_nodes)
 
     # Pair @name with the closest enclosing @chunk by walking up parents.
     # Use node.id (the underlying tree-sitter AST node identity) rather than
@@ -200,7 +217,20 @@ def _kind_from_node(node: Any, lang: str) -> str:
         "struct_declaration": "struct",
         "record_declaration": "record",
         "enum_declaration": "enum",
+        # C++ — new node types not shared with earlier languages.
+        "class_specifier": "class",
+        "struct_specifier": "struct",
+        "namespace_definition": "namespace",
     }
+    if node.type == "template_declaration":
+        # Descend into the first substantive child to determine the inner kind.
+        # template_declaration children: 'template', template_parameter_list,
+        # then the actual declaration (class_specifier, function_definition, etc.).
+        for child in node.children:
+            inner_kind = kind_map.get(child.type)
+            if inner_kind is not None:
+                return inner_kind
+        return "template"  # fallback if inner decl type is not recognised
     return kind_map.get(node.type, "unknown")
 
 
@@ -214,3 +244,52 @@ def _flatten_chunk_nodes(captures: Any) -> list[Any]:
         if isinstance(item, tuple) and len(item) == 2 and item[1] == "chunk":
             out.append(item[0])
     return out
+
+
+def _dedup_contained_nodes(nodes: list[Any]) -> list[Any]:
+    """Remove C++ nodes that should not be emitted as separate chunks.
+
+    Two cases handled, in order:
+
+    1. **Class-method / constructor filter**: ``function_definition`` nodes whose
+       direct parent is ``field_declaration_list`` are class methods or constructors
+       inlined inside a C++ class body. These are already part of the surrounding
+       ``class_specifier`` chunk and must not be emitted separately.  This filter
+       only fires for nodes of type ``function_definition``; all other languages use
+       distinct node types for methods (``method_declaration`` in Java/C#/Go) so
+       this has no effect on them.
+
+    2. **Template-containment dedup**: When C++ template queries fire, both the
+       outer ``template_declaration`` and the inner ``class_specifier`` /
+       ``function_definition`` are captured as separate @chunk matches.  Any node
+       that is fully contained within a ``template_declaration`` chunk is removed
+       so the outer template_declaration wins.  For all other languages no
+       ``template_declaration`` nodes appear, so this is a no-op.
+    """
+    # Step 1: Remove function_definition nodes that live inside a class body.
+    result = [
+        n
+        for n in nodes
+        if not (
+            n.type == "function_definition"
+            and n.parent is not None
+            and n.parent.type == "field_declaration_list"
+        )
+    ]
+
+    # Step 2: Remove nodes that are fully contained within a template_declaration chunk.
+    template_nodes = [n for n in result if n.type == "template_declaration"]
+    if not template_nodes:
+        return result  # fast path: no templates, step 2 is a no-op
+
+    ids_to_remove: set[int] = set()
+    for node in result:
+        if node.type == "template_declaration":
+            continue  # always keep template_declarations themselves
+        for tmpl in template_nodes:
+            if tmpl.id == node.id:
+                continue
+            if tmpl.start_point <= node.start_point and node.end_point <= tmpl.end_point:
+                ids_to_remove.add(node.id)
+                break
+    return [n for n in result if n.id not in ids_to_remove]

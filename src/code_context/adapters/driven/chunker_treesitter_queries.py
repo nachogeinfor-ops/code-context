@@ -13,6 +13,14 @@ Each query captures the AST nodes we want to emit as chunks. A node is
   enum_declaration.
 - Java: class_declaration, method_declaration, constructor_declaration,
   interface_declaration, enum_declaration, record_declaration.
+- C++: class_specifier, struct_specifier, function_definition (top-level
+  or namespace-level, not class methods), namespace_definition, and the
+  outer template_declaration for templated classes/structs/functions.
+  Template handling uses containment dedup: both the outer
+  template_declaration and inner class_specifier/function_definition are
+  captured by separate patterns; the chunker removes inner nodes that are
+  fully contained within an outer @chunk. _kind_from_node descends into
+  template_declaration children to determine the actual kind.
 
 Each query also captures the symbol's identifier as ``@name`` so callers
 that want to mine ``SymbolDef`` objects (extract_definitions) can pair
@@ -120,6 +128,45 @@ JAVA = """
   name: (identifier) @name) @chunk
 """
 
+# C++ node-type mapping:
+#   class_specifier       -> class
+#   struct_specifier      -> struct
+#   function_definition   -> function  (only top-level/namespace-level, since class methods
+#                                       use field_identifier as the declarator name, not
+#                                       identifier, so they won't match this pattern)
+#   namespace_definition  -> namespace
+#   template_declaration  -> class|struct|function  (kind determined by first inner decl)
+#
+# Template edge case: tree-sitter matches BOTH the outer template_declaration AND the inner
+# class_specifier/function_definition for templated declarations. The chunker applies a
+# containment-dedup step (see _dedup_contained_nodes in chunker_treesitter.py) that removes
+# inner captures fully enclosed by an outer @chunk. This ensures the template_declaration is
+# kept as the single chunk, with the inner name extracted for SymbolDef.
+#
+# Extension note: .h is treated as cpp. Pure C files are a valid subset that the C++ grammar
+# can parse; any C-only constructs will simply produce no chunks (unknown node types).
+CPP = """
+(class_specifier
+  name: (type_identifier) @name) @chunk
+(struct_specifier
+  name: (type_identifier) @name) @chunk
+(function_definition
+  declarator: (function_declarator
+    declarator: (identifier) @name)) @chunk
+(namespace_definition
+  name: (namespace_identifier) @name) @chunk
+(template_declaration
+  (class_specifier
+    name: (type_identifier) @name)) @chunk
+(template_declaration
+  (struct_specifier
+    name: (type_identifier) @name)) @chunk
+(template_declaration
+  (function_definition
+    declarator: (function_declarator
+      declarator: (identifier) @name))) @chunk
+"""
+
 QUERIES_BY_LANG: dict[str, str] = {
     "python": PYTHON,
     "javascript": JAVASCRIPT,
@@ -128,4 +175,5 @@ QUERIES_BY_LANG: dict[str, str] = {
     "rust": RUST,
     "csharp": CSHARP,
     "java": JAVA,
+    "cpp": CPP,
 }
