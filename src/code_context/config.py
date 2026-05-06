@@ -58,10 +58,15 @@ class Config:
     watch: bool = False
     watch_debounce_ms: int = 1000
     # Sprint 10 T5 — BM25 stop-word filter configuration.
-    # "on" (default): use the hard-coded _STOP_WORDS frozenset.
-    # "off": disable filtering entirely.
+    # "off" (default): no filtering — query passes through to FTS5 unchanged.
+    # "on": use the hard-coded _STOP_WORDS frozenset.
     # "<comma-list>": e.g. "foo,bar,baz" — use ONLY those words as the stop-word set.
-    bm25_stop_words: str = "on"
+    # Default is "off" because Sprint 10 T6 eval showed a small regression on the
+    # csharp set (NDCG@10 -0.007 to -0.010 across hybrid/hybrid_rerank) and zero
+    # change on python/ts. Users with predominantly natural-language queries can
+    # opt in via CC_BM25_STOP_WORDS=on. Future tuning of the list may flip the
+    # default if eval data justifies it.
+    bm25_stop_words: str = "off"
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -116,5 +121,5 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         bg_idle_seconds=float(os.environ.get("CC_BG_IDLE_SECONDS", "1.0")),
         watch=os.environ.get("CC_WATCH", "off").lower() in ("on", "true", "1"),
         watch_debounce_ms=int(os.environ.get("CC_WATCH_DEBOUNCE_MS", "1000")),
-        bm25_stop_words=os.environ.get("CC_BM25_STOP_WORDS", "on").lower(),
+        bm25_stop_words=os.environ.get("CC_BM25_STOP_WORDS", "off").lower(),
     )

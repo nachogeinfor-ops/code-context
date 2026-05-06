@@ -167,11 +167,12 @@ def test_all_treesitter_extensions_are_in_default_includes(tmp_path: Path) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_bm25_stop_words_defaults_to_on(tmp_path: Path) -> None:
-    """T5: when CC_BM25_STOP_WORDS is unset, bm25_stop_words defaults to 'on'."""
+def test_bm25_stop_words_defaults_to_off(tmp_path: Path) -> None:
+    """T6 review: default flipped from 'on' to 'off' after eval showed a small
+    csharp regression and no win on python/ts. Users opt in via env var."""
     with patch.dict(os.environ, {}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
-    assert cfg.bm25_stop_words == "on"
+    assert cfg.bm25_stop_words == "off"
 
 
 def test_bm25_stop_words_reads_env_var(tmp_path: Path) -> None:
