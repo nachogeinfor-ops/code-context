@@ -27,10 +27,11 @@ eliminates the "docs-first" ranking bug on real corpora.
 - **`CC_BM25_STOP_WORDS` env var (T4-T5)** — filters English stop words from
   BM25 keyword queries before AND-ing tokens, helping long natural-language
   queries that previously returned `[]` because connective words anded against
-  code chunks. Default `off` — Sprint 10 eval (T6) showed a small csharp
-  NDCG@10 regression (-0.005) with no gain on python/ts, making opt-in the
-  safe default. See `docs/configuration.md` for full semantics including
-  custom comma-list mode.
+  code chunks. Default `off` — Sprint 10 eval (T6) showed no measurable
+  improvement across hybrid configs on csharp/python/typescript, so opt-in is
+  the safe default pending more diverse query coverage that includes natural-
+  language queries with stop-word fillers. See `docs/configuration.md` for full
+  semantics including custom comma-list mode.
 - **Metadata schema v2 → v3 (T7)** — `metadata.json` gains a `source_tiers`
   field: the top 3 chunk-dense top-level directories (alphabetical tiebreaker;
   root-level files excluded), used by the `find_references` tier classifier.
@@ -57,16 +58,16 @@ return signature).
 ### Eval baseline (T10)
 
 Combined NDCG@10 (hybrid_rerank config) = **0.6169** across 129 queries
-× 3 languages × 3 configs. This is ≈ v1.1.0's 0.6173 (within
-non-determinism). The eval set contains no `find_references` queries, so
-the source-tier ranking improvement is not reflected in the NDCG numbers —
-it is validated by unit tests and the qualitative before/after example
-above.
+× 3 languages × 3 configs. This is ≈ v1.1.0's **0.6220** (Δ -0.0051,
+within non-determinism). The eval set contains no `find_references`
+queries, so the source-tier ranking improvement is not reflected in the
+NDCG numbers — it is validated by unit tests and the qualitative
+before/after example above.
 
-Regression note: csharp NDCG@10 shows a -0.010 jitter vs baseline; this
-is within sentence-transformers non-determinism on identical input. python
-and typescript are pixel-perfect. Sprint acceptance criterion (combined
-NDCG@10 ≥ 0.55) met by a wide margin.
+Per-repo (hybrid_rerank): csharp 0.4226 (was 0.4330, Δ -0.0104 — within
+sentence-transformers non-determinism on identical input); python 0.8265
+(was 0.8265, pixel-perfect); typescript 0.7783 (was 0.7783, pixel-perfect).
+Sprint acceptance criterion (combined NDCG@10 ≥ 0.55) met by a wide margin.
 
 ### Descoped from original Sprint 10 plan
 

@@ -61,11 +61,12 @@ class Config:
     # "off" (default): no filtering — query passes through to FTS5 unchanged.
     # "on": use the hard-coded _STOP_WORDS frozenset.
     # "<comma-list>": e.g. "foo,bar,baz" — use ONLY those words as the stop-word set.
-    # Default is "off" because Sprint 10 T6 eval showed a small regression on the
-    # csharp set (NDCG@10 -0.007 to -0.010 across hybrid/hybrid_rerank) and zero
-    # change on python/ts. Users with predominantly natural-language queries can
-    # opt in via CC_BM25_STOP_WORDS=on. Future tuning of the list may flip the
-    # default if eval data justifies it.
+    # Default is "off" because Sprint 10 T6 eval showed no measurable improvement
+    # across hybrid configs on csharp/python/typescript (the eval set is
+    # identifier-heavy, with few stop-word-rich natural-language queries that
+    # would actually exercise the filter). Users with predominantly natural-
+    # language queries can opt in via CC_BM25_STOP_WORDS=on. Future tuning of
+    # the list may flip the default once eval coverage includes such queries.
     bm25_stop_words: str = "off"
     # Sprint 10 T9 — find_references source-tier post-sort.
     # "source-first" (default): apply 4-tier classification (source > tests > docs > other),
