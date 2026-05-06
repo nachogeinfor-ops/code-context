@@ -193,6 +193,125 @@ multi-repo YAML:
     --output benchmarks\eval\results\smoke.csv
 ```
 
+## Multi-repo config schema
+
+The eval runner accepts a multi-repo config via `--config <path>` mode. The
+canonical config lives at [`configs/multi.yaml`](configs/multi.yaml) and
+points at the three v1.1.0 reference repos.
+
+```yaml
+runs:
+  - name: csharp                                 # required; unique within file
+    repo: C:/path/to/repo                        # required; absolute or relative-to-yaml-file
+    queries: benchmarks/eval/queries/csharp.json # required; must exist
+    cache_dir: ${TEMP}/code-context-bench-cache  # optional; ${VAR}-style env-var expansion
+  - name: python
+    repo: tests/fixtures/python_repo
+    queries: benchmarks/eval/queries/python.json
+```
+
+- Paths in the YAML are resolved against the YAML file's parent directory if
+  relative. Env-var substitutions (`${TEMP}`, `${USERPROFILE}`) are expanded
+  via `os.path.expandvars` at load time.
+- Retrieval-mode env vars (`CC_KEYWORD_INDEX`, `CC_RERANK`) are NOT in the
+  YAML — they come from the process environment. The same YAML drives all
+  three retrieval modes; you change modes by re-running with different env.
+- Each YAML run becomes one CSV under `--output-dir/<name>.csv`; a
+  `combined.csv` aggregates all runs with a `repo` column (= `name`).
+
+## CI eval gate
+
+[`.github/workflows/eval.yml`](../../.github/workflows/eval.yml) is an opt-in
+workflow that runs the eval against `tests/fixtures/python_repo` (the
+smallest fixture) in `hybrid` mode and posts an NDCG@10 delta as a PR
+comment. It does NOT block merge — informational only.
+
+Two ways to trigger:
+- **Manual:** Actions tab → "Eval (opt-in)" → "Run workflow" against any branch.
+- **Per-PR:** add the `run-eval` label to a PR. Subsequent pushes to the PR
+  re-trigger the eval automatically.
+
+The baseline numbers it compares against live in
+[`results/baseline.json`](results/baseline.json) under the `v1.1.0` key.
+When v1.2.0 ships, a new top-level key is added; the workflow defaults to
+the latest version key.
+
+The workflow uses [`benchmarks/eval/ci_baseline.py`](ci_baseline.py) to
+render the comment body. You can run the same delta-view locally:
+
+```powershell
+.\.venv\Scripts\python.exe -m benchmarks.eval.ci_baseline `
+    --csv path/to/run.csv `
+    --baseline benchmarks\eval\results\baseline.json `
+    --config hybrid `
+    --repo python `
+    --output comment.md
+```
+
+Sample comment:
+
+```
+## code-context eval (PR vs `main` v1.1.0)
+
+| Metric | Baseline | This run | Δ |
+|---|--:|--:|--:|
+| NDCG@10 | 0.8493 | 0.8551 | +0.0058 |
+| hit@1 | 27/33 | 28/33 | +1 |
+...
+```
+
+## How to add a query
+
+The query files are committed under [`queries/`](queries/) — one JSON file
+per language. Each entry:
+
+```json
+{
+  "query": "natural-language or symbol search string",
+  "expected_top1_path": "<substring of the path you expect to win>",
+  "kind": "search_repo"
+}
+```
+
+Recipe for adding a query:
+
+1. Pick a target repo and a real file in it. The substring you put in
+   `expected_top1_path` is matched case-insensitively against `SearchResult.path`,
+   so `"FooHandler.cs"` matches `"src/Adapters/FooHandler.cs"` but
+   `"src/Adapters"` matches every file in that directory and is too generic.
+2. Phrase the question how a Claude Code user would actually phrase it.
+   "Where is X handled" beats "function declaration of foo()".
+3. Append the entry to the relevant language's JSON file. **Don't reorder
+   existing queries** — published baseline CSVs depend on the row order.
+4. Verify locally:
+   ```powershell
+   $env:CC_CACHE_DIR = "$env:TEMP\code-context-bench-cache"
+   $env:CC_KEYWORD_INDEX = "sqlite"
+   $env:CC_RERANK = "off"
+   .\.venv\Scripts\python.exe -m benchmarks.eval.runner `
+       --repo <target_repo_root> `
+       --queries benchmarks\eval\queries\<lang>.json `
+       --output benchmarks\eval\results\smoke.csv
+   ```
+   The new query should appear in the CSV with its hit / NDCG. If it
+   scores zero across all three retrieval configs, double-check the
+   pin: the substring may not actually appear in any file's path.
+5. Re-record baselines: when adding >= 5 queries to a language, re-run all
+   three configs against that repo and update the relevant entries in
+   `results/baseline.json`. Bump the top-level version key to the next
+   patch (e.g. `v1.1.1`) and add the new block; CI will start comparing
+   PRs against it. Or wait for the next sprint's regression run.
+6. Commit the JSON change. Don't commit smoke CSV outputs — the
+   `.gitignore` will skip them.
+
+Theme balance — try to keep the query set spread across:
+- Endpoint discovery / API surface
+- Schema / model / type queries
+- Service / business-logic queries
+- Repository / DB queries
+- Test-suite queries
+- A few short identifier-style queries (1-2 tokens) so BM25 has matches.
+
 ## Threats to validity
 
 - **Sample size is 35**, not the 50 the original sprint plan

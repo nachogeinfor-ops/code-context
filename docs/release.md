@@ -53,25 +53,59 @@ rotate.
    [`../CHANGELOG.md`](../CHANGELOG.md). Recap behavior changes,
    tests, and any affected versions.
 4. Commit: `chore(release): bump to vX.Y.Z + changelog`.
-5. Annotated tag with the changelog body:
+5. ### Run the eval suite
+
+   Before tagging, run the full eval against all 3 reference repos in
+   all 3 retrieval modes. This is the regression net for code-trained
+   embeddings, BM25 changes, and reranker tweaks.
+
+   ```powershell
+   cd "C:\path\to\code-context"
+   $env:CC_CACHE_DIR = "$env:TEMP\code-context-bench-cache"
+
+   # Cold cache for honest reindex timing
+   Remove-Item -Recurse -Force $env:CC_CACHE_DIR
+
+   # Run all 3 configs (vector_only / hybrid / hybrid_rerank)
+   foreach ($mode in @("vector_only", "hybrid", "hybrid_rerank")) {
+       if ($mode -eq "vector_only") { $env:CC_KEYWORD_INDEX = "none" }
+       else { $env:CC_KEYWORD_INDEX = "sqlite" }
+       $env:CC_RERANK = if ($mode -eq "hybrid_rerank") { "on" } else { "off" }
+       .\.venv\Scripts\python.exe -m benchmarks.eval.runner `
+           --config benchmarks\eval\configs\multi.yaml `
+           --output-dir benchmarks\eval\results\v1.X.0\$mode\
+   }
+   ```
+
+   Acceptance:
+   - NDCG@10 (hybrid_rerank) on each repo must not regress more than 0.02
+     absolute vs the prior tag's baseline (recorded in
+     `benchmarks/eval/results/baseline.json`).
+   - p50 latency (hybrid_rerank) must not regress more than 50% vs prior
+     baseline.
+   - Update `benchmarks/eval/results/baseline.json` with a new top-level
+     version key (`vX.Y.0`).
+   - Commit the new CSVs under `benchmarks/eval/results/vX.Y.0/`.
+
+6. Annotated tag with the changelog body:
    ```bash
    git tag -a vX.Y.Z -F <(awk '/^## vX.Y.Z/,/^## /' CHANGELOG.md | head -n -1)
    ```
    Or paste the body into a `-m` heredoc (see prior tags for the
    pattern).
-6. `git push origin main vX.Y.Z`.
-7. Watch
+7. `git push origin main vX.Y.Z`.
+8. Watch
    [`Actions → Release`](https://github.com/nachogeinfor-ops/code-context/actions/workflows/release.yml).
    The `build` job produces `code_context-X.Y.Z-py3-none-any.whl`
    and `code_context-X.Y.Z.tar.gz`; the `publish` job uploads them
    to PyPI.
-8. Verify https://pypi.org/project/code-context-mcp/ shows the
+9. Verify https://pypi.org/project/code-context-mcp/ shows the
    new version (refresh after a few seconds).
-9. Create the GitHub release:
-   ```bash
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes-from-tag
-   ```
-10. Announce: cross-link `context-template`'s tool-protocol release
+10. Create the GitHub release:
+    ```bash
+    gh release create vX.Y.Z --title "vX.Y.Z" --notes-from-tag
+    ```
+11. Announce: cross-link `context-template`'s tool-protocol release
     if the same sprint touched it.
 
 ## Failure modes
