@@ -161,24 +161,37 @@ That's the regression net working as designed.
 
 ## Reproduce
 
+The standard way to reproduce the v1.1.0 numbers is via the multi-repo
+runner and the bundled config:
+
 ```powershell
 cd "C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context"
 & .\.venv\Scripts\pip.exe install -e ".[dev]"
 
-# Pick a config — vector_only / hybrid / hybrid_rerank.
 $env:CC_CACHE_DIR = "$env:TEMP\code-context-bench-cache"
+
+# Pick a retrieval config — vector_only / hybrid / hybrid_rerank.
 $env:CC_KEYWORD_INDEX = "sqlite"   # or "none"
 $env:CC_RERANK = "off"             # or "on"
 
 & .\.venv\Scripts\python.exe -m benchmarks.eval.runner `
-    --repo "C:\path\to\WinServiceScheduler" `
-    --queries benchmarks\eval\queries\csharp.json `
-    --output benchmarks\eval\results\v0.9.0_<config>.csv
+    --config benchmarks\eval\configs\multi.yaml `
+    --output-dir benchmarks\eval\results\v1.1.0\hybrid_rerank\
 ```
 
 The runner respects `CC_*` env vars at composition time. Use a
 dedicated `CC_CACHE_DIR` to avoid contention with a running MCP
 server's file locks.
+
+For a quick smoke-test against a single repo without setting up the
+multi-repo YAML:
+
+```powershell
+& .\.venv\Scripts\python.exe -m benchmarks.eval.runner `
+    --repo "C:\path\to\WinServiceScheduler" `
+    --queries benchmarks\eval\queries\csharp.json `
+    --output benchmarks\eval\results\smoke.csv
+```
 
 ## Threats to validity
 

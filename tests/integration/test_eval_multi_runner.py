@@ -133,6 +133,14 @@ def test_multi_runner_produces_per_run_and_combined_csv(
     assert len(crows) == len(TINY_QUERIES)
     assert "repo" in crows[0], "combined.csv missing 'repo' column"
 
+    # Regression: repo column must contain the YAML name ("tiny"), not a path.
+    repo_values = {r["repo"] for r in crows}
+    assert repo_values == {"tiny"}, f"expected {{'tiny'}}, got {repo_values}"
+    for r in crows:
+        assert "/" not in r["repo"] and "\\" not in r["repo"], (
+            f"repo column looks like a path: {r['repo']!r}"
+        )
+
 
 def test_old_single_repo_mode_unchanged(
     tmp_path: Path, git_repo: Path, monkeypatch: pytest.MonkeyPatch
@@ -223,3 +231,61 @@ runs:
         f"CC_CACHE_DIR was not restored: got {os.environ.get('CC_CACHE_DIR')!r}, "
         f"expected {str(process_cache)!r}"
     )
+
+
+def test_combined_csv_repo_column_uses_name_not_path(
+    tmp_path: Path, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: combined.csv repo column must be the YAML run name, never a path.
+
+    Two-run config drives two named runs ("alpha", "beta") against the same
+    tiny_repo fixture. Asserts that every row in combined.csv carries the
+    short name and contains no path separators.
+    """
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    monkeypatch.setenv("CC_CACHE_DIR", str(cache_dir))
+    monkeypatch.setenv("CC_LOG_LEVEL", "WARNING")
+
+    queries_path = tmp_path / "tiny_queries.json"
+    queries_path.write_text(json.dumps(TINY_QUERIES), encoding="utf-8")
+
+    yaml_path = tmp_path / "two_named.yaml"
+    yaml_path.write_text(
+        f"""\
+runs:
+  - name: alpha
+    repo: {git_repo.as_posix()}
+    queries: {queries_path.as_posix()}
+  - name: beta
+    repo: {git_repo.as_posix()}
+    queries: {queries_path.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    out_dir = tmp_path / "results"
+
+    from benchmarks.eval import runner
+
+    rc = runner.main(["--config", str(yaml_path), "--output-dir", str(out_dir)])
+    assert rc == 0
+
+    import csv
+
+    combined_csv = out_dir / "combined.csv"
+    assert combined_csv.exists()
+    with combined_csv.open(newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+
+    expected_rows = len(TINY_QUERIES) * 2
+    assert len(rows) == expected_rows, f"expected {expected_rows} rows, got {len(rows)}"
+
+    repo_values = {r["repo"] for r in rows}
+    assert repo_values == {"alpha", "beta"}, f"expected {{'alpha', 'beta'}}, got {repo_values}"
+
+    # Defensive: no row may carry a path-shaped value.
+    for r in rows:
+        assert "/" not in r["repo"] and "\\" not in r["repo"], (
+            f"repo column looks like a path: {r['repo']!r}"
+        )

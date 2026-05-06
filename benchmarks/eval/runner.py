@@ -335,9 +335,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
         )
         summaries.append(summary)
 
-        # Add 'repo' column to combined rows.
+        # Add 'repo' column to combined rows (use the run name, not the path).
         for row in summary.rows:
-            all_combined_rows.append({"repo": str(spec.repo), **row})
+            all_combined_rows.append({"repo": spec.name, **row})
 
         _print_summary(spec.name, summary)
 
