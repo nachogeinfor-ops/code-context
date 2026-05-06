@@ -1,5 +1,139 @@
 # Changelog
 
+## v1.1.0 — 2026-05-06
+
+Sprint 9 ships. **Eval coverage.** The 35-query single-repo eval suite that
+landed in v1.0.0 grows into a 129-query / 3-language / 3-repo regression net
+plus a multi-repo runner, an opt-in CI drift gate, and the canonical
+`benchmarks/eval/results/baseline.json` that future v1.x sprints will
+regress-test against. Public API surface unchanged — every change is
+additive (eval tooling, fixtures, docs, a CI workflow).
+
+### Behavior changes since v1.0.0
+
+- **Multi-repo eval runner** — `benchmarks/eval/runner.py` gains a
+  `--config <path>` mode that reads a `MultiRepoConfig` YAML listing
+  `(name, repo, queries, cache_dir?)` runs and emits one CSV per run plus
+  a `combined.csv` with a `repo` column (= run `name`). Composition is
+  rebuilt per iteration so each repo gets its own indexer/store/embeddings;
+  embedding warmup runs at the start of each iteration. `CC_CACHE_DIR` /
+  `CC_REPO_ROOT` are restored to their original values between iterations
+  so a run without `cache_dir` doesn't inherit the previous run's setting.
+  Existing single-repo `--repo`/`--queries`/`--output` mode is unchanged
+  (mutually-exclusive argparse group).
+- **Expanded query set** — `benchmarks/eval/queries.json` (the original
+  35 C# queries) becomes `queries/csharp.json` with 63 queries (35 original
+  + 28 new across error-handling chains, BushidoLog details, settings flow,
+  scheduler internals, web-component behaviors, and 3 short identifier
+  queries for BM25). New `queries/python.json` (33) targets a fresh
+  `tests/fixtures/python_repo/` FastAPI fixture. New `queries/typescript.json`
+  (33) targets a fresh `tests/fixtures/ts_repo/` Express+Zod backend
+  fixture. Total: **129 queries across 3 repos**.
+- **v1.1.0 baseline** — 3 retrieval configs × 3 repos = 9 per-run CSVs +
+  3 combined CSVs under
+  [`benchmarks/eval/results/v1.1.0/`](benchmarks/eval/results/v1.1.0/),
+  plus per-repo cold-cache reindex times (WinServiceScheduler ~220s,
+  fixtures ~3s). Headline numbers (NDCG@10):
+  - C# (63 q): vector_only **0.4313**, hybrid 0.4065, hybrid_rerank
+    **0.4330** (vs v1.0.0 35q hybrid_rerank 0.4641 — same shape, harder
+    queries; not a regression).
+  - Python (33 q): vector_only 0.8317, **hybrid 0.8493** (BM25 wins on
+    distinctive identifiers), hybrid_rerank 0.8265.
+  - TypeScript (33 q): vector_only 0.7865, hybrid 0.7819, **hybrid_rerank
+    0.7783** with hit@1 **23/33** (best across configs).
+  - Combined hybrid_rerank: **NDCG@10 0.6220** (129 q).
+- **CI eval drift gate** — new
+  [`.github/workflows/eval.yml`](.github/workflows/eval.yml) opt-in
+  workflow triggered by `workflow_dispatch` OR adding a `run-eval` label
+  to a PR. Runs the eval against `tests/fixtures/python_repo` in `hybrid`
+  mode, compares NDCG@10 against the latest version key in
+  `benchmarks/eval/results/baseline.json`, posts a markdown delta comment
+  via `actions/github-script`. **Informational only — does not block
+  merge**. Local equivalent:
+  `python -m benchmarks.eval.ci_baseline --csv ... --baseline ... --output comment.md`.
+- **`baseline.json` schema** — top-level keyed by version (`v1.1.0`),
+  inner keys `<config>_<repo>` (e.g. `hybrid_python`). Each entry stores
+  `ndcg10`, `mrr`, `hit_at_1`, `hit_at_10`, `n_queries`, `p50_ms`,
+  `p95_ms`, `captured_on`. Future tags add a new top-level version key;
+  CI defaults to "latest" via lexicographic sort.
+- **Eval gating in the per-release checklist** — `docs/release.md` now
+  prescribes running all 3 configs × 3 repos before tag push, with
+  acceptance criteria from the v1.1 roadmap (NDCG@10 hybrid_rerank
+  regression ≤ 0.02 absolute; p50 latency hybrid_rerank regression ≤ 50%)
+  and a `baseline.json` update step.
+- **Maintainer docs** — `benchmarks/eval/README.md` grows three sections:
+  multi-repo config schema, CI eval gate, and a 6-step "How to add a
+  query" recipe for contributors. The historical v1.0.0 baseline table
+  is preserved.
+
+### Public API impact
+
+None. v1.1.0 is purely additive across the surfaces in
+[`docs/v1-api.md`](docs/v1-api.md):
+
+- **MCP tools, CLI subcommands, env vars, Python imports, cache layout —
+  all unchanged.** No new env vars; the eval suite reuses existing
+  `CC_KEYWORD_INDEX` / `CC_RERANK` / `CC_CACHE_DIR` / etc.
+- New deliverables live under `benchmarks/eval/` (eval tooling), under
+  `tests/fixtures/{python_repo,ts_repo}/` (eval-only fixtures, not
+  imported from production code), and under `.github/workflows/eval.yml`
+  (CI workflow). None of these are part of the public Python API.
+- `pyyaml>=6` added to `[project.optional-dependencies] dev` only — no
+  new base dependency.
+
+### New files
+
+```
+benchmarks/eval/
+  config_models.py                # MultiRepoConfig + RunSpec frozen dataclasses + YAML loader
+  ci_baseline.py                  # local + CI delta-renderer (compute_metrics, load_baseline, render_comment)
+  configs/multi.yaml              # canonical multi-repo config (csharp + python + typescript)
+  queries/csharp.json             # 63 queries (was queries.json with 35 — moved + expanded)
+  queries/python.json             # 33 queries (new)
+  queries/typescript.json         # 33 queries (new)
+  results/baseline.json           # versioned baseline numbers; CI compares against this
+  results/v1.1.0/<config>/        # 12 CSVs: 3 configs × {csharp,python,typescript,combined}.csv
+
+tests/fixtures/python_repo/       # ~16 substantive .py files: FastAPI + pydantic + SQLAlchemy mini-app (~28 KB)
+tests/fixtures/ts_repo/           # ~20 substantive .ts files: Express + Zod + JWT mini-backend (~28 KB)
+
+.github/workflows/eval.yml        # opt-in CI eval gate (workflow_dispatch + run-eval label)
+```
+
+### Tests
+
+**274 passing** (was 255 in v1.0.0; +19 net):
+
+- 6 new unit tests for `MultiRepoConfig` (frozen, env-var expansion,
+  relative-path resolution, duplicate name rejection, missing queries
+  file, optional cache_dir defaults).
+- 3 new integration tests for the `--config` runner (per-run + combined
+  CSVs, env-var restoration between iterations, repo-column uses run
+  name not absolute path).
+- 9 new unit tests for `ci_baseline.py` (`compute_metrics` happy path +
+  empty CSV + missing column with context, `load_baseline` latest /
+  explicit / unknown version, `render_comment` positive / negative /
+  zero deltas, `_fmt_delta_float` zero case).
+- 1 regression test for the empty-`queries` guard in `run_one`.
+
+Lint (`ruff check` + `ruff format --check`) clean across `src tests
+benchmarks`.
+
+### Migration
+
+No action required. v1.1.0 changes only eval / CI / docs; the cache
+layout, MCP tools, env vars, and Python imports are unchanged. Existing
+indexes remain valid.
+
+If you want the new local eval helpers:
+
+```bash
+pip install -U code-context-mcp
+python -m benchmarks.eval.runner --config benchmarks/eval/configs/multi.yaml --output-dir out/
+```
+
+(Multi-repo runner needs `pyyaml`; install via `pip install code-context-mcp[dev]`.)
+
 ## v1.0.0 — 2026-05-05
 
 **First stable release.** Available on PyPI: `pip install code-context-mcp`.
