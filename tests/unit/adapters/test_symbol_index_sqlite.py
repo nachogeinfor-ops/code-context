@@ -9,6 +9,7 @@ import pytest
 from code_context.adapters.driven.symbol_index_sqlite import (
     _STOP_WORDS,
     SymbolIndexSqlite,
+    _classify_path,
     _resolve_stop_words,
     _sanitise,
 )
@@ -383,4 +384,158 @@ def test_index_with_custom_stop_words_only_filters_those(tmp_path: Path) -> None
     assert "result.py" in paths, (
         "custom stop words 'the,a' should not filter 'loadResult'; "
         f"got paths={paths!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# T8 — find_references source-tier post-sort (Sprint 10 Quality)
+# ---------------------------------------------------------------------------
+
+
+def test_find_references_ranks_source_above_tests_above_docs() -> None:
+    """T8-TC1: Same symbol in src/, tests/, docs/ — order must be source, tests, docs.
+
+    BM25 score is irrelevant to this test; we insert all three at the same
+    chunk-start line so FTS5 ranks them identically, and we assert on the
+    returned order, which must be governed by tier rank alone.
+    """
+    idx = SymbolIndexSqlite()
+    idx.set_source_tiers(["src"])
+    # Insert in reverse expected order so a sort bug would be obvious.
+    idx.populate_references_for_test([
+        ("docs/archive/config-design.md", 5, "loadConfig is described here"),
+        ("tests/ConfigTests.cs", 10, "loadConfig() called in test"),
+        ("src/Config.cs", 42, "loadConfig() implementation call"),
+    ])
+    out = idx.find_references("loadConfig", max_count=10)
+    assert len(out) == 3
+    # src/ must be first, tests/ second, docs/ last.
+    assert out[0].path.startswith("src/"), f"expected src/ first, got {out[0].path!r}"
+    assert out[1].path.startswith("tests/"), f"expected tests/ second, got {out[1].path!r}"
+    assert out[2].path.startswith("docs/"), f"expected docs/ last, got {out[2].path!r}"
+
+
+def test_find_references_classifies_python_test_files() -> None:
+    """T8-TC2: Files ending with _test.py or _tests.py classify as tier 1 (tests)."""
+    assert _classify_path("module_test.py", []) == 1
+    assert _classify_path("module_tests.py", []) == 1
+    # Nested path also classifies as tests by suffix.
+    assert _classify_path("pkg/sub/utils_test.py", ["pkg"]) == 1
+    assert _classify_path("pkg/sub/utils_tests.py", ["pkg"]) == 1
+    # A normal .py file under a source tier classifies as source.
+    assert _classify_path("src/utils.py", ["src"]) == 0
+
+
+def test_find_references_classifies_typescript_test_files() -> None:
+    """T8-TC3: .test.ts, .spec.ts, .test.tsx, .spec.tsx classify as tier 1 (tests)."""
+    assert _classify_path("app/foo.test.ts", ["app"]) == 1
+    assert _classify_path("app/foo.spec.ts", ["app"]) == 1
+    assert _classify_path("app/foo.test.tsx", ["app"]) == 1
+    assert _classify_path("app/foo.spec.tsx", []) == 1
+    # A plain .ts that is not a test file under a source tier is source.
+    assert _classify_path("src/service.ts", ["src"]) == 0
+
+
+def test_find_references_classifies_csharp_test_files() -> None:
+    """T8-TC4: C# test filename conventions classify as tier 1 (tests)."""
+    assert _classify_path("tests/FooTests.cs", []) == 1
+    assert _classify_path("tests/FooTest.cs", []) == 1
+    assert _classify_path("tests/FooSpec.cs", []) == 1
+    # CSharp test files nested under a source tier still classify as tests.
+    assert _classify_path("src/FooTests.cs", ["src"]) == 1
+    # A normal C# file under a source tier is source (not a test by filename).
+    assert _classify_path("src/Foo.cs", ["src"]) == 0
+
+
+def test_find_references_other_tier_for_unknown_paths() -> None:
+    """T8-TC5: A path not matching tests/docs/source_tiers is tier 3 (other)."""
+    assert _classify_path("bin/something.exe", []) == 3
+    assert _classify_path("build/output.js", ["src"]) == 3
+    assert _classify_path("vendor/lib/util.py", ["src"]) == 3
+
+
+def test_find_references_stable_sort_preserves_bm25_order_within_tier() -> None:
+    """T8-TC6: Two source refs — BM25 order within tier must be preserved (stable sort).
+
+    We insert two source-tier snippets and rely on FTS5's natural ordering
+    (insertion order when BM25 is equal) being preserved within the tier after
+    the sort. We assert the two source refs come before any non-source ref and
+    that their relative order is unchanged.
+    """
+    idx = SymbolIndexSqlite()
+    idx.set_source_tiers(["src"])
+    # Insert source refs first (A then B), then a docs ref.
+    idx.populate_references_for_test([
+        ("src/alpha.py", 1, "processItem called here first"),
+        ("src/beta.py", 2, "processItem called here second"),
+        ("docs/guide.md", 5, "processItem is documented here"),
+    ])
+    out = idx.find_references("processItem", max_count=10)
+    assert len(out) == 3
+    src_refs = [r for r in out if r.path.startswith("src/")]
+    non_src_refs = [r for r in out if not r.path.startswith("src/")]
+    # All source refs rank before non-source refs.
+    max_src_idx = max(out.index(r) for r in src_refs)
+    min_nonsrc_idx = min(out.index(r) for r in non_src_refs)
+    assert max_src_idx < min_nonsrc_idx, (
+        "all source refs must appear before docs refs; "
+        f"got order: {[r.path for r in out]}"
+    )
+    # Relative order within source tier is preserved (alpha before beta).
+    assert src_refs[0].path == "src/alpha.py", (
+        f"within-tier BM25 order not preserved; got {[r.path for r in src_refs]}"
+    )
+    assert src_refs[1].path == "src/beta.py"
+
+
+def test_find_references_with_empty_source_tiers_treats_src_as_other() -> None:
+    """T8-TC7: With source_tiers=[], a src/ path is NOT classified as source.
+
+    Without source_tiers configured, src/foo.py falls through to tier 3 (other),
+    because the source_tiers list is empty and can't match. Tests and docs still
+    classify normally.
+    """
+    idx = SymbolIndexSqlite()
+    idx.set_source_tiers([])  # empty — no source tier configured
+    idx.populate_references_for_test([
+        ("src/foo.py", 1, "checkValue returns True"),
+        ("tests/test_foo.py", 2, "checkValue is tested here"),
+    ])
+    out = idx.find_references("checkValue", max_count=10)
+    paths = [r.path for r in out]
+    # tests/ (tier 1) must come before src/ (tier 3 — not in source_tiers).
+    assert paths.index("tests/test_foo.py") < paths.index("src/foo.py"), (
+        f"tests/ must rank above src/ when source_tiers=[]; got order: {paths}"
+    )
+
+
+def test_set_source_tiers_can_be_called_multiple_times() -> None:
+    """T8-TC8: set_source_tiers is idempotent and the last call wins."""
+    idx = SymbolIndexSqlite()
+    idx.set_source_tiers(["a"])
+    assert idx._source_tiers == ["a"]
+    idx.set_source_tiers(["b", "c"])
+    assert idx._source_tiers == ["b", "c"]
+    # Calling with empty list also works.
+    idx.set_source_tiers([])
+    assert idx._source_tiers == []
+
+
+def test_load_does_not_set_source_tiers_directly(tmp_path: Path) -> None:
+    """T8-TC9: load() must NOT touch _source_tiers (option b — composition owns it).
+
+    After calling load(), _source_tiers must still be [] (the __init__ default),
+    confirming that the composition layer is responsible for calling set_source_tiers
+    after load. This is the architectural contract for option (b).
+    """
+    # Build a minimal on-disk index to load from.
+    writer = SymbolIndexSqlite()
+    writer.add_definitions([SymbolDef("x", "a.py", (1, 1), "function", "python")])
+    writer.persist(tmp_path)
+
+    loader = SymbolIndexSqlite()
+    loader.load(tmp_path)
+    # After load, _source_tiers must be the __init__ default (not mutated by load).
+    assert loader._source_tiers == [], (
+        "load() must not set _source_tiers; composition layer is responsible"
     )

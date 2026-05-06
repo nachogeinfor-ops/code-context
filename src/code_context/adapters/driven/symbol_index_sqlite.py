@@ -27,6 +27,82 @@ _FILE = "symbols.sqlite"
 _DEFS_TABLE = "symbol_defs"
 _REFS_TABLE = "symbol_refs_fts"
 
+# ---------------------------------------------------------------------------
+# Path classification for find_references post-sort (T8)
+# ---------------------------------------------------------------------------
+
+# Filename suffix patterns that mark a file as a test regardless of directory.
+# Order: check BEFORE source_tiers so a chunk-dense tests/ dir (which T7 might
+# include in source_tiers) still correctly classifies as tests, not source.
+_TEST_FIRST_SEGMENTS: frozenset[str] = frozenset({"tests", "test", "__tests__"})
+
+_TEST_SUFFIXES: tuple[str, ...] = (
+    "_test.py", "_tests.py",
+    ".test.ts", ".test.tsx",
+    ".spec.ts", ".spec.tsx",
+    "_test.go",
+    "_test.rs",
+)
+
+# C# test filename patterns (case-sensitive by convention).
+# Matches: FooTests.cs, FooTest.cs, FooSpec.cs, Foo.Test.cs, Foo.Tests.cs
+_CSHARP_TEST_RE = re.compile(
+    r"(Tests?|Spec)(\.cs)$"
+    r"|"
+    r"\.(Tests?|Spec)\.cs$"
+)
+
+_DOCS_FIRST_SEGMENTS: frozenset[str] = frozenset({"docs", "doc"})
+_DOCS_EXTENSIONS: frozenset[str] = frozenset({".md", ".rst"})
+
+
+def _classify_path(path: str, source_tiers: list[str]) -> int:
+    """Classify a repo-relative POSIX path into a tier rank.
+
+    Returns:
+        0  — source  (first path segment in source_tiers; not a test/doc)
+        1  — tests   (matches test directory or test filename pattern)
+        2  — docs    (matches docs directory or .md/.rst extension)
+        3  — other   (everything else)
+
+    Tests and docs are checked BEFORE source so a chunk-dense ``tests/``
+    directory (which T7 might include in source_tiers) still classifies
+    as tests rather than source.
+
+    Limitations (heuristic, not exhaustive):
+    - Only the FIRST path segment is checked for directory-level tier
+      classification. Deeply nested test dirs like ``src/internal/tests/``
+      will not be caught by the directory check (though suffix patterns may
+      still catch them for Python/Go/Rust/TS files).
+    - C# class-level test detection is filename-only; it does not inspect
+      ``[TestClass]`` / ``[Fact]`` attributes.
+    """
+    parts = path.split("/")
+    filename = parts[-1]
+    first_segment = parts[0].lower() if parts else ""
+    ext = "." + filename.rsplit(".", 1)[-1] if "." in filename else ""
+
+    # --- Tests (rank 1) — checked first ---
+    if first_segment in _TEST_FIRST_SEGMENTS:
+        return 1
+    if any(filename.endswith(suf) for suf in _TEST_SUFFIXES):
+        return 1
+    if ext == ".cs" and _CSHARP_TEST_RE.search(filename):
+        return 1
+
+    # --- Docs (rank 2) ---
+    if first_segment in _DOCS_FIRST_SEGMENTS:
+        return 2
+    if ext in _DOCS_EXTENSIONS:
+        return 2
+
+    # --- Source (rank 0) ---
+    if parts[0] in source_tiers:
+        return 0
+
+    # --- Other (rank 3) ---
+    return 3
+
 # FTS5 query sanitisation — same logic as keyword_index_sqlite.py.
 # Strip punctuation (FTS5 parses `.`, `-`, `:`, etc. as syntax even
 # though the unicode61 tokenizer accepts them in indexed text), and
@@ -142,6 +218,11 @@ class SymbolIndexSqlite:
             self._stop_words = _resolve_stop_words(config.bm25_stop_words)
         else:
             self._stop_words = _STOP_WORDS
+        # T8: source_tiers are NOT set at construction; the composition layer
+        # calls set_source_tiers() after load() (option b). Default to [] so
+        # find_references works even if set_source_tiers is never called —
+        # it just means all paths classify as tier 1, 2, or 3 (no tier 0).
+        self._source_tiers: list[str] = []
         self._open_inmem()
 
     # ---------- public ----------
@@ -175,6 +256,20 @@ class SymbolIndexSqlite:
             rows,
         )
         self._conn.commit()
+
+    def set_source_tiers(self, tiers: list[str]) -> None:
+        """Set the source-tier directory names used to classify paths in find_references.
+
+        Called by the composition layer after load() so the adapter stays
+        schema-agnostic (it never reads metadata.json directly — option b).
+
+        Passing an empty list (the default) means no paths will classify as
+        tier 0 (source); they will fall to tier 1 (tests), 2 (docs), or 3 (other)
+        based on name patterns alone. This is the safe backwards-compatible default.
+
+        May be called multiple times; the last call wins.
+        """
+        self._source_tiers = list(tiers)
 
     def delete_by_path(self, path: str) -> int:
         """Remove every row whose path == `path` from BOTH symbol_defs
@@ -261,9 +356,14 @@ class SymbolIndexSqlite:
                 seen.add(key)
                 trimmed = line_text.strip()[:200]
                 out.append(SymbolRef(path=path, line=actual_line, snippet=trimmed))
-                if len(out) >= max_count:
-                    return out
-        return out
+        # T8: stable-sort by tier rank so source > tests > docs > other,
+        # preserving the original BM25 order within each tier. Python's
+        # list.sort() is guaranteed stable, so equal-rank entries keep
+        # their insertion (BM25 score) order. We sort ALL candidates first,
+        # then truncate — this ensures the top-N returned is the highest-ranked
+        # N after the tier sort, not a random BM25-ordered subset.
+        out.sort(key=lambda r: _classify_path(r.path, self._source_tiers))
+        return out[:max_count]
 
     def persist(self, path: Path) -> None:
         assert self._conn is not None

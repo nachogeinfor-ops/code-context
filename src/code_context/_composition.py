@@ -250,6 +250,25 @@ def build_use_cases(
     )
 
 
+def _load_source_tiers(active_dir: Path) -> list[str]:
+    """Read source_tiers from metadata.json, or return [] if absent/malformed.
+
+    Called by the composition layer after symbol_index.load() to wire the
+    T8 tier-ranking into the adapter (option b: adapter is schema-agnostic,
+    composition owns metadata.json knowledge).
+    """
+    metadata_path = active_dir / "metadata.json"
+    if not metadata_path.exists():
+        return []
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        tiers = metadata.get("source_tiers") or []
+        return list(tiers) if isinstance(tiers, list) else []
+    except Exception:  # noqa: BLE001 - malformed metadata must not crash composition
+        log.warning("could not read source_tiers from %s; defaulting to []", metadata_path)
+        return []
+
+
 def make_reload_callback(
     indexer: IndexerUseCase,
     store: NumPyParquetStore,
@@ -272,6 +291,10 @@ def make_reload_callback(
         try:
             keyword_index.load(active)
             symbol_index.load(active)
+            # T8: wire source_tiers after load so find_references can rank
+            # source paths above tests/docs (option b — composition reads metadata).
+            if hasattr(symbol_index, "set_source_tiers"):
+                symbol_index.set_source_tiers(_load_source_tiers(active))
         except FileNotFoundError:
             # Reindex was published but one of the stores' files isn't
             # there yet (race between persist + swap); next bus tick
@@ -303,6 +326,9 @@ def fast_load_existing_index(
         store.load(active)
         keyword_index.load(active)
         symbol_index.load(active)
+        # T8: wire source_tiers after load (option b).
+        if hasattr(symbol_index, "set_source_tiers"):
+            symbol_index.set_source_tiers(_load_source_tiers(active))
     except FileNotFoundError:
         return False
     return True
@@ -396,6 +422,9 @@ def ensure_index(
             try:
                 keyword_index.load(current)
                 symbol_index.load(current)
+                # T8: wire source_tiers after load (option b).
+                if hasattr(symbol_index, "set_source_tiers"):
+                    symbol_index.set_source_tiers(_load_source_tiers(current))
             except FileNotFoundError:
                 log.info(
                     "keyword or symbol index missing in %s; reindexing to backfill",
@@ -405,6 +434,9 @@ def ensure_index(
                 store.load(new_dir)
                 keyword_index.load(new_dir)
                 symbol_index.load(new_dir)
+                # T8: wire source_tiers after reindex-backfill load (option b).
+                if hasattr(symbol_index, "set_source_tiers"):
+                    symbol_index.set_source_tiers(_load_source_tiers(new_dir))
             return
     log.info(
         "ensure_index: %s — running %s reindex",
@@ -415,6 +447,9 @@ def ensure_index(
     store.load(new_dir)
     keyword_index.load(new_dir)
     symbol_index.load(new_dir)
+    # T8: wire source_tiers after fresh reindex load (option b).
+    if hasattr(symbol_index, "set_source_tiers"):
+        symbol_index.set_source_tiers(_load_source_tiers(new_dir))
 
 
 def setup_logging(cfg: Config) -> None:
