@@ -26,7 +26,34 @@ _BATCH_SIZE = 64
 _CURRENT_FILE = "current.json"
 # v1: original schema (no file_hashes).
 # v2: Sprint 6 — adds file_hashes for incremental reindex.
-_VERSION = 2
+# v3: Sprint 10 — adds source_tiers for find_references ranking.
+_VERSION = 3
+_SOURCE_TIERS_TOP_N = 3
+
+
+def _compute_source_tiers(chunks: list) -> list[str]:
+    """Return the top-N top-level directories by chunk count.
+
+    Algorithm:
+    - Top-level dir = the first path segment of a POSIX chunk path.
+    - Root-level files (no '/') are excluded — they have no directory bucket.
+    - Tie-breaker: alphabetical ascending (ensures deterministic output).
+    - Returns at most ``_SOURCE_TIERS_TOP_N`` directory names.
+    """
+    counts: dict[str, int] = {}
+    for chunk in chunks:
+        path = chunk.path  # repo-relative POSIX string, e.g. "src/foo/bar.py"
+        slash = path.find("/")
+        if slash == -1:
+            # Root-level file — skip; it has no top-level directory.
+            continue
+        top_dir = path[:slash]
+        counts[top_dir] = counts.get(top_dir, 0) + 1
+
+    # Sort by (-count, name) so highest-count dirs come first; alphabetical
+    # ascending as tie-breaker (stable across Python dict insertion order).
+    ranked = sorted(counts.keys(), key=lambda d: (-counts[d], d))
+    return ranked[:_SOURCE_TIERS_TOP_N]
 
 
 @dataclass
@@ -64,9 +91,10 @@ class IndexerUseCase:
         if not self.git_source.is_repo(self.repo_root):
             return StaleSet(full_reindex_required=True, reason="not a git repo")
         if active.get("version", 1) < _VERSION:
+            prior_ver = active.get("version", 1)
             return StaleSet(
                 full_reindex_required=True,
-                reason="metadata schema upgrade (v1 → v2)",
+                reason=f"metadata schema upgrade (v{prior_ver} → v{_VERSION})",
             )
         if active.get("embeddings_model") != self.embeddings.model_id:
             return StaleSet(full_reindex_required=True, reason="embeddings_model changed")
@@ -212,6 +240,13 @@ class IndexerUseCase:
         self.keyword_index.persist(new_dir)
         self.symbol_index.persist(new_dir)
 
+        # Preserve source_tiers from the prior metadata — incremental runs
+        # only see changed chunks, so recomputing would give a biased result.
+        # v2→v3 is impossible here (dirty_set forces full reindex on schema
+        # bump), so prior will always have source_tiers. Defensive fallback
+        # to [] in case of unexpected missing field.
+        preserved_tiers: list[str] = prior.get("source_tiers") or []
+
         meta = {
             "version": _VERSION,
             "head_sha": head,
@@ -227,6 +262,7 @@ class IndexerUseCase:
             "n_chunks_added": len(new_entries),
             "n_files": len(new_file_hashes),
             "file_hashes": new_file_hashes,
+            "source_tiers": preserved_tiers,
         }
         (new_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
 
@@ -295,6 +331,8 @@ class IndexerUseCase:
         self.symbol_index.add_references(ref_rows)
         self.symbol_index.persist(new_dir)
 
+        source_tiers = _compute_source_tiers(chunks_with_paths)
+
         meta = {
             "version": _VERSION,
             "head_sha": head,
@@ -307,6 +345,7 @@ class IndexerUseCase:
             "n_chunks": len(all_entries),
             "n_files": len(file_hashes),
             "file_hashes": file_hashes,
+            "source_tiers": source_tiers,
         }
         (new_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
 

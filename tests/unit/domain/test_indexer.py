@@ -501,7 +501,7 @@ def test_run_writes_file_hashes_into_metadata(cache_dir: Path, repo_root: Path) 
     )
     new_dir = uc.run()
     meta = json.loads((new_dir / "metadata.json").read_text())
-    assert meta["version"] == 2
+    assert meta["version"] == 3  # bumped to v3 in Sprint 10 T7
     assert "file_hashes" in meta
     assert set(meta["file_hashes"].keys()) == {"a.py", "b.py"}
     assert all(len(h) == 64 for h in meta["file_hashes"].values())  # sha256 hex
@@ -539,7 +539,7 @@ def test_run_incremental_falls_back_to_run_when_full_reindex_required(
     # New dir created with full-run artifacts.
     assert (out / "metadata.json").exists()
     meta = json.loads((out / "metadata.json").read_text())
-    assert meta["version"] == 2
+    assert meta["version"] == 3  # bumped to v3 in Sprint 10 T7
     assert "a.py" in meta["file_hashes"]
 
 
@@ -675,3 +675,246 @@ def test_run_incremental_no_op_when_nothing_changed(cache_dir: Path, repo_root: 
     assert (new_dir2 / "metadata.json").exists()
     meta = json.loads((new_dir2 / "metadata.json").read_text())
     assert "a.py" in meta["file_hashes"]
+
+
+# ----- Sprint 10 T7: source_tiers detection -----
+
+
+class MultiChunkFaker:
+    """A chunker that emits N identical chunks per file.
+
+    Useful for controlling the chunk count per directory in source-tier tests.
+    Each 'copy' gets a unique line_start so the snapshot is realistic.
+    """
+
+    version = "multi-v1"
+
+    def __init__(self, n: int) -> None:
+        self._n = n
+
+    def chunk(self, content, path):
+        return [
+            Chunk(
+                path=path,
+                line_start=i + 1,
+                line_end=i + 1,
+                content_hash=f"h{i}",
+                snippet=content[:50],
+            )
+            for i in range(self._n)
+        ]
+
+
+def _build_uc_multi(
+    cache: Path,
+    repo: Path,
+    files: dict[Path, str],
+    chunks_per_file: int = 1,
+    head: str = "abc123",
+):
+    """_build_uc variant that lets the caller control chunks-per-file."""
+    return IndexerUseCase(
+        cache_dir=cache,
+        repo_root=repo,
+        embeddings=FakeEmbeddings(),
+        vector_store=FakeVectorStore(),
+        keyword_index=FakeKeywordIndex(),
+        symbol_index=FakeSymbolIndex(),
+        chunker=MultiChunkFaker(chunks_per_file),
+        code_source=FakeCodeSource(files),
+        git_source=FakeGit(repo=True, head=head),
+        include_extensions=[".py"],
+        max_file_bytes=1_000_000,
+    )
+
+
+def test_full_reindex_writes_source_tiers_to_metadata(
+    cache_dir: Path, repo_root: Path
+) -> None:
+    """Top-3 dirs by chunk count land in metadata["source_tiers"]."""
+    # 10 chunks from src, 8 from tests, 5 from docs, 1 from examples
+    # → top-3 = ["src", "tests", "docs"]
+    src_dir = repo_root / "src"
+    src_dir.mkdir()
+    tests_dir = repo_root / "tests"
+    tests_dir.mkdir()
+    docs_dir = repo_root / "docs"
+    docs_dir.mkdir()
+    examples_dir = repo_root / "examples"
+    examples_dir.mkdir()
+
+    files: dict[Path, str] = {}
+    # src: 10 files × 1 chunk each (chunks_per_file=1, so we use 10 files)
+    for i in range(10):
+        p = src_dir / f"f{i}.py"
+        p.write_text(f"x = {i}\n", encoding="utf-8")
+        files[p] = f"x = {i}\n"
+    # tests: 8 files
+    for i in range(8):
+        p = tests_dir / f"t{i}.py"
+        p.write_text(f"y = {i}\n", encoding="utf-8")
+        files[p] = f"y = {i}\n"
+    # docs: 5 files
+    for i in range(5):
+        p = docs_dir / f"d{i}.py"
+        p.write_text(f"z = {i}\n", encoding="utf-8")
+        files[p] = f"z = {i}\n"
+    # examples: 1 file
+    p = examples_dir / "e0.py"
+    p.write_text("w = 0\n", encoding="utf-8")
+    files[p] = "w = 0\n"
+
+    uc = _build_uc_multi(cache_dir, repo_root, files, chunks_per_file=1)
+    out = uc.run()
+    meta = json.loads((out / "metadata.json").read_text())
+    assert meta["source_tiers"] == ["src", "tests", "docs"]
+
+
+def test_source_tiers_skips_root_level_files(cache_dir: Path, repo_root: Path) -> None:
+    """Files at the repo root (no parent dir) are excluded from tiering."""
+    src_dir = repo_root / "src"
+    src_dir.mkdir()
+
+    root_file = repo_root / "foo.py"
+    root_file.write_text("root = 1\n", encoding="utf-8")
+    src_file1 = src_dir / "bar.py"
+    src_file1.write_text("bar = 1\n", encoding="utf-8")
+    src_file2 = src_dir / "baz.py"
+    src_file2.write_text("baz = 1\n", encoding="utf-8")
+
+    files = {
+        root_file: "root = 1\n",
+        src_file1: "bar = 1\n",
+        src_file2: "baz = 1\n",
+    }
+    uc = _build_uc_multi(cache_dir, repo_root, files, chunks_per_file=1)
+    out = uc.run()
+    meta = json.loads((out / "metadata.json").read_text())
+    # Root file excluded; only "src" is a top-level dir
+    assert meta["source_tiers"] == ["src"]
+    assert "" not in meta["source_tiers"]
+
+
+def test_source_tiers_alphabetical_tiebreaker(cache_dir: Path, repo_root: Path) -> None:
+    """When two dirs have the same chunk count, they are sorted alphabetically ascending."""
+    src_dir = repo_root / "src"
+    src_dir.mkdir()
+    tests_dir = repo_root / "tests"
+    tests_dir.mkdir()
+
+    files: dict[Path, str] = {}
+    # 5 files in each dir → equal chunk counts
+    for i in range(5):
+        p = src_dir / f"s{i}.py"
+        p.write_text(f"s = {i}\n", encoding="utf-8")
+        files[p] = f"s = {i}\n"
+    for i in range(5):
+        p = tests_dir / f"t{i}.py"
+        p.write_text(f"t = {i}\n", encoding="utf-8")
+        files[p] = f"t = {i}\n"
+
+    uc = _build_uc_multi(cache_dir, repo_root, files, chunks_per_file=1)
+    out = uc.run()
+    meta = json.loads((out / "metadata.json").read_text())
+    # Both dirs have 5 chunks; alphabetical tiebreaker → "src" before "tests"
+    assert meta["source_tiers"] == ["src", "tests"]
+
+
+def test_source_tiers_top_3_only(cache_dir: Path, repo_root: Path) -> None:
+    """Only the top 3 dirs by chunk count end up in source_tiers."""
+    dirs_chunks = [("aaa", 10), ("bbb", 8), ("ccc", 5), ("ddd", 3), ("eee", 1)]
+    files: dict[Path, str] = {}
+    for dir_name, n_files in dirs_chunks:
+        d = repo_root / dir_name
+        d.mkdir()
+        for i in range(n_files):
+            p = d / f"f{i}.py"
+            p.write_text(f"x = {i}\n", encoding="utf-8")
+            files[p] = f"x = {i}\n"
+
+    uc = _build_uc_multi(cache_dir, repo_root, files, chunks_per_file=1)
+    out = uc.run()
+    meta = json.loads((out / "metadata.json").read_text())
+    assert len(meta["source_tiers"]) == 3
+    assert meta["source_tiers"] == ["aaa", "bbb", "ccc"]
+
+
+def test_dirty_set_v2_metadata_triggers_full_reindex(
+    cache_dir: Path, repo_root: Path
+) -> None:
+    """v2 metadata (no source_tiers) → dirty_set forces full reindex for schema upgrade."""
+    f = repo_root / "a.py"
+    f.write_text("x = 1\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "x = 1\n"})
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+
+    # Downgrade the stored metadata to version=2 to simulate a pre-T7 index.
+    meta_path = new_dir / "metadata.json"
+    meta = json.loads(meta_path.read_text())
+    meta["version"] = 2
+    meta.pop("source_tiers", None)
+    meta_path.write_text(json.dumps(meta))
+
+    s = uc.dirty_set()
+    assert s.full_reindex_required is True
+    assert "schema" in s.reason.lower() or "upgrade" in s.reason.lower()
+
+
+def test_run_incremental_preserves_source_tiers_from_active_metadata(
+    cache_dir: Path, repo_root: Path
+) -> None:
+    """run_incremental copies source_tiers from the prior metadata verbatim."""
+    src_dir = repo_root / "src"
+    src_dir.mkdir()
+    f1 = src_dir / "a.py"
+    f1.write_text("a = 1\n", encoding="utf-8")
+    f2 = src_dir / "b.py"
+    f2.write_text("b = 2\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f1: "a = 1\n", f2: "b = 2\n"})
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+
+    # Patch the metadata to inject known source_tiers (simulating a v3 index).
+    meta_path = new_dir / "metadata.json"
+    meta = json.loads(meta_path.read_text())
+    meta["source_tiers"] = ["src", "lib"]
+    meta_path.write_text(json.dumps(meta))
+
+    # Edit one file so dirty_set picks it up.
+    uc.code_source = FakeCodeSource({f1: "a = 99\n", f2: "b = 2\n"})
+    s = uc.dirty_set()
+    assert not s.full_reindex_required
+    assert len(s.dirty_files) == 1
+
+    new_dir2 = uc.run_incremental(s)
+    meta2 = json.loads((new_dir2 / "metadata.json").read_text())
+    assert meta2["source_tiers"] == ["src", "lib"]
+
+
+def test_run_incremental_handles_missing_source_tiers_in_v3_metadata(
+    cache_dir: Path, repo_root: Path
+) -> None:
+    """Defensive: if active v3 metadata somehow lacks source_tiers, store [] and don't crash."""
+    f = repo_root / "a.py"
+    f.write_text("a = 1\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "a = 1\n"})
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+
+    # Strip source_tiers from the metadata (shouldn't happen at v3, but guard).
+    meta_path = new_dir / "metadata.json"
+    meta = json.loads(meta_path.read_text())
+    meta.pop("source_tiers", None)
+    meta_path.write_text(json.dumps(meta))
+
+    uc.code_source = FakeCodeSource({f: "a = 99\n"})
+    s = uc.dirty_set()
+    # May or may not require full reindex depending on version; if it does, skip.
+    if s.full_reindex_required:
+        pytest.skip("full reindex triggered — incremental path not exercised")
+
+    new_dir2 = uc.run_incremental(s)
+    meta2 = json.loads((new_dir2 / "metadata.json").read_text())
+    assert "source_tiers" in meta2
+    assert meta2["source_tiers"] == []
