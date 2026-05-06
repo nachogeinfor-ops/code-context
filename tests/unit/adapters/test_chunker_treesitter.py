@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from code_context.adapters.driven.chunker_treesitter import TreeSitterChunker
+from code_context.adapters.driven.chunker_treesitter import (
+    _EXT_TO_LANG,
+    TreeSitterChunker,
+)
+from code_context.adapters.driven.chunker_treesitter_queries import QUERIES_BY_LANG
 
 FIXTURES = Path(__file__).resolve().parent.parent.parent / "fixtures" / "chunker_samples"
 
@@ -162,3 +166,77 @@ def test_extract_definitions_lines_are_one_indexed() -> None:
     for d in defs:
         assert d.lines[0] >= 1, f"line_start must be 1-indexed, got {d.lines}"
         assert d.lines[1] >= d.lines[0]
+
+
+# ---------------------------------------------------------------------------
+# T1 (Sprint 11) — Regression guard: pin exact supported language set (v1.2.0)
+#
+# The Sprint 1 plan said "5 languages" (Py/JS/TS/Go/Rust).
+# As of v1.2.0, C# was silently added (QUERIES_BY_LANG + _EXT_TO_LANG both
+# include "csharp"), making the true count 6.  This test pins the exact set
+# so that:
+#   - T2-T5 (C# / Java / C++ / Markdown) MUST update this assertion or CI
+#     breaks — uses == not >= so additions are caught immediately.
+#   - Any accidental removal is equally visible.
+#
+# If you are landing T2 (C#) or later tasks, update _EXPECTED_LANGUAGES and
+# _EXPECTED_EXT_MAP to include the new language/extensions.
+# ---------------------------------------------------------------------------
+
+_EXPECTED_LANGUAGES: frozenset[str] = frozenset(
+    {"python", "javascript", "typescript", "go", "rust", "csharp"}
+)
+
+_EXPECTED_EXT_MAP: dict[str, str] = {
+    ".py": "python",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".go": "go",
+    ".rs": "rust",
+    ".cs": "csharp",
+}
+
+
+def test_supported_language_set_is_exactly_v1_2_0() -> None:
+    """QUERIES_BY_LANG must contain exactly the 6 languages wired in v1.2.0.
+
+    Update _EXPECTED_LANGUAGES when a T2-T5 task adds a new language.
+    This test uses == (not >=) so both additions and removals break CI.
+    """
+    assert frozenset(QUERIES_BY_LANG.keys()) == _EXPECTED_LANGUAGES, (
+        f"QUERIES_BY_LANG keys changed.\n"
+        f"  Expected: {sorted(_EXPECTED_LANGUAGES)}\n"
+        f"  Got:      {sorted(QUERIES_BY_LANG.keys())}\n"
+        "Update _EXPECTED_LANGUAGES in this test to match the new language set."
+    )
+
+
+def test_ext_to_lang_map_is_exactly_v1_2_0() -> None:
+    """_EXT_TO_LANG must contain exactly the 8 extension mappings wired in v1.2.0.
+
+    Update _EXPECTED_EXT_MAP when a T2-T5 task adds new file extensions.
+    This test uses == (not >=) so both additions and removals break CI.
+    """
+    assert _EXT_TO_LANG == _EXPECTED_EXT_MAP, (
+        f"_EXT_TO_LANG changed.\n"
+        f"  Expected: {_EXPECTED_EXT_MAP}\n"
+        f"  Got:      {dict(_EXT_TO_LANG)}\n"
+        "Update _EXPECTED_EXT_MAP in this test to match the new extension map."
+    )
+
+
+def test_every_query_lang_has_at_least_one_ext_mapping() -> None:
+    """Every language in QUERIES_BY_LANG must be reachable via at least one extension.
+
+    A language with a query but no extension mapping would be silently unreachable:
+    _detect_language() returns None for files with unmapped extensions, so the
+    language's query would never fire. This test catches that class of wiring bug.
+    """
+    mapped_langs = frozenset(_EXT_TO_LANG.values())
+    for lang in QUERIES_BY_LANG:
+        assert lang in mapped_langs, (
+            f"Language '{lang}' has a query in QUERIES_BY_LANG but no extension "
+            "in _EXT_TO_LANG — it can never be triggered. Add an extension mapping."
+        )
