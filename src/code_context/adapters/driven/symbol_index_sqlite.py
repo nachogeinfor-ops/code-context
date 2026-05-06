@@ -45,11 +45,23 @@ _TEST_SUFFIXES: tuple[str, ...] = (
 )
 
 # C# test filename patterns (case-sensitive by convention).
-# Matches: FooTests.cs, FooTest.cs, FooSpec.cs, Foo.Test.cs, Foo.Tests.cs
+# Matches:
+#   Suffix forms  — FooTests.cs, FooTest.cs, FooSpec.cs, Foo.Test.cs, Foo.Tests.cs
+#   Prefix form   — TestFoo.cs, TestsHelper.cs, TestBarService.cs (spec T8 gap fix)
+#
+# The prefix alternative (^|/)Tests?[A-Z][^/]*\.cs$ requires a capital letter
+# after "Test/Tests" so that:
+#   - TestFoo.cs       matches  (capital F)
+#   - TestsHelper.cs   matches  (capital H)
+#   - Testimony.cs     does NOT match (lowercase 'i' after 'Test'; not a test pattern)
+#   - Test.cs          does NOT match via this branch (no follow-up char) but the
+#                      first alternative catches it via (Tests?|Spec)(\.cs)$
 _CSHARP_TEST_RE = re.compile(
     r"(Tests?|Spec)(\.cs)$"
     r"|"
     r"\.(Tests?|Spec)\.cs$"
+    r"|"
+    r"(^|/)Tests?[A-Z][^/]*\.cs$"
 )
 
 _DOCS_FIRST_SEGMENTS: frozenset[str] = frozenset({"docs", "doc"})

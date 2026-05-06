@@ -447,6 +447,28 @@ def test_find_references_classifies_csharp_test_files() -> None:
     assert _classify_path("src/Foo.cs", ["src"]) == 0
 
 
+def test_classify_path_csharp_test_prefix_form() -> None:
+    """T8 spec gap fix: Test*.cs prefix form must classify as tier 1 (tests).
+
+    The original _CSHARP_TEST_RE only matched suffix forms (FooTests.cs,
+    FooTest.cs, FooSpec.cs, Foo.Test.cs, Foo.Tests.cs). The spec also required
+    the prefix form where the filename STARTS with Test/Tests followed by a
+    capital letter (e.g. TestFoo.cs, TestsHelper.cs). Sprint 10.
+
+    False-positive guard: Testimony.cs starts with 'Test' but is followed by
+    lowercase 'i', so it must NOT be classified as a test file.
+    """
+    # Prefix form at root level — should be tier 1 (tests).
+    assert _classify_path("TestFoo.cs", []) == 1
+    # Prefix form in a subdirectory — still tier 1.
+    assert _classify_path("src/TestBar.cs", ["src"]) == 1
+    # 'Tests' (with s) prefix form — tier 1.
+    assert _classify_path("src/TestsHelper.cs", ["src"]) == 1
+    # False positive guard: 'Testimony.cs' starts with 'Test' but the next
+    # char is lowercase 'i', not a capital — must classify as source (tier 0).
+    assert _classify_path("src/Testimony.cs", ["src"]) == 0
+
+
 def test_find_references_other_tier_for_unknown_paths() -> None:
     """T8-TC5: A path not matching tests/docs/source_tiers is tier 3 (other)."""
     assert _classify_path("bin/something.exe", []) == 3
