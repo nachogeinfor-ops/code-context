@@ -61,6 +61,10 @@ runs:
     assert cfg.runs[1].name == "run_b"
     assert cfg.runs[0].cache_dir is None
     assert cfg.runs[1].cache_dir is None
+    # Path resolution: both repo and queries must resolve to absolute Paths.
+    assert cfg.runs[0].repo == repo_a.resolve()
+    assert cfg.runs[0].queries == queries_file.resolve()
+    assert cfg.runs[1].repo == repo_b.resolve()
 
 
 def test_relative_paths_resolved_against_yaml_parent(tmp_path: Path) -> None:

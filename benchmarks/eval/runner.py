@@ -47,6 +47,21 @@ from pathlib import Path
 from typing import Any
 
 # ---------------------------------------------------------------------------
+# CSV schema — single source of truth for per-run and combined writers
+# ---------------------------------------------------------------------------
+
+_CSV_FIELDNAMES: tuple[str, ...] = (
+    "query",
+    "expected",
+    "top1",
+    "hit_at_1",
+    "hit_at_10",
+    "ndcg10",
+    "rr",
+    "latency_ms",
+)
+
+# ---------------------------------------------------------------------------
 # Metric helpers
 # ---------------------------------------------------------------------------
 
@@ -106,6 +121,9 @@ def run_one(
 
     Returns a :class:`RunSummary` with aggregate metrics.
     """
+    if not queries:
+        raise ValueError("queries list must be non-empty")
+
     from code_context._composition import (
         build_indexer_and_store,
         build_use_cases,
@@ -154,7 +172,7 @@ def run_one(
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w = csv.DictWriter(fh, fieldnames=list(_CSV_FIELDNAMES))
         w.writeheader()
         w.writerows(rows)
 
@@ -277,19 +295,27 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
     summaries: list[RunSummary] = []
     all_combined_rows: list[dict[str, Any]] = []
 
+    # Snapshot process-env values once, before the loop, so that each
+    # iteration that doesn't specify a value can restore the original
+    # instead of inheriting a previous iteration's override.
+    original_cache_dir: str | None = os.environ.get("CC_CACHE_DIR")
+
     for spec in multi_cfg.runs:
         print(f"\nRunning: {spec.name}  repo={spec.repo}")
 
-        # Set env vars for this iteration. Each iteration must use its own
-        # composition (different repos = different stores).
+        # Restore or set CC_REPO_ROOT for this iteration.
         os.environ["CC_REPO_ROOT"] = str(spec.repo)
+
+        # Restore or set CC_CACHE_DIR for this iteration.  A spec without
+        # cache_dir falls back to whatever the process environment had
+        # before the loop started, not whatever a previous iteration set.
         if spec.cache_dir is not None:
             os.environ["CC_CACHE_DIR"] = str(spec.cache_dir)
-        elif "CC_CACHE_DIR" in os.environ:
-            # If the run has no cache_dir, leave CC_CACHE_DIR as-is from the
-            # process environment (caller-supplied) so the default platformdirs
-            # path is used if it was never set, or the caller's value if it was.
-            pass
+        else:
+            if original_cache_dir is None:
+                os.environ.pop("CC_CACHE_DIR", None)
+            else:
+                os.environ["CC_CACHE_DIR"] = original_cache_dir
 
         queries = json.loads(spec.queries.read_text(encoding="utf-8"))
         if not queries:
@@ -319,8 +345,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
     # Write combined CSV.
     combined_path = output_dir / "combined.csv"
     with combined_path.open("w", newline="", encoding="utf-8") as fh:
-        fieldnames = ["repo"] + list(summaries[0].rows[0].keys())
-        w = csv.DictWriter(fh, fieldnames=fieldnames)
+        w = csv.DictWriter(fh, fieldnames=("repo",) + _CSV_FIELDNAMES)
         w.writeheader()
         w.writerows(all_combined_rows)
 
@@ -330,7 +355,9 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
     w_hit10 = sum(s.hit10 for s in summaries)
     w_ndcg = sum(s.ndcg10 * s.query_count for s in summaries) / total_queries
     w_mrr = sum(s.mrr * s.query_count for s in summaries) / total_queries
-    # Weighted latency: weighted median approximation via weighted mean of medians.
+    # Latency: query-count-weighted average of per-run p50/p95 values.
+    # This is a rough summary only — not a true overall percentile.
+    # Use the per-run rows for precise latency comparisons.
     w_p50 = sum(s.p50_ms * s.query_count for s in summaries) / total_queries
     w_p95 = sum(s.p95_ms * s.query_count for s in summaries) / total_queries
 
@@ -340,8 +367,8 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901
         f"hit@10: {w_hit10} / {total_queries}   "
         f"NDCG@10: {w_ndcg:.4f}   "
         f"MRR: {w_mrr:.4f}   "
-        f"p50: {w_p50:.0f} ms   "
-        f"p95: {w_p95:.0f} ms"
+        f"avg p50 (per-run): {w_p50:.0f} ms   "
+        f"avg p95 (per-run): {w_p95:.0f} ms"
     )
     print(f"combined csv:   {combined_path}")
     return 0

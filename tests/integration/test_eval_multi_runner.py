@@ -15,6 +15,7 @@ monkeypatched CC_CACHE_DIR to avoid polluting the user cache).
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -170,3 +171,55 @@ def test_old_single_repo_mode_unchanged(
         rows = list(csv.DictReader(fh))
     assert len(rows) == len(TINY_QUERIES)
     assert set(rows[0].keys()) >= EXPECTED_COLUMNS
+
+
+def test_env_cache_dir_restored_after_multi_run(
+    tmp_path: Path, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CC_CACHE_DIR must be restored to its pre-loop value after multi-repo runs.
+
+    Regression for the env-leakage bug: a run A with an explicit cache_dir
+    must NOT pollute run B (and the process env) when B has no cache_dir.
+    """
+    # The "process-level" cache dir that was set before the runner loop.
+    process_cache = tmp_path / "processCache"
+    process_cache.mkdir()
+    monkeypatch.setenv("CC_CACHE_DIR", str(process_cache))
+    monkeypatch.setenv("CC_LOG_LEVEL", "WARNING")
+
+    # Run A will use its own explicit cache dir.
+    cache_a = tmp_path / "cacheA"
+    cache_a.mkdir()
+
+    # Both runs share the same tiny_repo and queries for simplicity.
+    queries_path = tmp_path / "tiny_queries.json"
+    queries_path.write_text(json.dumps(TINY_QUERIES), encoding="utf-8")
+
+    yaml_path = tmp_path / "two_runs.yaml"
+    yaml_path.write_text(
+        f"""\
+runs:
+  - name: run_a
+    repo: {git_repo.as_posix()}
+    queries: {queries_path.as_posix()}
+    cache_dir: {cache_a.as_posix()}
+  - name: run_b
+    repo: {git_repo.as_posix()}
+    queries: {queries_path.as_posix()}
+""",
+        encoding="utf-8",
+    )
+
+    out_dir = tmp_path / "results"
+
+    from benchmarks.eval import runner
+
+    rc = runner.main(["--config", str(yaml_path), "--output-dir", str(out_dir)])
+    assert rc == 0, "runner.main returned non-zero exit code"
+
+    # After main() returns, CC_CACHE_DIR must equal the process-level value,
+    # not run_a's cache_dir.
+    assert os.environ.get("CC_CACHE_DIR") == str(process_cache), (
+        f"CC_CACHE_DIR was not restored: got {os.environ.get('CC_CACHE_DIR')!r}, "
+        f"expected {str(process_cache)!r}"
+    )
