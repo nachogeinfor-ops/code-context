@@ -182,5 +182,97 @@
       "p95_ms": 6949,
       "captured_on": "2026-05-06"
     }
+  },
+  "v1.3.0": {
+    "vector_only_csharp": {
+      "ndcg10": 0.3917,
+      "hit_at_1": 14,
+      "hit_at_10": 40,
+      "n_queries": 63,
+      "mrr": 0.3321,
+      "p50_ms": 27,
+      "p95_ms": 42,
+      "captured_on": "2026-05-06"
+    },
+    "vector_only_python": {
+      "ndcg10": 0.8317,
+      "hit_at_1": 25,
+      "hit_at_10": 33,
+      "n_queries": 33,
+      "mrr": 0.8545,
+      "p50_ms": 18,
+      "p95_ms": 21,
+      "captured_on": "2026-05-06"
+    },
+    "vector_only_typescript": {
+      "ndcg10": 0.7865,
+      "hit_at_1": 20,
+      "hit_at_10": 33,
+      "n_queries": 33,
+      "mrr": 0.7333,
+      "p50_ms": 20,
+      "p95_ms": 24,
+      "captured_on": "2026-05-06"
+    },
+    "hybrid_csharp": {
+      "ndcg10": 0.3601,
+      "hit_at_1": 11,
+      "hit_at_10": 39,
+      "n_queries": 63,
+      "mrr": 0.2862,
+      "p50_ms": 24,
+      "p95_ms": 33,
+      "captured_on": "2026-05-06"
+    },
+    "hybrid_python": {
+      "ndcg10": 0.8493,
+      "hit_at_1": 27,
+      "hit_at_10": 33,
+      "n_queries": 33,
+      "mrr": 0.8899,
+      "p50_ms": 18,
+      "p95_ms": 21,
+      "captured_on": "2026-05-06"
+    },
+    "hybrid_typescript": {
+      "ndcg10": 0.7819,
+      "hit_at_1": 20,
+      "hit_at_10": 33,
+      "n_queries": 33,
+      "mrr": 0.7333,
+      "p50_ms": 16,
+      "p95_ms": 20,
+      "captured_on": "2026-05-06"
+    },
+    "hybrid_rerank_csharp": {
+      "ndcg10": 0.3336,
+      "hit_at_1": 12,
+      "hit_at_10": 31,
+      "n_queries": 63,
+      "mrr": 0.2807,
+      "p50_ms": 4721,
+      "p95_ms": 7007,
+      "captured_on": "2026-05-06"
+    },
+    "hybrid_rerank_python": {
+      "ndcg10": 0.8265,
+      "hit_at_1": 24,
+      "hit_at_10": 33,
+      "n_queries": 33,
+      "mrr": 0.8485,
+      "p50_ms": 4718,
+      "p95_ms": 7777,
+      "captured_on": "2026-05-06"
+    },
+    "hybrid_rerank_typescript": {
+      "ndcg10": 0.7783,
+      "hit_at_1": 23,
+      "hit_at_10": 31,
+      "n_queries": 33,
+      "mrr": 0.7653,
+      "p50_ms": 4900,
+      "p95_ms": 7483,
+      "captured_on": "2026-05-06"
+    }
   }
 }

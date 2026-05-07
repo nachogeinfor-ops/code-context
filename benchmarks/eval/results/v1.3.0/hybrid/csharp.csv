@@ -1,0 +1,64 @@
+query,expected,top1,hit_at_1,hit_at_10,ndcg10,rr,latency_ms
+where is BushidoLogScannerAdapter defined,BushidoLogScannerAdapter.cs,GeinforScheduler.Tests/Unit/Infrastructure/BushidoLogs/BushidoLogScannerAdapterTests.cs,0,1,0.3869,0.2,24.59
+how is settings.json loaded,Settings,GeinforScheduler/Infrastructure/Configuration/ConfigurationService.cs,0,1,0.5726,0.3333,22.63
+scheduler worker main loop,Worker.cs,docs/archive/HEXAGONAL_ARCHITECTURE.md,0,0,0.0,0.0,22.98
+task execution history maintenance,HistoryMaintenance,GeinforScheduler/Domain/Ports/IExecutionHistoryRepository.cs,0,1,0.3155,0.125,26.23
+send a test notification,SendTestNotification,docs/superpowers/plans/2026-04-24-notification-type-routing.md,0,1,0.3333,0.1429,24.39
+delete a bat file,DeleteBatFile,docs/superpowers/plans/2026-04-20-web-panel.md,0,0,0.0,0.0,25.3
+list all bat files,ListBatFiles,GeinforScheduler/Common/Exceptions.cs,0,0,0.0,0.0,22.67
+read a bat file content,ReadBatFile,GeinforScheduler/Common/Exceptions.cs,0,1,0.3155,0.125,22.8
+save a bat file,SaveBatFile,GeinforScheduler/Application/UseCases/Bats/SaveBatFileUseCase.cs,1,1,0.7904,1.0,22.12
+retry policy validation rules,RetryPolicy,GeinforScheduler/Models/TaskConfiguration.cs,0,1,0.6948,0.5,21.4
+scheduler logger adapter implementation,SchedulerLoggerAdapter.cs,GeinforScheduler/Infrastructure/Adapters/SchedulerLoggerAdapter.cs,1,1,0.8175,1.0,22.39
+execution history repository port,IExecutionHistoryRepository,docs/superpowers/plans/2026-04-20-web-panel.md,0,0,0.0,0.0,22.82
+bushido log scanner port interface,IBushidoLogScanner.cs,GeinforScheduler/Application/UseCases/BushidoLogs/QueryBushidoLogsUseCase.cs,0,1,0.301,0.1111,22.82
+scheduler logger port interface,ISchedulerLogger.cs,GeinforScheduler/Infrastructure/Adapters/SchedulerLoggerAdapter.cs,0,1,0.5,0.3333,26.27
+service install powershell script,install.ps1,docs/archive/SUMMARY.md,0,0,0.0,0.0,31.63
+global usings for the GeinforScheduler project,GlobalUsings.cs,GeinforScheduler/GlobalUsings.cs,1,1,1.0,1.0,31.29
+Program startup entry point,Program.cs,GeinforScheduler/Infrastructure/Logging/ILogService.cs,0,0,0.0,0.0,19.62
+settings dto builder mapping,SettingsDtoBuilder,GeinforScheduler/Infrastructure/Configuration/ConfigFileChangeHandler.cs,0,1,0.7336,0.5,23.03
+history paging helper logic,HistoryPagingHelper,GeinforScheduler.Tests/Unit/Web/Components/Pages/HistoryPagingHelperTests.cs,1,1,0.9068,1.0,24.2
+task edit config builder,TaskEditConfigBuilder,GeinforScheduler.Tests/Unit/Infrastructure/Configuration/ConfigFileChangeHandlerTests.cs,0,0,0.0,0.0,22.44
+schedule builder web component,ScheduleBuilder,docs/superpowers/plans/2026-04-23-panel-redesign-fase-2.md,0,1,0.3562,0.1667,20.49
+exception handling helper centralized errors,ExceptionHandlingHelper,GeinforScheduler/Common/ExceptionHandlingHelper.cs,1,1,0.8712,1.0,22.88
+host builder extensions registration,HostBuilderExtensions,GeinforScheduler.Tests/Integration/WebPanel/WebPanelHttpTests.cs,0,0,0.0,0.0,22.6
+navigation menu component,NavMenu,GeinforScheduler.Tests/Unit/Web/Components/Pages/SettingsDefaultsTests.cs,0,1,0.4685,0.25,21.71
+main layout error boundary,MainLayoutErrorBoundary,docs/superpowers/plans/2026-04-23-panel-redesign-fase-1.md,0,0,0.0,0.0,28.35
+confirm dialog reusable component,ConfirmDialog,docs/superpowers/plans/2026-04-23-panel-redesign-fase-3.md,0,1,0.7882,0.5,24.14
+history filter with dates and status,HistoryFilter,docs/superpowers/plans/2026-04-23-panel-redesign-fase-4.md,0,0,0.0,0.0,22.8
+tasks page double-click handling,TasksDoubleClick,docs/superpowers/plans/2026-04-23-panel-redesign-fase-2.md,0,1,0.301,0.1111,23.3
+periodic refresh loop component,PeriodicRefreshLoop,GeinforScheduler/Web/Components/Pages/PeriodicRefreshLoop.cs,1,1,0.9435,1.0,24.07
+task configuration JSON serialization,TaskConfigurationSerialization,GeinforScheduler/Infrastructure/Configuration/ConfigurationService.cs,0,1,0.4307,0.25,18.95
+settings configuration loading rules,SettingsConfigurationLoading,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,0,0.0,0.0,20.11
+appsettings defaults for the web project,AppSettingsDefaults,docs/superpowers/plans/2026-04-20-web-panel.md,0,1,0.5706,0.3333,22.15
+bushido logs v1.11.0 debug regression,BushidoLogV1110Debug,GeinforScheduler.Tests/Integration/BushidoLogs/BushidoLogCoverageAuditTest.cs,0,1,0.4307,0.25,23.86
+json backward compatibility integration,JsonBackwardCompatibility,docs/superpowers/plans/2026-04-22-task-scheduler-features.md,0,1,0.5,0.3333,23.74
+sample config cron format integration,SampleConfigCronFormat,docs/archive/ANALYSIS_SUMMARY.md,0,0,0.0,0.0,25.71
+where are exceptions logged in the scheduler,ExceptionHandlingHelper.cs,docs/superpowers/plans/2026-05-05-system-error-email-notifications.md,0,0,0.0,0.0,22.72
+invalid task policy custom exception,InvalidTaskPolicyException.cs,GeinforScheduler/Common/Exceptions/InvalidTaskPolicyException.cs,1,1,1.0,1.0,21.32
+system error category mapper infrastructure,SystemErrorCategoryMapper.cs,docs/superpowers/specs/2026-05-05-system-error-email-notifications-design.md,0,1,0.3155,0.125,22.84
+BushidoErrorNotifier error notification flow,BushidoErrorNotifier.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoErrorNotifier.cs,1,1,1.0,1.0,24.21
+system error email sink notification,SystemErrorEmailSink.cs,docs/superpowers/plans/2026-05-05-system-error-email-notifications.md,0,0,0.0,0.0,23.92
+BushidoLineParser,BushidoLineParser.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogScannerAdapter.cs,0,1,0.5591,0.2,25.54
+BushidoLogMonitor background scanning,BushidoLogMonitor.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogMonitor.cs,1,1,0.7977,1.0,27.54
+BushidoLogStore in-memory log entries,BushidoLogStore.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogMonitor.cs,0,1,0.6309,0.5,25.91
+bushido log entry domain entity,BushidoLogEntry.cs,docs/superpowers/plans/2026-05-06-v1.15-notifications-overhaul.md,0,0,0.0,0.0,22.63
+query bushido logs use case,QueryBushidoLogsUseCase.cs,docs/superpowers/specs/2026-05-06-v1.15-notifications-overhaul-design.md,0,1,0.2891,0.1,26.51
+how is configuration written back to disk atomically,AtomicFileConfigurationWriter.cs,GeinforScheduler/Infrastructure/Adapters/AtomicFileConfigurationWriter.cs,1,1,0.8855,1.0,28.06
+ConfigurationProviderAdapter settings reload,ConfigurationProviderAdapter.cs,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,1,0.3707,0.125,27.93
+how does file change trigger config reload,ConfigFileChangeHandler.cs,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,1,0.5204,0.2,24.25
+application settings domain model,ApplicationSettings.cs,docs/archive/REFACTORING_ROADMAP.md,0,1,0.3333,0.1429,27.31
+update settings configuration use case,UpdateSettingsConfigurationUseCase.cs,GeinforScheduler/Application/UseCases/Configuration/IGetSettingsUseCase.cs,0,1,0.3869,0.2,22.27
+CronTaskScheduler next fire time,CronTaskScheduler.cs,docs/superpowers/specs/2026-05-06-v1.15-notifications-overhaul-design.md,0,1,0.3155,0.125,28.54
+cron expression evaluator parse validate,CronExpressionEvaluator.cs,GeinforScheduler/Application/UseCases/Scheduling/IValidateCronExpressionUseCase.cs,0,0,0.0,0.0,28.89
+SchedulingOrchestrator worker dispatch loop,SchedulingOrchestrator.cs,GeinforScheduler.Tests/Integration/SystemErrorEmailSinkIntegrationTests.cs,0,0,0.0,0.0,29.22
+how is a task triggered manually on demand,TriggerTaskNowUseCase.cs,GeinforScheduler.Tests/Unit/Application/Scheduling/InMemoryTaskStateManagerInitTests.cs,0,0,0.0,0.0,28.85
+InMemoryTaskStateManager task lifecycle state,InMemoryTaskStateManager.cs,docs/archive/SEMANA_3_QUICK_REFERENCE.md,0,0,0.0,0.0,27.42
+how does the watchdog detect a stuck task,WatchdogMonitor.cs,GeinforScheduler/Application/Scheduling/IWatchdogMonitor.cs,1,1,0.8772,1.0,26.54
+home page Blazor dashboard component,Home.razor,docs/superpowers/plans/2026-04-20-web-panel.md,0,0,0.0,0.0,31.36
+task edit razor page form bindings,TaskEdit.razor,docs/superpowers/plans/2026-04-22-task-scheduler-features.md,0,0,0.0,0.0,29.06
+logs page Blazor tail log viewer,Logs.razor,GeinforScheduler/Application/UseCases/Logs/TailLogFileUseCase.cs,0,0,0.0,0.0,26.53
+ServiceStatusBadge component web UI,ServiceStatusBadge.razor,GeinforScheduler/Application/UseCases/Scheduler/IGetServiceStatusUseCase.cs,0,0,0.0,0.0,32.67
+BushidoLogSource,BushidoLogSource.cs,GeinforScheduler/Domain/Ports/IBushidoLogScanner.cs,0,0,0.0,0.0,38.93
+TaskExecutor,TaskExecutor.cs,docs/archive/SEMANA_3_QUICK_REFERENCE.md,0,1,0.6189,0.5,50.27
+WebPanelServiceCollectionExtensions,WebPanelServiceCollectionExtensions.cs,docs/superpowers/plans/2026-04-20-web-panel.md,0,1,0.4575,0.25,35.91

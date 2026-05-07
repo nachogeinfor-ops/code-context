@@ -1,0 +1,130 @@
+repo,query,expected,top1,hit_at_1,hit_at_10,ndcg10,rr,latency_ms
+csharp,where is BushidoLogScannerAdapter defined,BushidoLogScannerAdapter.cs,GeinforScheduler.Tests/Unit/Infrastructure/BushidoLogs/BushidoLogScannerAdapterTests.cs,0,1,0.3869,0.2,24.59
+csharp,how is settings.json loaded,Settings,GeinforScheduler/Infrastructure/Configuration/ConfigurationService.cs,0,1,0.5726,0.3333,22.63
+csharp,scheduler worker main loop,Worker.cs,docs/archive/HEXAGONAL_ARCHITECTURE.md,0,0,0.0,0.0,22.98
+csharp,task execution history maintenance,HistoryMaintenance,GeinforScheduler/Domain/Ports/IExecutionHistoryRepository.cs,0,1,0.3155,0.125,26.23
+csharp,send a test notification,SendTestNotification,docs/superpowers/plans/2026-04-24-notification-type-routing.md,0,1,0.3333,0.1429,24.39
+csharp,delete a bat file,DeleteBatFile,docs/superpowers/plans/2026-04-20-web-panel.md,0,0,0.0,0.0,25.3
+csharp,list all bat files,ListBatFiles,GeinforScheduler/Common/Exceptions.cs,0,0,0.0,0.0,22.67
+csharp,read a bat file content,ReadBatFile,GeinforScheduler/Common/Exceptions.cs,0,1,0.3155,0.125,22.8
+csharp,save a bat file,SaveBatFile,GeinforScheduler/Application/UseCases/Bats/SaveBatFileUseCase.cs,1,1,0.7904,1.0,22.12
+csharp,retry policy validation rules,RetryPolicy,GeinforScheduler/Models/TaskConfiguration.cs,0,1,0.6948,0.5,21.4
+csharp,scheduler logger adapter implementation,SchedulerLoggerAdapter.cs,GeinforScheduler/Infrastructure/Adapters/SchedulerLoggerAdapter.cs,1,1,0.8175,1.0,22.39
+csharp,execution history repository port,IExecutionHistoryRepository,docs/superpowers/plans/2026-04-20-web-panel.md,0,0,0.0,0.0,22.82
+csharp,bushido log scanner port interface,IBushidoLogScanner.cs,GeinforScheduler/Application/UseCases/BushidoLogs/QueryBushidoLogsUseCase.cs,0,1,0.301,0.1111,22.82
+csharp,scheduler logger port interface,ISchedulerLogger.cs,GeinforScheduler/Infrastructure/Adapters/SchedulerLoggerAdapter.cs,0,1,0.5,0.3333,26.27
+csharp,service install powershell script,install.ps1,docs/archive/SUMMARY.md,0,0,0.0,0.0,31.63
+csharp,global usings for the GeinforScheduler project,GlobalUsings.cs,GeinforScheduler/GlobalUsings.cs,1,1,1.0,1.0,31.29
+csharp,Program startup entry point,Program.cs,GeinforScheduler/Infrastructure/Logging/ILogService.cs,0,0,0.0,0.0,19.62
+csharp,settings dto builder mapping,SettingsDtoBuilder,GeinforScheduler/Infrastructure/Configuration/ConfigFileChangeHandler.cs,0,1,0.7336,0.5,23.03
+csharp,history paging helper logic,HistoryPagingHelper,GeinforScheduler.Tests/Unit/Web/Components/Pages/HistoryPagingHelperTests.cs,1,1,0.9068,1.0,24.2
+csharp,task edit config builder,TaskEditConfigBuilder,GeinforScheduler.Tests/Unit/Infrastructure/Configuration/ConfigFileChangeHandlerTests.cs,0,0,0.0,0.0,22.44
+csharp,schedule builder web component,ScheduleBuilder,docs/superpowers/plans/2026-04-23-panel-redesign-fase-2.md,0,1,0.3562,0.1667,20.49
+csharp,exception handling helper centralized errors,ExceptionHandlingHelper,GeinforScheduler/Common/ExceptionHandlingHelper.cs,1,1,0.8712,1.0,22.88
+csharp,host builder extensions registration,HostBuilderExtensions,GeinforScheduler.Tests/Integration/WebPanel/WebPanelHttpTests.cs,0,0,0.0,0.0,22.6
+csharp,navigation menu component,NavMenu,GeinforScheduler.Tests/Unit/Web/Components/Pages/SettingsDefaultsTests.cs,0,1,0.4685,0.25,21.71
+csharp,main layout error boundary,MainLayoutErrorBoundary,docs/superpowers/plans/2026-04-23-panel-redesign-fase-1.md,0,0,0.0,0.0,28.35
+csharp,confirm dialog reusable component,ConfirmDialog,docs/superpowers/plans/2026-04-23-panel-redesign-fase-3.md,0,1,0.7882,0.5,24.14
+csharp,history filter with dates and status,HistoryFilter,docs/superpowers/plans/2026-04-23-panel-redesign-fase-4.md,0,0,0.0,0.0,22.8
+csharp,tasks page double-click handling,TasksDoubleClick,docs/superpowers/plans/2026-04-23-panel-redesign-fase-2.md,0,1,0.301,0.1111,23.3
+csharp,periodic refresh loop component,PeriodicRefreshLoop,GeinforScheduler/Web/Components/Pages/PeriodicRefreshLoop.cs,1,1,0.9435,1.0,24.07
+csharp,task configuration JSON serialization,TaskConfigurationSerialization,GeinforScheduler/Infrastructure/Configuration/ConfigurationService.cs,0,1,0.4307,0.25,18.95
+csharp,settings configuration loading rules,SettingsConfigurationLoading,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,0,0.0,0.0,20.11
+csharp,appsettings defaults for the web project,AppSettingsDefaults,docs/superpowers/plans/2026-04-20-web-panel.md,0,1,0.5706,0.3333,22.15
+csharp,bushido logs v1.11.0 debug regression,BushidoLogV1110Debug,GeinforScheduler.Tests/Integration/BushidoLogs/BushidoLogCoverageAuditTest.cs,0,1,0.4307,0.25,23.86
+csharp,json backward compatibility integration,JsonBackwardCompatibility,docs/superpowers/plans/2026-04-22-task-scheduler-features.md,0,1,0.5,0.3333,23.74
+csharp,sample config cron format integration,SampleConfigCronFormat,docs/archive/ANALYSIS_SUMMARY.md,0,0,0.0,0.0,25.71
+csharp,where are exceptions logged in the scheduler,ExceptionHandlingHelper.cs,docs/superpowers/plans/2026-05-05-system-error-email-notifications.md,0,0,0.0,0.0,22.72
+csharp,invalid task policy custom exception,InvalidTaskPolicyException.cs,GeinforScheduler/Common/Exceptions/InvalidTaskPolicyException.cs,1,1,1.0,1.0,21.32
+csharp,system error category mapper infrastructure,SystemErrorCategoryMapper.cs,docs/superpowers/specs/2026-05-05-system-error-email-notifications-design.md,0,1,0.3155,0.125,22.84
+csharp,BushidoErrorNotifier error notification flow,BushidoErrorNotifier.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoErrorNotifier.cs,1,1,1.0,1.0,24.21
+csharp,system error email sink notification,SystemErrorEmailSink.cs,docs/superpowers/plans/2026-05-05-system-error-email-notifications.md,0,0,0.0,0.0,23.92
+csharp,BushidoLineParser,BushidoLineParser.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogScannerAdapter.cs,0,1,0.5591,0.2,25.54
+csharp,BushidoLogMonitor background scanning,BushidoLogMonitor.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogMonitor.cs,1,1,0.7977,1.0,27.54
+csharp,BushidoLogStore in-memory log entries,BushidoLogStore.cs,GeinforScheduler/Infrastructure/BushidoLogs/BushidoLogMonitor.cs,0,1,0.6309,0.5,25.91
+csharp,bushido log entry domain entity,BushidoLogEntry.cs,docs/superpowers/plans/2026-05-06-v1.15-notifications-overhaul.md,0,0,0.0,0.0,22.63
+csharp,query bushido logs use case,QueryBushidoLogsUseCase.cs,docs/superpowers/specs/2026-05-06-v1.15-notifications-overhaul-design.md,0,1,0.2891,0.1,26.51
+csharp,how is configuration written back to disk atomically,AtomicFileConfigurationWriter.cs,GeinforScheduler/Infrastructure/Adapters/AtomicFileConfigurationWriter.cs,1,1,0.8855,1.0,28.06
+csharp,ConfigurationProviderAdapter settings reload,ConfigurationProviderAdapter.cs,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,1,0.3707,0.125,27.93
+csharp,how does file change trigger config reload,ConfigFileChangeHandler.cs,GeinforScheduler/Infrastructure/Configuration/IConfigurationService.cs,0,1,0.5204,0.2,24.25
+csharp,application settings domain model,ApplicationSettings.cs,docs/archive/REFACTORING_ROADMAP.md,0,1,0.3333,0.1429,27.31
+csharp,update settings configuration use case,UpdateSettingsConfigurationUseCase.cs,GeinforScheduler/Application/UseCases/Configuration/IGetSettingsUseCase.cs,0,1,0.3869,0.2,22.27
+csharp,CronTaskScheduler next fire time,CronTaskScheduler.cs,docs/superpowers/specs/2026-05-06-v1.15-notifications-overhaul-design.md,0,1,0.3155,0.125,28.54
+csharp,cron expression evaluator parse validate,CronExpressionEvaluator.cs,GeinforScheduler/Application/UseCases/Scheduling/IValidateCronExpressionUseCase.cs,0,0,0.0,0.0,28.89
+csharp,SchedulingOrchestrator worker dispatch loop,SchedulingOrchestrator.cs,GeinforScheduler.Tests/Integration/SystemErrorEmailSinkIntegrationTests.cs,0,0,0.0,0.0,29.22
+csharp,how is a task triggered manually on demand,TriggerTaskNowUseCase.cs,GeinforScheduler.Tests/Unit/Application/Scheduling/InMemoryTaskStateManagerInitTests.cs,0,0,0.0,0.0,28.85
+csharp,InMemoryTaskStateManager task lifecycle state,InMemoryTaskStateManager.cs,docs/archive/SEMANA_3_QUICK_REFERENCE.md,0,0,0.0,0.0,27.42
+csharp,how does the watchdog detect a stuck task,WatchdogMonitor.cs,GeinforScheduler/Application/Scheduling/IWatchdogMonitor.cs,1,1,0.8772,1.0,26.54
+csharp,home page Blazor dashboard component,Home.razor,docs/superpowers/plans/2026-04-20-web-panel.md,0,0,0.0,0.0,31.36
+csharp,task edit razor page form bindings,TaskEdit.razor,docs/superpowers/plans/2026-04-22-task-scheduler-features.md,0,0,0.0,0.0,29.06
+csharp,logs page Blazor tail log viewer,Logs.razor,GeinforScheduler/Application/UseCases/Logs/TailLogFileUseCase.cs,0,0,0.0,0.0,26.53
+csharp,ServiceStatusBadge component web UI,ServiceStatusBadge.razor,GeinforScheduler/Application/UseCases/Scheduler/IGetServiceStatusUseCase.cs,0,0,0.0,0.0,32.67
+csharp,BushidoLogSource,BushidoLogSource.cs,GeinforScheduler/Domain/Ports/IBushidoLogScanner.cs,0,0,0.0,0.0,38.93
+csharp,TaskExecutor,TaskExecutor.cs,docs/archive/SEMANA_3_QUICK_REFERENCE.md,0,1,0.6189,0.5,50.27
+csharp,WebPanelServiceCollectionExtensions,WebPanelServiceCollectionExtensions.cs,docs/superpowers/plans/2026-04-20-web-panel.md,0,1,0.4575,0.25,35.91
+python,create user endpoint POST route,routers/users.py,src/app/routers/users.py,1,1,0.8036,1.0,17.81
+python,list users endpoint pagination,routers/users.py,src/app/routers/users.py,1,1,0.7977,1.0,25.58
+python,delete user by id route,routers/users.py,src/app/routers/users.py,1,1,0.7904,1.0,17.43
+python,get user by id endpoint handler,routers/users.py,src/app/routers/users.py,1,1,0.8385,1.0,16.78
+python,create item endpoint with owner,routers/items.py,src/app/routers/items.py,1,1,1.0,1.0,18.24
+python,list items route with skip and limit,routers/items.py,src/app/routers/items.py,1,1,1.0,1.0,17.01
+python,update item partial patch endpoint,routers/items.py,src/app/routers/items.py,1,1,0.7904,1.0,17.31
+python,login endpoint username password authentication,routers/auth.py,src/app/schemas/auth.py,0,1,0.5,0.3333,17.77
+python,refresh token route exchange token pair,routers/auth.py,src/app/routers/auth.py,1,1,0.7904,1.0,18.14
+python,pydantic UserCreate schema with email and password,schemas/user.py,src/app/schemas/user.py,1,1,1.0,1.0,16.81
+python,UserRead response model pydantic,schemas/user.py,src/app/schemas/user.py,1,1,0.8711,1.0,17.85
+python,ItemCreate pydantic schema for new items,schemas/item.py,src/app/services/item_service.py,0,1,0.4144,0.2,19.0
+python,ItemUpdate schema optional title description,schemas/item.py,src/app/schemas/item.py,1,1,0.9675,1.0,19.36
+python,TokenResponse schema access refresh token fields,schemas/auth.py,src/app/schemas/auth.py,1,1,0.9197,1.0,19.75
+python,SQLAlchemy User model table columns,models/user.py,src/app/database.py,0,1,0.6309,0.5,15.95
+python,Item SQLAlchemy database model owner foreign key,models/item.py,src/app/models/item.py,1,1,1.0,1.0,18.03
+python,password hashing function bcrypt,services/auth_service.py,src/app/services/auth_service.py,1,1,0.9197,1.0,16.19
+python,JWT access token encoding function,services/auth_service.py,src/app/services/auth_service.py,1,1,1.0,1.0,14.38
+python,verify token decode JWT payload,services/auth_service.py,src/app/services/auth_service.py,1,1,1.0,1.0,15.25
+python,create refresh token long lived JWT,services/auth_service.py,src/app/services/auth_service.py,1,1,0.9218,1.0,20.58
+python,user service business logic create account,services/user_service.py,src/app/routers/users.py,0,1,0.6934,0.5,19.34
+python,item service list items by owner,services/item_service.py,src/app/services/item_service.py,1,1,0.9134,1.0,20.99
+python,user database queries find by email,repositories/user_repository.py,src/app/repositories/user_repository.py,1,1,0.927,1.0,18.73
+python,get user by email SQLAlchemy query,repositories/user_repository.py,src/app/repositories/user_repository.py,1,1,0.9512,1.0,18.69
+python,item repository list items by owner id,repositories/item_repository.py,src/app/repositories/item_repository.py,1,1,1.0,1.0,16.8
+python,SQLAlchemy session factory database engine setup,database.py,src/app/database.py,1,1,0.818,1.0,17.68
+python,test create user endpoint 201 response,tests/test_users.py,tests/test_users.py,1,1,0.9797,1.0,15.58
+python,test login flow returns access token,tests/test_auth.py,tests/test_auth.py,1,1,1.0,1.0,18.45
+python,UserService class create_user method,services/user_service.py,src/app/routers/users.py,0,1,0.6241,0.5,18.09
+python,ItemRepository class SQLAlchemy CRUD operations,repositories/item_repository.py,src/app/services/item_service.py,0,1,0.6559,0.3333,18.36
+python,get_settings,config.py,src/app/config.py,1,1,0.8503,1.0,16.57
+python,TokenPayload,schemas/auth.py,src/app/schemas/auth.py,1,1,0.8396,1.0,18.21
+python,hash_password,services/auth_service.py,src/app/services/auth_service.py,1,1,0.8175,1.0,19.57
+typescript,verifyToken,src/services/authService.ts,src/services/authService.ts,1,1,0.8486,1.0,15.87
+typescript,errorHandler,src/middleware/errorHandler.ts,src/middleware/errorHandler.ts,1,1,1.0,1.0,15.01
+typescript,JwtPayload,src/types/jwt.ts,src/middleware/authMiddleware.ts,0,1,0.5803,0.5,20.81
+typescript,login endpoint route post credentials,src/routes/auth.ts,src/routes/auth.ts,1,1,1.0,1.0,19.05
+typescript,refresh token route exchange token pair,src/routes/auth.ts,src/types/jwt.ts,0,1,0.6309,0.5,19.55
+typescript,create user route POST endpoint,src/routes/users.ts,src/routes/users.ts,1,1,1.0,1.0,18.36
+typescript,delete user endpoint by id,src/routes/users.ts,src/controllers/usersController.ts,0,1,0.5,0.3333,15.8
+typescript,list users route protected,src/routes/users.ts,src/routes/users.ts,1,1,1.0,1.0,12.3
+typescript,create item endpoint owned by user,src/routes/items.ts,src/controllers/itemsController.ts,0,1,0.6309,0.5,13.52
+typescript,delete item endpoint route,src/routes/items.ts,src/controllers/itemsController.ts,0,1,0.5,0.3333,15.88
+typescript,update item partial patch route,src/routes/items.ts,src/services/itemService.ts,0,1,0.5,0.3333,15.75
+typescript,auth controller login handler email password,src/controllers/authController.ts,src/routes/auth.ts,0,1,0.3562,0.1667,16.18
+typescript,user controller create handler 201 response,src/controllers/usersController.ts,src/controllers/usersController.ts,1,1,0.867,1.0,16.45
+typescript,item controller list items by authenticated owner,src/controllers/itemsController.ts,src/services/itemService.ts,0,1,0.4825,0.25,16.21
+typescript,auth service JWT sign verify bcrypt,src/services/authService.ts,src/services/authService.ts,1,1,0.9709,1.0,16.46
+typescript,hash password bcrypt rounds,src/services/authService.ts,src/services/authService.ts,1,1,1.0,1.0,16.02
+typescript,user service create account business logic,src/services/userService.ts,tests/users.test.ts,0,1,0.3562,0.1667,17.47
+typescript,get user by email lookup function,src/services/userService.ts,src/services/userService.ts,1,1,0.9651,1.0,19.31
+typescript,item service list items by owner id,src/services/itemService.ts,src/services/itemService.ts,1,1,1.0,1.0,18.4
+typescript,zod schema user validation email username password,src/validators/userValidators.ts,src/types/user.ts,0,1,0.5706,0.3333,18.93
+typescript,item create validator zod schema title description,src/validators/itemValidators.ts,src/types/item.ts,0,1,0.4825,0.25,18.5
+typescript,User interface TypeScript email username passwordHash,src/types/user.ts,src/types/user.ts,1,1,1.0,1.0,17.36
+typescript,JWT payload interface sub type access refresh,src/types/jwt.ts,src/types/jwt.ts,1,1,1.0,1.0,15.1
+typescript,Item interface TypeScript ownerId title description,src/types/item.ts,src/types/item.ts,1,1,1.0,1.0,18.14
+typescript,JWT auth middleware Bearer token verification,src/middleware/authMiddleware.ts,src/services/authService.ts,0,1,0.4144,0.2,19.0
+typescript,global error handler Express ZodError status,src/middleware/errorHandler.ts,src/middleware/errorHandler.ts,1,1,1.0,1.0,15.02
+typescript,request logger middleware response time log,src/middleware/requestLogger.ts,src/middleware/requestLogger.ts,1,1,1.0,1.0,15.62
+typescript,test login endpoint returns access token,tests/auth.test.ts,tests/auth.test.ts,1,1,0.8503,1.0,18.48
+typescript,test create user endpoint 201 status,tests/users.test.ts,tests/users.test.ts,1,1,0.8772,1.0,19.13
+typescript,test create item owned by authenticated user,tests/items.test.ts,tests/items.test.ts,1,1,0.9197,1.0,15.67
+typescript,express app initialization mount routers,src/app.ts,src/routes/auth.ts,0,1,0.5,0.3333,16.16
+typescript,server listen port entry point,src/server.ts,src/server.ts,1,1,1.0,1.0,18.26
+typescript,zod env config validated environment variables,src/config.ts,src/config.ts,1,1,1.0,1.0,18.14
