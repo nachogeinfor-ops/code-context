@@ -1,5 +1,90 @@
 # Changelog
 
+## v1.3.0 — 2026-05-07
+
+Sprint 11 ships. **Language reach.** Tree-sitter chunking and symbol extraction extended to Java, C++, and Markdown. Three new languages join the existing six (Python, JavaScript, TypeScript, Go, Rust, C#), bringing the AST-chunked total to **9 languages**. Comes with a `chunker_version` bump to `treesitter-v3` that triggers a one-time automatic full reindex on first v1.3.0 startup.
+
+### New languages
+
+#### Java (T3)
+
+New extension: `.java`.
+
+- Chunk kinds: `class`, `method`, `constructor`, `interface`, `enum`, `record`.
+- `extract_definitions` populates the symbol index for all kinds; `find_definition("MyService")` and `find_references("MyService")` now work on Java source.
+- Grammar: `tree-sitter-java` (bundled in `tree-sitter-language-pack` — no new install dependency).
+
+#### C++ (T4)
+
+New extensions: `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.h` (7 extensions total).
+
+- Chunk kinds: `class`, `struct`, `function`, `namespace`, `template`.
+- **Template handling**: a `template_declaration` wrapping a class or function is emitted as a single chunk. `_kind_from_node` descends into the inner declaration to derive the actual kind (`class`, `struct`, or `function`) so the symbol DB records `"class"` not `"template"`. `_dedup_contained_nodes` removes any inner node already covered by an outer template wrapper.
+- **`.h` files**: treated as C++ (tree-sitter-cpp accepts C as a subset). Pure C headers parse correctly; symbol kinds read `function` for C function declarations, which is acceptable.
+- Grammar: `tree-sitter-cpp` (bundled in `tree-sitter-language-pack`).
+
+#### Markdown (T5)
+
+New extensions: `.md`, `.markdown`.
+
+- **Section-based chunking**: each heading (ATX `#` or setext underline) plus all content until the next heading at the same or higher level becomes one chunk. Heading hierarchy is preserved.
+- **Hard cap**: sections longer than 200 lines fall back to the line chunker (50-line windows, 10-line overlap) for that section only. This prevents oversized sections from producing unwieldy chunks.
+- `extract_definitions` returns `kind="section"` with the heading text as the symbol name, so `find_definition("Configuration")` can locate a Markdown doc section.
+- Grammar: `tree-sitter-markdown` (bundled in `tree-sitter-language-pack`).
+
+### Dispatch consolidation (T6)
+
+`EXT_TO_LANG` is now the **single source of truth** for the extension → language mapping. The dispatcher derives its `_TREESITTER_EXTS` set directly from `EXT_TO_LANG` at import time, eliminating an earlier silent routing bug where Java (`.java`) and C++ (`.cpp`, `.hpp`, …) extensions were present in the config table but not in the dispatcher's routing set between the T3/T4 commits and T6. A parametrized routing test covers all 18 tree-sitter extensions plus the line-fallback path.
+
+### Schema bump — chunker_version v2 → v3 (T7)
+
+`metadata.json.chunker_version` bumps from `treesitter-v2` to `treesitter-v3`.
+
+> **ACTION REQUIRED for large repos:** the `chunker_version` bump triggers an **automatic full reindex on first v1.3.0 startup** via the existing `dirty_set` model-id staleness check. For a ~300-file repo this is roughly 3-5 minutes cold. No user action is needed — the reindex runs automatically in the background — but plan for the one-time wait before expecting Java, C++, and Markdown files to return AST-aligned results.
+
+### Behavior change — Markdown indexing displaces source in search_repo (T5 + T8)
+
+> **Behavior change**: With improved Markdown indexing (T5), `search_repo()` queries with natural-language wording (e.g., "settings configuration loading rules") may now surface relevant docs sections instead of source code. This is a side-effect of markdown chunks being semantically coherent rather than 50-line windows. For exact source lookups, use `find_definition()` (which already has source-tier ranking from v1.2.0). A future release will extend source-tier ranking to `search_repo` to address this ranking displacement.
+
+The T8 eval confirmed this. See "Eval baseline" below for numbers.
+
+### Eval baseline (T8)
+
+Combined NDCG@10 (hybrid_rerank, 129 queries × 3 repos) = **0.5735** (was **0.6173** in v1.2.0, Δ -0.044). **Driver: Markdown displacement on the C# eval set.** No chunker bugs were found — the C# query path is byte-identical between v1.2.0 and v1.3.0.
+
+Per-repo (hybrid_rerank):
+
+| Repo | v1.2.0 | v1.3.0 | Δ | Notes |
+|---|---|---|---|---|
+| csharp (63 q) | 0.4315 | 0.3425 | -0.089 | Markdown displacement — 24 queries regressed >0.01 NDCG; 7 had top1 switch from .cs → .md |
+| python (33 q) | 0.8265 | 0.8265 | 0.000 | Pixel-perfect |
+| typescript (33 q) | 0.7783 | 0.7783 | 0.000 | Pixel-perfect |
+
+Combined hit@10: 106/129 → 95/129 (expected source files displaced from top10 by Markdown section chunks on csharp queries). The regression is structural — Markdown sections now rank higher on natural-language queries — and is the intended side-effect of T5. Sprint 12 will address `search_repo` source-tier ranking to restore hybrid csharp NDCG.
+
+### Tests
+
+**~371 passing** (was 324 in v1.2.0; +47 across Sprint 11 tasks):
+
+- T1: regression test pinning the `frozenset` of supported languages and the `EXT_TO_LANG` dict; catches language/extension drift between code and docs.
+- T3: Java tree-sitter unit tests (class/method/constructor/interface/enum/record chunking, symbol extraction).
+- T4: C++ tree-sitter unit tests (class/struct/function/namespace/template chunking, `_dedup_contained_nodes` for template wrappers, `.h` extension routing).
+- T5: Markdown section chunking unit tests (ATX + setext headings, hard cap fallback at 200 lines, `extract_definitions` kind=section).
+- T6: Parametrized dispatcher routing test — 18 tree-sitter extensions + line-fallback for unknown extensions.
+- T7: `dirty_set` triggers full reindex on `treesitter-v2` → `treesitter-v3` version drift.
+
+Lint (`ruff check` + `ruff format --check`) clean.
+
+### Migration
+
+> **One-time reindex required.** First v1.3.0 startup automatically triggers a full reindex (see schema bump note above). No env var changes, no manual steps.
+
+Existing call patterns, env var names, MCP tool signatures, CLI subcommands, and Python imports are **unchanged**.
+
+For source-exact lookups on repos with rich Markdown documentation, prefer `find_definition()` over `search_repo()` until Sprint 12 ships source-tier ranking for `search_repo`.
+
+---
+
 ## v1.2.0 — 2026-05-06
 
 Sprint 10 ships. **Retrieval quality hardening.** Two opt-in env vars

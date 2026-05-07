@@ -135,11 +135,12 @@ chunk's snippet text is stored once). For a 50K-file repo, expect
 SQLite-backed symbol index that is populated at reindex time:
 
 - **Definitions** come from `TreeSitterChunker.extract_definitions`. Each
-  function/class/method/struct/enum/interface/record node in a Py/JS/TS/
-  Go/Rust/C# file produces a row in the `symbol_defs` table with `name`,
-  `path`, `line_start`, `line_end`, `kind`, `language`. `find_definition`
-  is a single indexed SQL lookup on `name` (optionally narrowed by
-  `language`).
+  function/class/method/struct/enum/interface/record/section node in a
+  Py/JS/TS/Go/Rust/C#/Java/C++/Markdown file produces a row in the
+  `symbol_defs` table with `name`, `path`, `line_start`, `line_end`,
+  `kind`, `language`. `find_definition` is a single indexed SQL lookup on
+  `name` (optionally narrowed by `language`). For Markdown files, the
+  symbol name is the heading text and `kind` is `section`.
 - **References** come from the FTS5-indexed snippet text of every chunk
   emitted by the chunker (tree-sitter or LineChunker fallback). FTS5
   unicode61 tokenizer matches the symbol; a word-boundary regex
@@ -274,11 +275,38 @@ No new env vars in v0.7.0.
 
 ## Chunking strategies
 
-Default (`CC_CHUNKER=treesitter`): for files with extensions `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.go`, `.rs`, `.cs`, the chunker uses tree-sitter to cut along function/class/method boundaries. Each chunk is a complete semantic unit. For everything else (markdown, JSON, YAML, Java, …) the chunker falls back to a line-window (50 lines + 10 overlap by default). Tree-sitter parse errors also fall back to line-window so no file is ever lost from the index.
+Default (`CC_CHUNKER=treesitter`): for files whose extensions appear in the support matrix below, the chunker uses tree-sitter to cut along function/class/method/section boundaries. Each chunk is a complete semantic unit. For all other file types (JSON, YAML, plain text, …) the chunker falls back to a line-window (50 lines + 10 overlap by default). Tree-sitter parse errors also fall back to line-window so no file is ever lost from the index.
 
 `CC_CHUNKER=line` restores v0.1.x behavior: every file is chunked by line-window. Use this if tree-sitter parsers cause issues on your platform or if you need byte-for-byte reproducibility with a v0.1.x index.
 
 The chunker version is encoded in `metadata.json.chunker_version`. Switching `CC_CHUNKER` triggers an automatic full reindex on next start because `IndexerUseCase.dirty_set()` sees the version drift.
+
+### Tree-sitter chunker support matrix (v1.3.0)
+
+9 languages receive AST-aligned chunks. `extract_definitions` populates the symbol index for `find_definition` / `find_references`.
+
+| Language | Extensions | Chunk kinds | Symbol kinds extracted |
+|---|---|---|---|
+| Python | `.py` | function, class, method | function, class, method |
+| JavaScript | `.js`, `.jsx` | function, class, method, arrow function | function, class, method |
+| TypeScript | `.ts`, `.tsx` | function, class, method, interface, type alias | function, class, method, interface |
+| Go | `.go` | function, method, struct, interface | function, method, struct, interface |
+| Rust | `.rs` | function, impl block, struct, enum, trait | function, struct, enum, trait |
+| C# | `.cs` | class, method, constructor, interface, struct, enum, record, namespace | class, method, constructor, interface, struct, enum, record |
+| Java | `.java` | class, method, constructor, interface, enum, record | class, method, constructor, interface, enum, record |
+| C++ | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx`, `.h` | class, struct, function, namespace, template | class, struct, function |
+| Markdown | `.md`, `.markdown` | section (heading + content) | section (heading text as name) |
+
+**C++ template handling.** A `template_declaration` wrapping a class or function is treated as a single chunk; `_kind_from_node` descends into the inner declaration to derive the kind (`class`, `struct`, or `function`). This avoids double-counting the outer template and the inner definition.
+
+**`.h` files.** Header files (`.h`) are parsed as C++ since tree-sitter-cpp accepts C as a strict subset. Pure C headers parse correctly; the symbol kind may read `function` for a C function declaration, which is acceptable.
+
+**Markdown section chunking.** Sections are defined as "heading + all content until the next heading at the same or higher level." Each section becomes one chunk.
+
+- `extract_definitions` returns `kind="section"` with the heading text as the name, so `find_definition("Configuration")` can locate a docs section.
+- **Hard cap**: sections longer than 200 lines fall back to the line chunker (50-line windows, 10-line overlap) for that section only. This prevents a single giant section from producing an unwieldy chunk.
+
+**Unchanged languages.** Python, JavaScript, TypeScript, Go, Rust, and C# were already tree-sitter-chunked in v1.2.0. The extension → language mapping (`EXT_TO_LANG`) is now the single source of truth; the dispatcher derives its routing table from it, eliminating the possibility of an extension being in the config table but missed by the dispatcher.
 
 ## Index lifecycle (v0.8.0+)
 

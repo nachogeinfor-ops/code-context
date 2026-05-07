@@ -17,7 +17,7 @@ When you point Claude Code at a repo, you give it `CLAUDE.md` for static context
 - **`search_repo(query, top_k?, scope?)`** — **hybrid retrieval** across the codebase: vector embeddings (semantic) fused with BM25 keyword search (exact identifiers) via Reciprocal Rank Fusion. Optional cross-encoder reranking (off by default — enable with `CC_RERANK=on`).
 - **`recent_changes(since?, paths?, max?)`** — recent git commits, optionally filtered.
 - **`get_summary(scope?, path?)`** — structured project summary (name, stack, key modules, stats).
-- **`find_definition(name, language?, max?)`** — locate where a symbol (function, class, method, type) is defined. Use INSTEAD of `Grep` for `def X` / `class X` / `function X` patterns. Returns repo-relative paths with line ranges and the symbol's kind (function, class, method, interface, struct, enum, record).
+- **`find_definition(name, language?, max?)`** — locate where a symbol (function, class, method, type) is defined. Use INSTEAD of `Grep` for `def X` / `class X` / `function X` patterns. Returns repo-relative paths with line ranges and the symbol's kind (function, class, method, interface, struct, enum, record). For Markdown files, also finds doc sections by heading text (kind = `section`).
 - **`find_references(name, max?)`** — list every line mentioning a named symbol. Use INSTEAD of `grep -n "X"` when the user asks "who calls X?" or "where is X used?". Word-boundary matched, so `log` doesn't return `logger`.
 - **`get_file_tree(path?, max_depth?, include_hidden?)`** — repo-relative directory tree, gitignore-aware. Use INSTEAD of `Bash: ls -R` or `Bash: tree` for orientation prompts ("show me the project structure", "what's in this module?"). Returns hierarchical FileTreeNode with file sizes; honors `.gitignore`; defaults to depth 4.
 - **`explain_diff(ref, max_chunks?)`** — AST-aligned chunks affected by the diff at `ref` (full SHA, `HEAD`, `HEAD~N`, branch). Use INSTEAD of `Bash: git show <sha>` for "what does this commit do" questions. The chunker resolves which whole functions/classes were touched, not raw line additions.
@@ -111,7 +111,7 @@ Configured via env vars. See [`docs/configuration.md`](docs/configuration.md) fo
 | `CC_EMBEDDINGS` | `local` (or `openai`) |
 | `CC_EMBEDDINGS_MODEL` | `all-MiniLM-L6-v2` |
 | `CC_INCLUDE_EXTENSIONS` | `.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.md,.yaml,.yml,.json` |
-| `CC_CHUNKER` | `treesitter` (AST-aware for Py/JS/TS/Go/Rust/C#, line fallback) — set `line` for v0.1.x behavior |
+| `CC_CHUNKER` | `treesitter` (AST-aware for 9 languages: Python, JavaScript, TypeScript, Go, Rust, C#, Java, C++, Markdown — line fallback for the rest) — set `line` for v0.1.x behavior |
 | `CC_CACHE_DIR` | platformdirs user cache |
 
 ## Documentation

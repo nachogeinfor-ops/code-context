@@ -71,7 +71,7 @@ All env vars use the `CC_` prefix.
 | `CC_TOP_K_DEFAULT` | `5` | v0.1 | Default `top_k` for `search_repo`. |
 | `CC_CHUNK_LINES` | `50` | v0.1 | Line-window chunker chunk size. |
 | `CC_CHUNK_OVERLAP` | `10` | v0.1 | Line-window overlap. |
-| `CC_CHUNKER` | `treesitter` | v0.2 | `treesitter` (AST for Py/JS/TS/Go/Rust/C# + line fallback) or `line`. |
+| `CC_CHUNKER` | `treesitter` | v0.2 | `treesitter` (AST for 9 languages: Python, JavaScript, TypeScript, Go, Rust, C#, Java, C++, Markdown — line fallback for the rest) or `line`. |
 | `CC_KEYWORD_INDEX` | `sqlite` | v0.4 | `sqlite` (FTS5 BM25) or `none` (vector-only). |
 | `CC_RERANK` | `off` | v0.4 | `on` enables cross-encoder reranking. |
 | `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | v0.4 | Cross-encoder model id. |
@@ -166,7 +166,8 @@ table:
 | v0.5.x | v1.1 | v0.2.x |
 | v0.6.x – v0.9.x | v1.2 | v0.3.x |
 | v1.0.x – v1.1.x | v1.2 | v0.3.x |
-| **v1.2.x** | **v1.2** | **v0.3.x** |
+| v1.2.x | v1.2 | v0.3.x |
+| **v1.3.x** | **v1.2** | **v0.3.x** |
 
 Bumping the protocol to v2 will require both repos to release in
 sync — see [`docs/release.md`](release.md) for the coordination
