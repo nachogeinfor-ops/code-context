@@ -16,13 +16,21 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from code_context._telemetry import (
+    _HEARTBEAT_INTERVAL_SECONDS,
     TelemetryClient,
+    TelemetryHeartbeatThread,
+    _compute_repo_size_bucket,
+    _load_state,
     _load_telemetry_config,
+    _save_state,
     _TelemetryConfig,
 )
 
@@ -412,3 +420,219 @@ def _make_mock_posthog_module() -> MagicMock:
     mock_instance = MagicMock()
     mock_module.Posthog = MagicMock(return_value=mock_instance)
     return mock_module
+
+
+# ---------------------------------------------------------------------------
+# T3 — _compute_repo_size_bucket
+# ---------------------------------------------------------------------------
+
+
+def test_compute_repo_size_bucket_boundaries() -> None:
+    """Verify every boundary for the four size buckets."""
+    assert _compute_repo_size_bucket(0) == "S"
+    assert _compute_repo_size_bucket(999) == "S"
+    assert _compute_repo_size_bucket(1000) == "M"
+    assert _compute_repo_size_bucket(9999) == "M"
+    assert _compute_repo_size_bucket(10000) == "L"
+    assert _compute_repo_size_bucket(99999) == "L"
+    assert _compute_repo_size_bucket(100000) == "XL"
+    assert _compute_repo_size_bucket(1_000_000) == "XL"
+
+
+# ---------------------------------------------------------------------------
+# T3 — _load_state / _save_state round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_state_save_and_load_roundtrip(tmp_path: Path) -> None:
+    """_save_state writes JSON and _load_state reads it back faithfully."""
+    state = {"last_heartbeat_ts": 1714984800.0, "last_heartbeat_version": "1.3.0"}
+    _save_state(tmp_path, state)
+    loaded = _load_state(tmp_path)
+    assert loaded["last_heartbeat_ts"] == pytest.approx(1714984800.0)
+    assert loaded["last_heartbeat_version"] == "1.3.0"
+
+
+def test_load_state_missing_file_returns_empty(tmp_path: Path) -> None:
+    """_load_state returns {} when the state file does not exist."""
+    assert _load_state(tmp_path) == {}
+
+
+def test_load_state_malformed_returns_empty(tmp_path: Path) -> None:
+    """_load_state returns {} for corrupt JSON without raising."""
+    (tmp_path / ".telemetry_state.json").write_text("not valid json", encoding="utf-8")
+    assert _load_state(tmp_path) == {}
+
+
+# ---------------------------------------------------------------------------
+# T3 — TelemetryHeartbeatThread._should_send_heartbeat
+# ---------------------------------------------------------------------------
+
+
+def test_should_send_heartbeat_first_time(tmp_path: Path) -> None:
+    """Empty state (last_ts=0) → should always fire."""
+    client = TelemetryClient(_enabled_cfg(tmp_path))
+    thread = TelemetryHeartbeatThread(client=client)
+    assert thread._should_send_heartbeat(now=1_000_000.0, last_ts=0.0) is True
+
+
+def test_should_send_heartbeat_after_7_days(tmp_path: Path) -> None:
+    """last_ts 8 days ago → should fire."""
+    client = TelemetryClient(_enabled_cfg(tmp_path))
+    thread = TelemetryHeartbeatThread(client=client)
+    now = 1_000_000.0
+    last_ts = now - (8 * 86400)
+    assert thread._should_send_heartbeat(now=now, last_ts=last_ts) is True
+
+
+def test_should_send_heartbeat_within_7_days(tmp_path: Path) -> None:
+    """last_ts 3 days ago → should NOT fire."""
+    client = TelemetryClient(_enabled_cfg(tmp_path))
+    thread = TelemetryHeartbeatThread(client=client)
+    now = 1_000_000.0
+    last_ts = now - (3 * 86400)
+    assert thread._should_send_heartbeat(now=now, last_ts=last_ts) is False
+
+
+def test_should_send_heartbeat_exactly_7_days(tmp_path: Path) -> None:
+    """Exactly 7 days = boundary: should fire (>= check)."""
+    client = TelemetryClient(_enabled_cfg(tmp_path))
+    thread = TelemetryHeartbeatThread(client=client)
+    now = 1_000_000.0
+    last_ts = now - _HEARTBEAT_INTERVAL_SECONDS
+    assert thread._should_send_heartbeat(now=now, last_ts=last_ts) is True
+
+
+# ---------------------------------------------------------------------------
+# T3 — TelemetryHeartbeatThread thread behaviour (mock clock, no real sleep)
+# ---------------------------------------------------------------------------
+
+
+def _make_enabled_thread(
+    tmp_path: Path,
+    mock_posthog_module: MagicMock,
+    clock_fn: Callable[[], float],
+    chunk_count_fn: Callable[[], int] | None = None,
+) -> TelemetryHeartbeatThread:
+    """Build a real TelemetryHeartbeatThread with injected mock clock."""
+    cfg = _enabled_cfg(tmp_path)
+    client = TelemetryClient(cfg)
+    thread = TelemetryHeartbeatThread(
+        client=client,
+        chunk_count_fn=chunk_count_fn,
+        clock_fn=clock_fn,
+        check_interval_seconds=0.01,  # poll fast in tests
+    )
+    return thread
+
+
+def test_heartbeat_thread_skips_when_recent(tmp_path: Path) -> None:
+    """Thread fires no heartbeat when last_ts is only 3 days ago."""
+    mock_posthog_module = _make_mock_posthog_module()
+    now = 1_000_000.0
+    # Pre-write a state that is 3 days old
+    _save_state(tmp_path, {"last_heartbeat_ts": now - 3 * 86400})
+
+    with patch.dict(sys.modules, {"posthog": mock_posthog_module}):
+        thread = _make_enabled_thread(tmp_path, mock_posthog_module, clock_fn=lambda: now)
+        # _maybe_send_heartbeat runs synchronously — test it directly (no real thread)
+        thread._maybe_send_heartbeat()
+
+    mock_posthog_module.Posthog.return_value.capture.assert_not_called()
+
+
+def test_heartbeat_thread_fires_after_interval(tmp_path: Path) -> None:
+    """Thread fires exactly one heartbeat when last_ts is 8 days ago."""
+    mock_posthog_module = _make_mock_posthog_module()
+    now = 1_000_000.0
+    _save_state(tmp_path, {"last_heartbeat_ts": now - 8 * 86400})
+
+    with patch.dict(sys.modules, {"posthog": mock_posthog_module}):
+        thread = _make_enabled_thread(tmp_path, mock_posthog_module, clock_fn=lambda: now)
+        thread._maybe_send_heartbeat()
+
+    mock_instance = mock_posthog_module.Posthog.return_value
+    assert mock_instance.capture.call_count == 1
+    props = mock_instance.capture.call_args[1]["properties"]
+    assert props["repo_size_bucket"] == "unknown"  # no chunk_count_fn provided
+
+
+def test_heartbeat_thread_writes_state_after_fire(tmp_path: Path) -> None:
+    """After firing, state file must contain the new timestamp."""
+    mock_posthog_module = _make_mock_posthog_module()
+    now = 9_999_999.0
+    # No prior state → will fire
+    with patch.dict(sys.modules, {"posthog": mock_posthog_module}):
+        thread = _make_enabled_thread(tmp_path, mock_posthog_module, clock_fn=lambda: now)
+        thread._maybe_send_heartbeat()
+
+    state = _load_state(tmp_path)
+    assert state["last_heartbeat_ts"] == pytest.approx(now)
+    assert "last_heartbeat_version" in state
+
+
+def test_heartbeat_thread_uses_chunk_count_fn(tmp_path: Path) -> None:
+    """chunk_count_fn result maps to the correct bucket in the heartbeat."""
+    mock_posthog_module = _make_mock_posthog_module()
+    now = 1_000_000.0
+    # No prior state → fires
+    with patch.dict(sys.modules, {"posthog": mock_posthog_module}):
+        thread = _make_enabled_thread(
+            tmp_path,
+            mock_posthog_module,
+            clock_fn=lambda: now,
+            chunk_count_fn=lambda: 5000,  # 1000–9999 → "M"
+        )
+        thread._maybe_send_heartbeat()
+
+    props = mock_posthog_module.Posthog.return_value.capture.call_args[1]["properties"]
+    assert props["repo_size_bucket"] == "M"
+
+
+def test_heartbeat_thread_handles_chunk_count_exception(tmp_path: Path) -> None:
+    """chunk_count_fn that raises → bucket defaults to 'unknown', heartbeat still fires."""
+    mock_posthog_module = _make_mock_posthog_module()
+    now = 1_000_000.0
+
+    def _bad_fn() -> int:
+        raise RuntimeError("store not ready")
+
+    with patch.dict(sys.modules, {"posthog": mock_posthog_module}):
+        thread = _make_enabled_thread(
+            tmp_path,
+            mock_posthog_module,
+            clock_fn=lambda: now,
+            chunk_count_fn=_bad_fn,
+        )
+        thread._maybe_send_heartbeat()
+
+    mock_instance = mock_posthog_module.Posthog.return_value
+    assert mock_instance.capture.call_count == 1
+    props = mock_instance.capture.call_args[1]["properties"]
+    assert props["repo_size_bucket"] == "unknown"
+
+
+def test_heartbeat_thread_disabled_when_client_disabled(tmp_path: Path) -> None:
+    """When TelemetryClient is disabled, the thread should not be started at all.
+
+    This mirrors the composition layer contract: when cfg.telemetry=False
+    we never instantiate TelemetryHeartbeatThread.  The test documents that
+    a thread built with a disabled client fires no captures.
+    """
+    mock_posthog_module = _make_mock_posthog_module()
+    now = 1_000_000.0
+
+    # Use a *disabled* client
+    cfg = _disabled_cfg(tmp_path)
+    client = TelemetryClient(cfg)
+    with patch.dict(sys.modules, {"posthog": mock_posthog_module}):
+        thread = TelemetryHeartbeatThread(client=client, clock_fn=lambda: now)
+        thread._maybe_send_heartbeat()
+
+    # heartbeat() on a disabled client is a no-op → capture never called
+    mock_posthog_module.Posthog.return_value.capture.assert_not_called()
+    # State file should still be written (scheduler writes regardless)
+    # Actually: _fire_heartbeat calls client.heartbeat (no-op) then _save_state.
+    # Verify state IS written so the scheduler doesn't spam even when disabled.
+    state = _load_state(tmp_path)
+    assert "last_heartbeat_ts" in state

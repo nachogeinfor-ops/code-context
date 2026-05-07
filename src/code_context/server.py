@@ -37,6 +37,11 @@ from code_context._composition import (
     make_reload_callback,
     setup_logging,
 )
+from code_context._telemetry import (
+    TelemetryClient,
+    TelemetryHeartbeatThread,
+    _load_telemetry_config,
+)
 from code_context._watcher import RepoWatcher
 from code_context.adapters.driving.mcp_server import register
 from code_context.config import Config, load_config
@@ -93,6 +98,18 @@ async def _run_server(cfg: Config) -> None:
         bg.trigger()  # kick off initial dirty_set + (full or incremental) reindex
         log.info("background indexer started (idle=%.2fs)", cfg.bg_idle_seconds)
 
+    heartbeat_thread = None
+    if cfg.telemetry:
+        tconf = _load_telemetry_config(cfg)
+        tel_client = TelemetryClient(tconf)
+        heartbeat_thread = TelemetryHeartbeatThread(
+            client=tel_client,
+            # chunk_count_fn: len of the store's internal chunk list
+            chunk_count_fn=lambda: len(store._chunks),
+        )
+        heartbeat_thread.start()
+        log.info("telemetry heartbeat scheduler started")
+
     watcher = None
     if cfg.watch and bg is not None:
         watcher = RepoWatcher(
@@ -133,6 +150,9 @@ async def _run_server(cfg: Config) -> None:
         if bg is not None:
             log.info("stopping background indexer")
             bg.stop(timeout=10.0)
+        if heartbeat_thread is not None:
+            log.info("stopping telemetry heartbeat scheduler")
+            heartbeat_thread.stop(timeout=5.0)
 
 
 def main() -> int:

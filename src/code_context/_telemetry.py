@@ -14,10 +14,14 @@ installed) incurs zero overhead.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import platform
 import sys
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -26,6 +30,7 @@ log = logging.getLogger(__name__)
 
 _INSTALL_ID_FILE = ".install_id"
 _TELEMETRY_STATE_FILE = ".telemetry_state.json"
+_HEARTBEAT_INTERVAL_SECONDS: float = 7 * 24 * 3600  # 7 days
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +215,143 @@ class TelemetryClient:
             event=name,
             properties=properties,
         )
+
+
+def _compute_repo_size_bucket(chunk_count: int) -> str:
+    """Map a raw chunk count to a size bucket label.
+
+    Boundaries (exclusive upper):
+      S  — < 1 000 chunks
+      M  — 1 000 – 9 999 chunks
+      L  — 10 000 – 99 999 chunks
+      XL — ≥ 100 000 chunks
+    """
+    if chunk_count < 1000:
+        return "S"
+    elif chunk_count < 10000:
+        return "M"
+    elif chunk_count < 100000:
+        return "L"
+    else:
+        return "XL"
+
+
+def _load_state(cache_dir: Path) -> dict[str, Any]:
+    """Read .telemetry_state.json from cache_dir.
+
+    Returns an empty dict if the file does not exist or is malformed.
+    Never raises.
+    """
+    state_path = cache_dir / _TELEMETRY_STATE_FILE
+    if not state_path.exists():
+        return {}
+    try:
+        return json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - malformed state must not crash
+        log.debug("telemetry: could not parse %s; treating as empty state", state_path)
+        return {}
+
+
+def _save_state(cache_dir: Path, state: dict[str, Any]) -> None:
+    """Write state dict to .telemetry_state.json in cache_dir. Never raises."""
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        state_path = cache_dir / _TELEMETRY_STATE_FILE
+        state_path.write_text(json.dumps(state), encoding="utf-8")
+    except Exception:  # noqa: BLE001 - state I/O must not crash the process
+        log.debug("telemetry: could not write state to %s", cache_dir / _TELEMETRY_STATE_FILE)
+
+
+class TelemetryHeartbeatThread(threading.Thread):
+    """Daemon thread that sends a weekly heartbeat via *client*.
+
+    The thread wakes up every *check_interval_seconds* (default 60 s) to
+    check whether 7 days have elapsed since the last heartbeat. If so, it
+    fires one and persists the new timestamp to
+    ``<cache_dir>/.telemetry_state.json``.
+
+    Design decisions:
+    - Separate from BackgroundIndexer — telemetry is orthogonal to indexing.
+    - Daemon=True so it never blocks process exit.
+    - Uses a ``threading.Event`` stop flag so ``stop()`` is responsive
+      (wakes the sleeping thread immediately).
+    - ``clock_fn`` and ``chunk_count_fn`` are injectable for hermetic tests
+      (no real sleeps required).
+
+    Usage::
+
+        thread = TelemetryHeartbeatThread(client=client, chunk_count_fn=store_size)
+        thread.start()
+        # … at shutdown …
+        thread.stop()
+    """
+
+    def __init__(
+        self,
+        client: TelemetryClient,
+        chunk_count_fn: Callable[[], int] | None = None,
+        clock_fn: Callable[[], float] = time.time,
+        check_interval_seconds: float = 60.0,
+    ) -> None:
+        super().__init__(name="code-context-telemetry-heartbeat", daemon=True)
+        self._client = client
+        self._chunk_count_fn = chunk_count_fn
+        self._clock_fn = clock_fn
+        self._check_interval = check_interval_seconds
+        self._stop_event = threading.Event()
+
+    def stop(self, timeout: float = 5.0) -> None:
+        """Signal the thread to exit and join up to *timeout* seconds."""
+        self._stop_event.set()
+        self.join(timeout=timeout)
+
+    def run(self) -> None:
+        # Send at startup if due, then check on every interval tick.
+        self._maybe_send_heartbeat()
+        while not self._stop_event.wait(self._check_interval):
+            self._maybe_send_heartbeat()
+
+    def _maybe_send_heartbeat(self) -> None:
+        """Check state file and send a heartbeat if 7 days have passed."""
+        try:
+            cache_dir = self._client._config.cache_dir
+            state = _load_state(cache_dir)
+            last_ts: float = state.get("last_heartbeat_ts", 0.0)
+            now = self._clock_fn()
+            if not self._should_send_heartbeat(now, last_ts):
+                return
+            self._fire_heartbeat(cache_dir, now)
+        except Exception:  # noqa: BLE001 - never let heartbeat crash the thread
+            log.debug("telemetry: unexpected error in heartbeat scheduler", exc_info=True)
+
+    def _should_send_heartbeat(self, now: float, last_ts: float) -> bool:
+        """Return True when *last_ts* is 0 (never sent) or older than 7 days."""
+        return last_ts == 0.0 or (now - last_ts) >= _HEARTBEAT_INTERVAL_SECONDS
+
+    def _fire_heartbeat(self, cache_dir: Path, now: float) -> None:
+        """Compute the repo size bucket, call client.heartbeat(), save state."""
+        from code_context import __version__
+
+        bucket = self._resolve_bucket()
+        self._client.heartbeat(version=__version__, repo_size_bucket=bucket)
+        _save_state(
+            cache_dir,
+            {
+                "last_heartbeat_ts": now,
+                "last_heartbeat_version": __version__,
+            },
+        )
+
+    def _resolve_bucket(self) -> str:
+        """Call chunk_count_fn and map result to a bucket. Returns "unknown" on error."""
+        if self._chunk_count_fn is None:
+            return "unknown"
+        try:
+            count = self._chunk_count_fn()
+            return _compute_repo_size_bucket(count)
+        except Exception:  # noqa: BLE001 - chunk_count errors must not suppress heartbeat
+            log.debug("telemetry: chunk_count_fn raised; defaulting bucket to 'unknown'")
+            return "unknown"
 
 
 def _load_telemetry_config(config: Any) -> _TelemetryConfig:
