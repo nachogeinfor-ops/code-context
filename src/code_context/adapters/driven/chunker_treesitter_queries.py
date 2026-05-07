@@ -21,6 +21,11 @@ Each query captures the AST nodes we want to emit as chunks. A node is
   captured by separate patterns; the chunker removes inner nodes that are
   fully contained within an outer @chunk. _kind_from_node descends into
   template_declaration children to determine the actual kind.
+- Markdown: section-based chunking with level-aware boundaries.  Markdown
+  is structurally different from code: headings + content blocks form
+  ``section`` nodes in the grammar.  Chunking is handled by a dedicated
+  code path in chunker_treesitter.py rather than an S-expression query;
+  the sentinel value ``MARKDOWN_SENTINEL`` marks this in QUERIES_BY_LANG.
 
 Each query also captures the symbol's identifier as ``@name`` so callers
 that want to mine ``SymbolDef`` objects (extract_definitions) can pair
@@ -167,6 +172,11 @@ CPP = """
       declarator: (identifier) @name))) @chunk
 """
 
+# Markdown uses section-based chunking, not S-expression queries.
+# The chunker_treesitter.py detects this sentinel and routes to the
+# dedicated _chunk_markdown / _extract_markdown_defs code paths.
+MARKDOWN_SENTINEL = "__markdown__"
+
 QUERIES_BY_LANG: dict[str, str] = {
     "python": PYTHON,
     "javascript": JAVASCRIPT,
@@ -176,4 +186,5 @@ QUERIES_BY_LANG: dict[str, str] = {
     "csharp": CSHARP,
     "java": JAVA,
     "cpp": CPP,
+    "markdown": MARKDOWN_SENTINEL,
 }

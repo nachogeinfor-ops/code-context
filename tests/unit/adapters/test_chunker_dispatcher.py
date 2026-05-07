@@ -37,13 +37,21 @@ def test_python_routes_to_treesitter() -> None:
     assert out[0].snippet == "<ts>"
 
 
-def test_markdown_routes_to_line() -> None:
+def test_markdown_routes_to_treesitter_then_line_fallback() -> None:
+    """T5 — .md is now routed to treesitter first.
+
+    When treesitter returns [] (e.g. headingless content or the _Recording stub),
+    the dispatcher falls back to the line chunker so .md files are always indexed.
+    With a real TreeSitterChunker, headed markdown returns section chunks from
+    treesitter directly (no line fallback needed).
+    """
     ts = _Recording("ts")
     line = _Recording("line")
     d = ChunkerDispatcher(treesitter=ts, line=line)
+    # _Recording always returns exactly 1 chunk (non-empty list), so treesitter wins.
     out = d.chunk("# hello\n", "README.md")
-    assert line.calls and not ts.calls
-    assert out[0].snippet == "<line>"
+    assert ts.calls, "expected .md to attempt treesitter first"
+    assert out[0].snippet == "<ts>"
 
 
 def test_treesitter_empty_falls_back_to_line() -> None:
@@ -79,11 +87,16 @@ def test_version_combines_subchunker_versions() -> None:
 
 
 def test_extensions_routed_to_treesitter() -> None:
-    """All supported language extensions go to treesitter."""
+    """All supported language extensions go to treesitter (including T5 markdown)."""
     ts = _Recording("ts")
     line = _Recording("line")
     d = ChunkerDispatcher(treesitter=ts, line=line)
-    for ext in [".py", ".js", ".ts", ".go", ".rs", ".jsx", ".tsx", ".cs"]:
+    exts = [
+        ".py", ".js", ".ts", ".go", ".rs", ".jsx", ".tsx", ".cs",
+        ".java", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx", ".h",
+        ".md", ".markdown",
+    ]
+    for ext in exts:
         d.chunk("content", f"x{ext}")
-    assert len(ts.calls) == 8
+    assert len(ts.calls) == len(exts)
     assert not line.calls

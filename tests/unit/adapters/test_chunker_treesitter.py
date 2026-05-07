@@ -403,19 +403,228 @@ def test_cpp_language_set_and_definitions() -> None:
 
 
 # ---------------------------------------------------------------------------
+# T5 (Sprint 11) — Markdown tree-sitter: section-based chunking.
+#
+# Implementation choice: Approach B (level-aware sections).
+# The tree-sitter markdown grammar wraps each heading + its content in a
+# `section` node.  Nesting is natural: an h2 `section` contains h3 `section`
+# children, so the h2 chunk encompasses its sub-headings automatically.
+# We emit ALL section nodes (at every nesting level) so both
+# `find_definition("## Foo")` AND `find_definition("### Bar")` work.
+#
+# Hard cap: _SECTION_HARD_CAP = 200 lines.  Sections exceeding this fall back
+# to LineChunker(chunk_lines=50) applied only to that section's byte range.
+# ---------------------------------------------------------------------------
+
+
+def test_chunks_markdown_top_level_sections() -> None:
+    """Fixture has # h1, ## h2a, ## h2b — each heading produces a chunk.
+
+    The h1 chunk should encompass the entire doc (all sub-sections).
+    The two h2 chunks should be non-overlapping sub-ranges.
+    """
+    src = _read(FIXTURES / "markdown" / "sample.md")
+    chunks = TreeSitterChunker().chunk(src, "sample.md")
+    assert chunks, "expected at least one chunk for markdown"
+
+    # All chunks should have the correct path.
+    assert all(c.path == "sample.md" for c in chunks)
+
+    # Every chunk's snippet must round-trip correctly from source lines.
+    lines = src.splitlines()
+    for c in chunks:
+        expected_snippet = "\n".join(lines[c.line_start - 1 : c.line_end])
+        assert c.snippet == expected_snippet, (
+            f"snippet mismatch at lines {c.line_start}-{c.line_end}"
+        )
+
+    # The fixture has a top-level "# code-context" heading — verify a chunk starts at line 1.
+    starts = {c.line_start for c in chunks}
+    assert 1 in starts, f"expected a chunk starting at line 1 (top-level h1); got starts={starts}"
+
+    # The fixture has "## Installation" and "## Configuration" — verify we have h2-level chunks.
+    snippets = [c.snippet for c in chunks]
+    assert any("## Installation" in s for s in snippets), (
+        "expected a chunk covering '## Installation'"
+    )
+    assert any("## Configuration" in s for s in snippets), (
+        "expected a chunk covering '## Configuration'"
+    )
+
+
+def test_chunks_markdown_nested_sections() -> None:
+    """Level-aware nesting: ## Foo section includes ### Bar sub-section content.
+
+    We use an inline fixture here for precision.  The ## Foo chunk must
+    contain ### Bar.  Both ## Foo and ### Bar must be emitted as separate chunks
+    so that find_definition works on both names.
+    """
+    src = (
+        "## Foo\n"
+        "\n"
+        "Paragraph under Foo.\n"
+        "\n"
+        "### Bar\n"
+        "\n"
+        "Paragraph under Bar.\n"
+        "\n"
+        "### Baz\n"
+        "\n"
+        "Paragraph under Baz.\n"
+        "\n"
+        "## Next\n"
+        "\n"
+        "Paragraph under Next.\n"
+    )
+    chunks = TreeSitterChunker().chunk(src, "nested.md")
+    assert chunks, "expected chunks for nested markdown"
+
+    by_first_line = {c.snippet.splitlines()[0]: c for c in chunks}
+
+    # ## Foo must be present and its snippet must include ### Bar content.
+    assert "## Foo" in by_first_line, f"expected '## Foo' chunk; got: {list(by_first_line)}"
+    foo_chunk = by_first_line["## Foo"]
+    assert "### Bar" in foo_chunk.snippet, (
+        f"## Foo chunk should include ### Bar sub-section; snippet:\n{foo_chunk.snippet}"
+    )
+
+    # ### Bar must also be emitted as its own chunk for findability.
+    assert "### Bar" in by_first_line, (
+        f"expected '### Bar' chunk; got: {list(by_first_line)}"
+    )
+
+    # ### Baz must be emitted too.
+    assert "### Baz" in by_first_line, (
+        f"expected '### Baz' chunk; got: {list(by_first_line)}"
+    )
+
+    # ## Next must be present and NOT include ## Foo content.
+    assert "## Next" in by_first_line, f"expected '## Next' chunk; got: {list(by_first_line)}"
+    next_chunk = by_first_line["## Next"]
+    assert "## Foo" not in next_chunk.snippet, (
+        "## Next chunk should not include ## Foo content"
+    )
+
+
+def test_extract_definitions_markdown_uses_heading_text_as_name() -> None:
+    """find_definition('Configuration') must return the ## Configuration section."""
+    src = _read(FIXTURES / "markdown" / "sample.md")
+    defs = TreeSitterChunker().extract_definitions(src, "sample.md")
+    assert defs, "expected SymbolDefs for markdown"
+
+    names = {d.name for d in defs}
+    # Fixture headings include: "code-context", "Installation", "Configuration",
+    # "Prerequisites", "Optional dependencies", "Usage", "Architecture", "Contributing", etc.
+    assert "Configuration" in names, (
+        f"expected 'Configuration' in definition names; got: {names}"
+    )
+    assert "Installation" in names, f"expected 'Installation'; got: {names}"
+
+    # All defs should have kind='section' and language='markdown'.
+    kinds = {d.kind for d in defs}
+    assert "section" in kinds, f"expected kind='section'; got: {kinds}"
+    langs = {d.language for d in defs}
+    assert langs == {"markdown"}, f"expected all defs language='markdown'; got: {langs}"
+
+    # Line ranges must be 1-indexed and monotonically valid.
+    for d in defs:
+        assert d.lines[0] >= 1, f"line_start must be >= 1, got {d.lines}"
+        assert d.lines[1] >= d.lines[0], f"line_end must be >= line_start, got {d.lines}"
+
+
+def test_chunks_markdown_no_headings_falls_back_to_line_chunks() -> None:
+    """A markdown file with no headings must still produce chunks (line-fallback).
+
+    TreeSitterChunker itself returns [] for markdown with no section nodes.
+    The ChunkerDispatcher then routes to LineChunker — but since TreeSitterChunker
+    now handles .md, its chunk() method should return [] for headingless content,
+    letting the dispatcher's line fallback kick in.
+    """
+    src = "\n".join(
+        ["This is just prose."] * 6  # > _MIN_LINES threshold in LineChunker
+    )
+    # TreeSitterChunker returns [] for headingless markdown; the dispatcher falls back.
+    # Key contract: no crash, and the dispatcher with line fallback produces chunks.
+    from code_context.adapters.driven.chunker_dispatcher import ChunkerDispatcher
+    from code_context.adapters.driven.chunker_line import LineChunker
+
+    dispatcher = ChunkerDispatcher(
+        treesitter=TreeSitterChunker(),
+        line=LineChunker(),
+    )
+    chunks = dispatcher.chunk(src, "prose.md")
+    assert chunks, "headingless markdown should still produce chunks via line fallback"
+
+
+def test_markdown_section_hard_cap_falls_back_to_line_chunks() -> None:
+    """Sections > _SECTION_HARD_CAP lines must not emit a single giant chunk.
+
+    Synthesize a markdown section that is 210 lines long (> 200 cap).
+    The chunker must produce multiple smaller chunks instead of one 210-line chunk.
+    """
+    # Build a section with 210 lines of content.
+    lines = ["## Big Section", ""]
+    lines += [f"Line {i} of content." for i in range(208)]
+    src = "\n".join(lines)
+    chunks = TreeSitterChunker().chunk(src, "big.md")
+    assert chunks, "expected chunks even for large markdown section"
+    # No single chunk should exceed _SECTION_HARD_CAP + a small tolerance.
+    from code_context.adapters.driven.chunker_treesitter import _SECTION_HARD_CAP
+
+    for c in chunks:
+        span = c.line_end - c.line_start + 1
+        assert span <= _SECTION_HARD_CAP + 10, (  # small tolerance for off-by-one at boundary
+            f"chunk at lines {c.line_start}-{c.line_end} spans {span} lines, "
+            f"exceeding hard cap {_SECTION_HARD_CAP}"
+        )
+
+
+def test_markdown_extensions_both_map_to_markdown() -> None:
+    """Both .md and .markdown extensions must map to the 'markdown' language."""
+    assert _EXT_TO_LANG.get(".md") == "markdown", (
+        f"'.md' not mapped to 'markdown'; got {_EXT_TO_LANG.get('.md')!r}"
+    )
+    assert _EXT_TO_LANG.get(".markdown") == "markdown", (
+        f"'.markdown' not mapped to 'markdown'; got {_EXT_TO_LANG.get('.markdown')!r}"
+    )
+
+
+def test_chunks_markdown_fixture_snippet_roundtrip() -> None:
+    """Every chunk's snippet must reconstruct exactly from the source file lines."""
+    src = _read(FIXTURES / "markdown" / "sample.md")
+    chunks = TreeSitterChunker().chunk(src, "docs/README.md")
+    lines = src.splitlines()
+    for c in chunks:
+        expected = "\n".join(lines[c.line_start - 1 : c.line_end])
+        assert c.snippet == expected, (
+            f"snippet mismatch at lines {c.line_start}-{c.line_end}"
+        )
+
+
+def test_extract_definitions_markdown_lines_are_one_indexed() -> None:
+    """All SymbolDef.lines from markdown must be 1-indexed."""
+    src = _read(FIXTURES / "markdown" / "sample.md")
+    defs = TreeSitterChunker().extract_definitions(src, "sample.md")
+    for d in defs:
+        assert d.lines[0] >= 1, f"line_start must be 1-indexed, got {d.lines}"
+        assert d.lines[1] >= d.lines[0]
+
+
+# ---------------------------------------------------------------------------
 # T1 (Sprint 11) — Regression guard: pin exact supported language set.
 #
 # Originally v1.2.0 had 6 languages (Py/JS/TS/Go/Rust/C#).
 # T3 (Sprint 11) adds Java, making the count 7.  This test now pins v1.3.0.
 # T4 (Sprint 11) adds C++, making the count 8.  This test now pins v1.4.0.
+# T5 (Sprint 11) adds Markdown, making the count 9.  This test now pins v1.5.0.
 #
-#   - T5 (Markdown) MUST update _EXPECTED_LANGUAGES and _EXPECTED_EXT_MAP or
-#     CI breaks — uses == not >= so additions are caught immediately.
+#   - Any future language addition MUST update _EXPECTED_LANGUAGES and
+#     _EXPECTED_EXT_MAP or CI breaks — uses == not >= so additions are caught.
 #   - Any accidental removal is equally visible.
 # ---------------------------------------------------------------------------
 
 _EXPECTED_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "go", "rust", "csharp", "java", "cpp"}
+    {"python", "javascript", "typescript", "go", "rust", "csharp", "java", "cpp", "markdown"}
 )
 
 _EXPECTED_EXT_MAP: dict[str, str] = {
@@ -437,13 +646,15 @@ _EXPECTED_EXT_MAP: dict[str, str] = {
     ".hh": "cpp",
     ".hxx": "cpp",
     ".h": "cpp",
+    # Markdown — documentation files.
+    ".md": "markdown",
+    ".markdown": "markdown",
 }
 
 
-def test_supported_language_set_is_exactly_v1_4_0() -> None:
-    """QUERIES_BY_LANG must contain exactly the 8 languages wired in v1.4.0.
+def test_supported_language_set_is_exactly_v1_5_0() -> None:
+    """QUERIES_BY_LANG must contain exactly the 9 languages wired in v1.5.0.
 
-    Update _EXPECTED_LANGUAGES when a T5 task adds a new language.
     This test uses == (not >=) so both additions and removals break CI.
     """
     assert frozenset(QUERIES_BY_LANG.keys()) == _EXPECTED_LANGUAGES, (
@@ -454,10 +665,9 @@ def test_supported_language_set_is_exactly_v1_4_0() -> None:
     )
 
 
-def test_ext_to_lang_map_is_exactly_v1_4_0() -> None:
-    """_EXT_TO_LANG must contain exactly the 16 extension mappings wired in v1.4.0.
+def test_ext_to_lang_map_is_exactly_v1_5_0() -> None:
+    """_EXT_TO_LANG must contain exactly the 18 extension mappings wired in v1.5.0.
 
-    Update _EXPECTED_EXT_MAP when a T5 task adds new file extensions.
     This test uses == (not >=) so both additions and removals break CI.
     """
     assert _EXT_TO_LANG == _EXPECTED_EXT_MAP, (

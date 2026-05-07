@@ -28,6 +28,7 @@ _DEFAULT_EXTENSIONS = [
     ".hh",
     ".hxx",
     ".md",
+    ".markdown",
     ".yaml",
     ".yml",
     ".json",

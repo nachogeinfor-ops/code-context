@@ -13,7 +13,11 @@ from pathlib import Path
 from code_context.domain.models import Chunk, SymbolDef
 from code_context.domain.ports import Chunker
 
-_TREESITTER_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".cs"}
+_TREESITTER_EXTS = {
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".cs",
+    ".java", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx", ".h",
+    ".md", ".markdown",
+}
 
 
 @dataclass

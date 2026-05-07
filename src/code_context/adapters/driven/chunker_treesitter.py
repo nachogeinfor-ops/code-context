@@ -4,10 +4,15 @@ Lazy-loads parsers per language. Returns whole-function / whole-class
 chunks. On unsupported language or parse failure, returns []. Caller
 (usually ChunkerDispatcher) is responsible for routing unsupported
 files to LineChunker.
+
+Markdown is handled as a special case: the grammar wraps each heading
+and its content in ``section`` nodes, giving us natural level-aware
+sections for free.  See ``_chunk_markdown`` for details.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 from dataclasses import dataclass
@@ -18,6 +23,10 @@ from code_context.adapters.driven.chunker_treesitter_queries import QUERIES_BY_L
 from code_context.domain.models import Chunk, SymbolDef
 
 log = logging.getLogger(__name__)
+
+# Hard cap for markdown section chunks.  Sections longer than this fall back to
+# the line chunker (50-line windows) so we never emit a multi-hundred-line blob.
+_SECTION_HARD_CAP = 200
 
 _EXT_TO_LANG: dict[str, str] = {
     ".py": "python",
@@ -39,6 +48,9 @@ _EXT_TO_LANG: dict[str, str] = {
     ".hh": "cpp",
     ".hxx": "cpp",
     ".h": "cpp",
+    # Markdown documentation files.
+    ".md": "markdown",
+    ".markdown": "markdown",
 }
 
 
@@ -72,6 +84,8 @@ class TreeSitterChunker:
         if lang is None or lang not in QUERIES_BY_LANG:
             return []
         try:
+            if lang == "markdown":
+                return _chunk_markdown(content, path)
             return _chunk_via_treesitter(content, path, lang)
         except Exception as exc:  # parse errors are rare; LineChunker fallback handles them
             log.warning("treesitter parse failed for %s (%s); returning []", path, exc)
@@ -85,6 +99,8 @@ class TreeSitterChunker:
         if lang is None or lang not in QUERIES_BY_LANG:
             return []
         try:
+            if lang == "markdown":
+                return _extract_markdown_defs(content, path)
             return _extract_via_treesitter(content, path, lang)
         except Exception as exc:
             log.warning("treesitter extract_definitions failed for %s (%s)", path, exc)
@@ -94,6 +110,204 @@ class TreeSitterChunker:
 def _detect_language(path: str) -> str | None:
     suffix = Path(path).suffix.lower()
     return _EXT_TO_LANG.get(suffix)
+
+
+# ---------------------------------------------------------------------------
+# Markdown-specific chunking (Approach B — level-aware via grammar nesting).
+#
+# The tree-sitter markdown grammar wraps each heading and all its content
+# (including nested sub-headings) in a ``section`` node.  This nesting is
+# naturally level-aware:
+#   - A ``## Foo`` section node ends at the next sibling ``##`` or ``#``.
+#   - A ``### Bar`` section node is a CHILD of the ``## Foo`` section.
+#
+# We emit ALL section nodes at every nesting depth so that:
+#   - find_definition("Foo") → returns the ``## Foo`` chunk (large, includes Bar).
+#   - find_definition("Bar") → returns the ``### Bar`` chunk (focused).
+#
+# Hard cap: sections > _SECTION_HARD_CAP lines fall back to line-windowing
+# (50-line windows with 10-line overlap) applied only to that section's range.
+# ---------------------------------------------------------------------------
+
+
+def _get_heading_info(section_node: Any) -> tuple[str | None, int | None]:
+    """Return (heading_text, heading_level) for a section node's first child heading.
+
+    Returns (None, None) if the section has no recognisable heading.
+    """
+    if not section_node.children:
+        return None, None
+    first = section_node.children[0]
+    if first.type == "atx_heading":
+        level = None
+        text = None
+        for child in first.children:
+            if child.type.startswith("atx_h") and child.type.endswith("_marker"):
+                # atx_h1_marker, atx_h2_marker, ... atx_h6_marker
+                with contextlib.suppress(ValueError, IndexError):
+                    level = int(child.type[5])  # 'atx_h1_marker'[5] == '1'
+            elif child.type == "inline":
+                text = child.text.decode("utf-8", errors="replace").strip()
+        return text, level
+    if first.type == "setext_heading":
+        level = None
+        text = None
+        for child in first.children:
+            if child.type == "setext_h1_underline":
+                level = 1
+            elif child.type == "setext_h2_underline":
+                level = 2
+            elif child.type == "paragraph":
+                for inline in child.children:
+                    if inline.type == "inline":
+                        text = inline.text.decode("utf-8", errors="replace").strip()
+        return text, level
+    return None, None
+
+
+def _collect_section_nodes(node: Any, result: list[Any]) -> None:
+    """Walk the AST and collect all ``section`` nodes (recursively)."""
+    if node.type == "section":
+        result.append(node)
+    for child in node.children:
+        _collect_section_nodes(child, result)
+
+
+def _make_line_chunks(content: str, path: str, line_start: int, line_end: int) -> list[Chunk]:
+    """Apply 50-line windowing to a sub-range of content (1-indexed, inclusive).
+
+    Used as the hard-cap fallback for oversized markdown sections.
+    """
+    from code_context.adapters.driven.chunker_line import LineChunker
+
+    lines = content.splitlines()
+    section_lines = lines[line_start - 1 : line_end]
+    section_text = "\n".join(section_lines)
+    sub_chunks = LineChunker(chunk_lines=50, overlap=10).chunk(section_text, path)
+    # Adjust line numbers to be relative to the full document.
+    offset = line_start - 1
+    adjusted: list[Chunk] = []
+    for c in sub_chunks:
+        adj_start = c.line_start + offset
+        adj_end = c.line_end + offset
+        # Re-slice from the original content to get the correct snippet.
+        snippet = "\n".join(lines[adj_start - 1 : adj_end])
+        adjusted.append(
+            Chunk(
+                path=path,
+                line_start=adj_start,
+                line_end=adj_end,
+                content_hash=hashlib.sha256(snippet.encode("utf-8")).hexdigest(),
+                snippet=snippet,
+            )
+        )
+    return adjusted
+
+
+def _chunk_markdown(content: str, path: str) -> list[Chunk]:
+    """Section-based markdown chunking with level-aware boundaries.
+
+    Implementation: Approach B — the tree-sitter markdown grammar nests
+    ``section`` nodes so each section already spans from its heading to the
+    correct end (next same-or-higher-level heading or EOF).  We walk all
+    ``section`` nodes at every depth, emitting each as a Chunk.
+
+    Hard cap: sections > _SECTION_HARD_CAP lines fall back to line-windowing.
+    Files with no headings return [] so ChunkerDispatcher falls back to LineChunker.
+    """
+    _, parser = _load_language("markdown")
+    tree = parser.parse(content.encode("utf-8"))
+    source_lines = content.splitlines()
+
+    sections: list[Any] = []
+    _collect_section_nodes(tree.root_node, sections)
+
+    # Filter to sections that actually have a recognisable heading.
+    headed_sections = [s for s in sections if _get_heading_info(s)[0] is not None]
+    if not headed_sections:
+        return []
+
+    chunks: list[Chunk] = []
+    for section_node in headed_sections:
+        line_start = section_node.start_point[0] + 1  # 1-indexed
+        line_end = section_node.end_point[0] + 1
+
+        # Clamp to actual document length (tree-sitter may report end beyond last line).
+        line_end = min(line_end, len(source_lines))
+
+        section_span = line_end - line_start + 1
+
+        if section_span > _SECTION_HARD_CAP:
+            # Fall back to line chunker for this oversized section.
+            chunks.extend(_make_line_chunks(content, path, line_start, line_end))
+        else:
+            snippet = "\n".join(source_lines[line_start - 1 : line_end])
+            chunks.append(
+                Chunk(
+                    path=path,
+                    line_start=line_start,
+                    line_end=line_end,
+                    content_hash=hashlib.sha256(snippet.encode("utf-8")).hexdigest(),
+                    snippet=snippet,
+                )
+            )
+
+    # Deduplicate chunks with identical (line_start, line_end) pairs that can
+    # arise when the hard-cap fallback sub-chunks align with another section boundary.
+    seen: set[tuple[int, int]] = set()
+    deduped: list[Chunk] = []
+    for c in chunks:
+        key = (c.line_start, c.line_end)
+        if key not in seen:
+            seen.add(key)
+            deduped.append(c)
+
+    # Sort by start line for stable, document-order output.
+    deduped.sort(key=lambda c: (c.line_start, c.line_end))
+    return deduped
+
+
+def _extract_markdown_defs(content: str, path: str) -> list[SymbolDef]:
+    """Extract SymbolDef entries from markdown headings.
+
+    Each heading becomes a SymbolDef with:
+      - name  = heading text (stripped of # markers)
+      - kind  = "section"
+      - lines = the section's line range (same as the corresponding Chunk)
+      - language = "markdown"
+    """
+    _, parser = _load_language("markdown")
+    tree = parser.parse(content.encode("utf-8"))
+    source_lines = content.splitlines()
+
+    sections: list[Any] = []
+    _collect_section_nodes(tree.root_node, sections)
+
+    defs: list[SymbolDef] = []
+    seen_keys: set[tuple[str, int, int]] = set()
+    for section_node in sections:
+        heading_text, _level = _get_heading_info(section_node)
+        if not heading_text:
+            continue
+        line_start = section_node.start_point[0] + 1
+        line_end = section_node.end_point[0] + 1
+        line_end = min(line_end, len(source_lines))
+        key = (heading_text, line_start, line_end)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        defs.append(
+            SymbolDef(
+                name=heading_text,
+                path=path,
+                lines=(line_start, line_end),
+                kind="section",
+                language="markdown",
+            )
+        )
+
+    defs.sort(key=lambda d: (d.lines[0], d.name))
+    return defs
 
 
 def _chunk_via_treesitter(content: str, path: str, lang: str) -> list[Chunk]:
