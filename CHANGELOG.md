@@ -50,14 +50,14 @@ Reports ✓/✗/? against 16 Phase 0 maturity criteria across four categories: t
 
 ### Tests
 
-**~452 passing** (was ~395 in v1.3.0; +57 across Sprint 12.5 tasks):
+**~446 passing** (was ~371 in v1.3.0; +75 across Sprint 12.5 tasks; +/- a few env-dependent integration tests):
 
 - T1: `TelemetryClient` core — init, anonymous install ID generation (sha256, 32 hex chars), `posthog` lazy-import guard (never imported when `CC_TELEMETRY=off`).
 - T2: `CC_TELEMETRY` env var parsing — all truthy/falsy values, default-off assertion, `CC_TELEMETRY_ENDPOINT` override.
 - T3: `TelemetryHeartbeatThread` scheduler — weekly cadence, state persistence to `.telemetry_state.json`, daemon thread teardown.
 - T4: Event hook wrappers — `query_count`, `index_count`, `index_failure_count`, `query_latency_<bucket>` counters; atexit session-aggregate flush.
 - T5: First-run opt-in notice — emitted to stderr exactly once (`.telemetry_notice_shown` guard), only when `CC_TELEMETRY=on`.
-- T7: `phase0-status.py` — 16 criteria checks report correct ✓/✗/? output; script exits 0 even when criteria are unmet.
+- T7: `phase0-status.py` — 16 criteria checks report correct ✓/✗/? output; script exits 1 when any mandatory criterion is unmet, 0 otherwise.
 
 Lint (`ruff check` + `ruff format --check`) clean.
 
