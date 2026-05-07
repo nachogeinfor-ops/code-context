@@ -217,6 +217,28 @@ class TelemetryClient:
         )
 
 
+def _latency_bucket(elapsed_ms: float) -> str:
+    """Map an elapsed time (ms) to a human-readable latency bucket label.
+
+    Boundaries (half-open, lower inclusive):
+      0-50ms     — < 50 ms
+      50-200ms   — 50 ms – < 200 ms
+      200ms-1s   — 200 ms – < 1 000 ms
+      1s-5s      — 1 000 ms – < 5 000 ms
+      >5s        — ≥ 5 000 ms
+    """
+    if elapsed_ms < 50:
+        return "0-50ms"
+    elif elapsed_ms < 200:
+        return "50-200ms"
+    elif elapsed_ms < 1000:
+        return "200ms-1s"
+    elif elapsed_ms < 5000:
+        return "1s-5s"
+    else:
+        return ">5s"
+
+
 def _compute_repo_size_bucket(chunk_count: int) -> str:
     """Map a raw chunk count to a size bucket label.
 

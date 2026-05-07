@@ -21,6 +21,7 @@ Claude is asking other questions.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import logging
 import sys
 
@@ -36,6 +37,8 @@ from code_context._composition import (
     fast_load_existing_index,
     make_reload_callback,
     setup_logging,
+    wrap_indexer_with_telemetry,
+    wrap_search_with_telemetry,
 )
 from code_context._telemetry import (
     TelemetryClient,
@@ -109,6 +112,13 @@ async def _run_server(cfg: Config) -> None:
         )
         heartbeat_thread.start()
         log.info("telemetry heartbeat scheduler started")
+
+        # T4: wire event counters at call sites (option C — wrap at composition).
+        search = wrap_search_with_telemetry(search, tel_client)
+        indexer = wrap_indexer_with_telemetry(indexer, tel_client)
+
+        # T4: flush aggregated counters on process exit so no session data is lost.
+        atexit.register(tel_client.flush)
 
     watcher = None
     if cfg.watch and bg is not None:

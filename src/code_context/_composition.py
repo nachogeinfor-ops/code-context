@@ -6,8 +6,10 @@ import json
 import logging
 import os
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from code_context.adapters.driven.chunker_dispatcher import ChunkerDispatcher
 from code_context.adapters.driven.chunker_line import LineChunker
@@ -448,6 +450,98 @@ def ensure_index(
     symbol_index.load(new_dir)
     # T8: wire source_tiers after fresh reindex load (option b).
     symbol_index.set_source_tiers(_load_source_tiers(new_dir))
+
+
+def wrap_search_with_telemetry(
+    use_case: SearchRepoUseCase,
+    client: Any,
+) -> SearchRepoUseCase:
+    """Wrap SearchRepoUseCase.run() with telemetry counters (option C).
+
+    Design: zero changes to domain code. This function monkey-patches the
+    bound method on a fully-constructed instance. When ``client.enabled``
+    is False the original is returned unmodified — not even a closure is
+    created — so the hot path has zero overhead in the disabled case.
+
+    Increments on every call:
+      - ``query_count``
+      - ``query_latency_<bucket>`` (e.g. ``query_latency_0-50ms``)
+
+    All telemetry calls are wrapped in contextlib.suppress so a telemetry
+    failure can never propagate out and interrupt a search result.
+    """
+    import contextlib
+
+    from code_context._telemetry import _latency_bucket
+
+    if not client.enabled:
+        return use_case
+
+    original_run = use_case.run
+
+    def _run_with_telemetry(*args, **kwargs):
+        start = time.monotonic()
+        try:
+            return original_run(*args, **kwargs)
+        finally:
+            with contextlib.suppress(Exception):
+                elapsed_ms = (time.monotonic() - start) * 1000
+                client.event("query_count")
+                client.event(f"query_latency_{_latency_bucket(elapsed_ms)}")
+
+    use_case.run = _run_with_telemetry  # type: ignore[method-assign]
+    return use_case
+
+
+def wrap_indexer_with_telemetry(
+    use_case: IndexerUseCase,
+    client: Any,
+) -> IndexerUseCase:
+    """Wrap IndexerUseCase.run() and run_incremental() with telemetry counters (option C).
+
+    When ``client.enabled`` is False the original is returned unmodified.
+
+    Increments on each call:
+      - ``index_count`` on success (both full and incremental)
+      - ``index_failure_count`` when an exception propagates out
+
+    Latency is NOT tracked for indexer runs because they are long-running
+    background operations whose duration is already logged separately.
+    The exception is re-raised so the caller's error-handling is unaffected.
+    """
+    import contextlib
+
+    if not client.enabled:
+        return use_case
+
+    original_run = use_case.run
+    original_run_incremental = use_case.run_incremental
+
+    def _run_with_telemetry(*args, **kwargs):
+        try:
+            result = original_run(*args, **kwargs)
+            with contextlib.suppress(Exception):
+                client.event("index_count")
+            return result
+        except Exception:
+            with contextlib.suppress(Exception):
+                client.event("index_failure_count")
+            raise
+
+    def _run_incremental_with_telemetry(*args, **kwargs):
+        try:
+            result = original_run_incremental(*args, **kwargs)
+            with contextlib.suppress(Exception):
+                client.event("index_count")
+            return result
+        except Exception:
+            with contextlib.suppress(Exception):
+                client.event("index_failure_count")
+            raise
+
+    use_case.run = _run_with_telemetry  # type: ignore[method-assign]
+    use_case.run_incremental = _run_incremental_with_telemetry  # type: ignore[method-assign]
+    return use_case
 
 
 def setup_logging(cfg: Config) -> None:
