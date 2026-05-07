@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 
 _INSTALL_ID_FILE = ".install_id"
 _TELEMETRY_STATE_FILE = ".telemetry_state.json"
+_NOTICE_FILE = ".telemetry_notice_shown"
 _HEARTBEAT_INTERVAL_SECONDS: float = 7 * 24 * 3600  # 7 days
 
 
@@ -282,6 +283,40 @@ def _save_state(cache_dir: Path, state: dict[str, Any]) -> None:
         state_path.write_text(json.dumps(state), encoding="utf-8")
     except Exception:  # noqa: BLE001 - state I/O must not crash the process
         log.debug("telemetry: could not write state to %s", cache_dir / _TELEMETRY_STATE_FILE)
+
+
+_NOTICE_TEXT = """\
+code-context: anonymous telemetry is enabled (CC_TELEMETRY=on).
+No PII, no query text, no code content. See:
+  https://github.com/nachogeinfor-ops/code-context/blob/main/docs/telemetry.md
+Disable: CC_TELEMETRY=off (or unset)
+"""
+
+
+def _show_first_run_notice(client: TelemetryClient) -> None:
+    """Print a one-time opt-in notice to stderr when telemetry is first enabled.
+
+    Logic:
+    - If client is disabled → return immediately (no I/O).
+    - If <cache_dir>/.telemetry_notice_shown exists → already shown, return.
+    - Otherwise print the notice to stderr and create the flag file so it only
+      appears once per install.
+
+    The notice goes to stderr so it never pollutes the MCP JSON-RPC stream on
+    stdout.
+    """
+    if not client.enabled:
+        return
+    notice_path = client._config.cache_dir / _NOTICE_FILE
+    if notice_path.exists():
+        return
+    # Print to stderr — never raise, consistent with the no-crash contract.
+    try:
+        print(_NOTICE_TEXT, file=sys.stderr, end="")
+        client._config.cache_dir.mkdir(parents=True, exist_ok=True)
+        notice_path.write_text("shown", encoding="utf-8")
+    except Exception:  # noqa: BLE001 - notice I/O must not crash the process
+        log.debug("telemetry: could not write notice flag to %s", notice_path)
 
 
 class TelemetryHeartbeatThread(threading.Thread):

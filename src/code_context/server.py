@@ -44,6 +44,7 @@ from code_context._telemetry import (
     TelemetryClient,
     TelemetryHeartbeatThread,
     _load_telemetry_config,
+    _show_first_run_notice,
 )
 from code_context._watcher import RepoWatcher
 from code_context.adapters.driving.mcp_server import register
@@ -105,6 +106,7 @@ async def _run_server(cfg: Config) -> None:
     if cfg.telemetry:
         tconf = _load_telemetry_config(cfg)
         tel_client = TelemetryClient(tconf)
+        _show_first_run_notice(tel_client)
         heartbeat_thread = TelemetryHeartbeatThread(
             client=tel_client,
             # chunk_count_fn: len of the store's internal chunk list
