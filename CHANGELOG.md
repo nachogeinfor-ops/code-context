@@ -1,5 +1,78 @@
 # Changelog
 
+## v1.4.0 — 2026-05-07
+
+Sprint 12.5 — pre-launch hardening: opt-in anonymous telemetry, multi-IDE smoke checklist, Phase 0 maturity script. Default behavior unchanged.
+
+> **No behavior change for existing users.** Default `CC_TELEMETRY=off` means zero new files, zero network calls, zero PostHog imports. Opt in via `CC_TELEMETRY=on`.
+
+### New env vars
+
+| Var | Default | Description |
+|---|---|---|
+| `CC_TELEMETRY` | `off` | Enable anonymous telemetry: `on` / `true` / `1` to enable; `off` / `false` / `0` or unset to disable. |
+| `CC_TELEMETRY_ENDPOINT` | PostHog Cloud | Override the PostHog ingest endpoint for self-hosted deployments. Only used when `CC_TELEMETRY=on`. |
+
+### Opt-in only
+
+> **Action required to enable telemetry.** Set `CC_TELEMETRY=on` to opt in. When disabled (the default), the `posthog` package is never imported, no files are created in `cache_dir`, and no network calls are made. Telemetry is strictly additive — no existing behavior changes on upgrade.
+
+### Telemetry schema (T1–T5)
+
+When `CC_TELEMETRY=on`, the following are collected:
+
+**Heartbeat** (weekly, via `TelemetryHeartbeatThread` daemon thread): `version`, OS platform, Python version, `days_since_install`, `repo_size_bucket` (file count range, not exact count). State persisted to `<cache_dir>/.telemetry_state.json`.
+
+**Session aggregates** (flushed at process exit via `atexit`): `query_count`, `index_count`, `index_failure_count`, `query_latency_<bucket>` (bucketed, not raw latency values).
+
+**Install ID**: anonymous sha256 of `cache_dir` path + directory mtime (32 hex chars). Not a user ID. Not reversible to a path.
+
+**Never collected**: queries, code content, file paths, user-identifying information, repository names, or any PII.
+
+Full schema, exclusions, opt-out instructions, and a link to the source: [`docs/telemetry.md`](docs/telemetry.md).
+
+### Phase 0 maturity script (T7)
+
+```
+python scripts/phase0-status.py
+```
+
+Reports ✓/✗/? against 16 Phase 0 maturity criteria across four categories: technical quality, real-world signal, multi-IDE coverage, and release readiness. Used by the maintainer to decide when Phase 0 is complete and Phase 1 (paid Team tier) work should begin.
+
+### New docs (T5–T6)
+
+- [`docs/telemetry.md`](docs/telemetry.md) — full telemetry schema, what is and is not collected, opt-out, self-host endpoint override, and a link to the collection source code.
+- [`docs/integrations.md`](docs/integrations.md) — multi-IDE setup checklists: Claude Code (verified), Cursor, Continue, and Cline (pending verification). Includes step-by-step MCP server registration for each IDE.
+
+### Env var docs updated (T8)
+
+`CC_TELEMETRY` and `CC_TELEMETRY_ENDPOINT` are documented in `docs/configuration.md`, `docs/v1-api.md`, and `README.md`.
+
+### Tests
+
+**~452 passing** (was ~395 in v1.3.0; +57 across Sprint 12.5 tasks):
+
+- T1: `TelemetryClient` core — init, anonymous install ID generation (sha256, 32 hex chars), `posthog` lazy-import guard (never imported when `CC_TELEMETRY=off`).
+- T2: `CC_TELEMETRY` env var parsing — all truthy/falsy values, default-off assertion, `CC_TELEMETRY_ENDPOINT` override.
+- T3: `TelemetryHeartbeatThread` scheduler — weekly cadence, state persistence to `.telemetry_state.json`, daemon thread teardown.
+- T4: Event hook wrappers — `query_count`, `index_count`, `index_failure_count`, `query_latency_<bucket>` counters; atexit session-aggregate flush.
+- T5: First-run opt-in notice — emitted to stderr exactly once (`.telemetry_notice_shown` guard), only when `CC_TELEMETRY=on`.
+- T7: `phase0-status.py` — 16 criteria checks report correct ✓/✗/? output; script exits 0 even when criteria are unmet.
+
+Lint (`ruff check` + `ruff format --check`) clean.
+
+### Deferred from original Sprint 12 plan
+
+**Sprint 12 (Latency)** — distill reranker (~22M → ~4M params), GPU auto-detect, batched rerank, embed cache — is **deferred to a future v1.5.x release**.
+
+The rerank p50 latency on CPU (~6.3 s) is the only Phase 0 technical criterion not met by v1.4.0 (target ≤ 1.5 s). All other Phase 0 criteria are met or pending real-world signal. The latency work requires a verified distilled model on HuggingFace and GPU auto-detect infrastructure that would have increased the v1.4.0 scope materially; it is cleanly separable and will be Sprint 13's primary deliverable.
+
+### Migration
+
+No action required. New env vars are opt-in; default behavior is fully preserved. No reindex is triggered on upgrade. When `CC_TELEMETRY` is unset (the default), v1.4.0 behaves identically to v1.3.0 at runtime.
+
+---
+
 ## v1.3.0 — 2026-05-07
 
 Sprint 11 ships. **Language reach.** Tree-sitter chunking and symbol extraction extended to Java, C++, and Markdown. Three new languages join the existing six (Python, JavaScript, TypeScript, Go, Rust, C#), bringing the AST-chunked total to **9 languages**. Comes with a `chunker_version` bump to `treesitter-v3` that triggers a one-time automatic full reindex on first v1.3.0 startup.
