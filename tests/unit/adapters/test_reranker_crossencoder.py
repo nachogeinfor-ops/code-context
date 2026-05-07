@@ -6,7 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from code_context.adapters.driven.reranker_crossencoder import CrossEncoderReranker
+from code_context.adapters.driven.reranker_crossencoder import (
+    _DEFAULT_RERANK_MODEL,
+    CrossEncoderReranker,
+)
 from code_context.domain.models import Chunk, IndexEntry
 
 
@@ -71,5 +74,5 @@ def test_empty_candidates_returns_empty() -> None:
 
 
 def test_model_id_includes_name_and_lib_version() -> None:
-    r = CrossEncoderReranker(model_name="cross-encoder/ms-marco-MiniLM-L-2-v2")
-    assert r.model_id.startswith("crossencoder:cross-encoder/ms-marco-MiniLM-L-2-v2")
+    r = CrossEncoderReranker()
+    assert r.model_id.startswith(f"crossencoder:{_DEFAULT_RERANK_MODEL}")
