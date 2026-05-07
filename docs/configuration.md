@@ -19,8 +19,8 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_CHUNK_OVERLAP` | `10` | Overlap between consecutive chunks (LineChunker only). |
 | `CC_CHUNKER` | `treesitter` | Chunking strategy: `treesitter` (AST-aware for Py/JS/TS/Go/Rust/C#, line fallback for the rest) or `line` (legacy line-window for everything). |
 | `CC_KEYWORD_INDEX` | `sqlite` | Keyword index strategy: `sqlite` (FTS5 BM25, default) or `none` (vector-only). |
-| `CC_RERANK` | `off` | Set to `on`/`true`/`1` to activate cross-encoder reranking on the fused top-N candidates. ~80 MB model download on first use. |
-| `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Override the cross-encoder model. Only consulted when `CC_RERANK=on`. |
+| `CC_RERANK` | `off` | Set to `on`/`true`/`1` to activate cross-encoder reranking on the fused top-N candidates. ~17 MB model download on first use. |
+| `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-2-v2` | Override the cross-encoder model. Only consulted when `CC_RERANK=on`. |
 | `CC_SYMBOL_INDEX` | `sqlite` | Symbol-index strategy: `sqlite` (default, FTS5-backed) or `none` (disables `find_definition`/`find_references`). |
 | `CC_TRUST_REMOTE_CODE` | `off` | Set to `on`/`true`/`1` to allow `sentence-transformers` to execute custom Python from the HF model repo. Required for models like `jinaai/jina-embeddings-v2-base-code` that use custom architectures. **Off by default for safety.** |
 | `CC_BM25_STOP_WORDS` | `off` | `off` disables filtering; `on` uses built-in 52-word English list; comma-list sets a custom stop-word set. See "BM25 stop-word filtering" below. **Since v1.2.0.** |
@@ -107,7 +107,7 @@ with a more accurate model:
 export CC_RERANK=on
 ```
 
-This downloads ~80 MB on first reindex (`cross-encoder/ms-marco-MiniLM-L-6-v2`)
+This downloads ~17 MB on first reindex (`cross-encoder/ms-marco-MiniLM-L-2-v2`)
 and adds ~100-300 ms per query on CPU. Default off because the latency
 trade-off doesn't pay off on every repo; enable it on a per-repo basis if
 you find that hybrid retrieval still misranks queries you care about.

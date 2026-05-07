@@ -14,6 +14,8 @@ from code_context.domain.models import IndexEntry
 
 log = logging.getLogger(__name__)
 
+_DEFAULT_RERANK_MODEL = "cross-encoder/ms-marco-MiniLM-L-2-v2"
+
 
 def _load_model(model_name: str) -> Any:  # pragma: no cover - integration-tested
     from sentence_transformers import CrossEncoder
@@ -32,7 +34,7 @@ def _lib_version() -> str:
 
 
 class CrossEncoderReranker:
-    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> None:
+    def __init__(self, model_name: str = _DEFAULT_RERANK_MODEL) -> None:
         self.model_name = model_name
         self._model: Any = None
 

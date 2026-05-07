@@ -19,7 +19,10 @@ from code_context.adapters.driven.embeddings_local import LocalST
 from code_context.adapters.driven.git_source_cli import GitCliSource
 from code_context.adapters.driven.introspector_fs import FilesystemIntrospector
 from code_context.adapters.driven.keyword_index_sqlite import SqliteFTS5Index
-from code_context.adapters.driven.reranker_crossencoder import CrossEncoderReranker
+from code_context.adapters.driven.reranker_crossencoder import (
+    _DEFAULT_RERANK_MODEL,
+    CrossEncoderReranker,
+)
 from code_context.adapters.driven.symbol_index_sqlite import SymbolIndexSqlite
 from code_context.adapters.driven.vector_store_numpy import NumPyParquetStore
 from code_context.config import Config
@@ -171,7 +174,7 @@ def build_reranker(cfg: Config) -> Reranker | None:
     if not cfg.rerank:
         return None
     return CrossEncoderReranker(
-        model_name=cfg.rerank_model or "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        model_name=cfg.rerank_model or _DEFAULT_RERANK_MODEL,
     )
 
 

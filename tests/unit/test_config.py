@@ -105,12 +105,12 @@ def test_rerank_default_is_off(tmp_path: Path) -> None:
 def test_rerank_on_via_env(tmp_path: Path) -> None:
     with patch.dict(
         os.environ,
-        {"CC_RERANK": "on", "CC_RERANK_MODEL": "cross-encoder/ms-marco-MiniLM-L-6-v2"},
+        {"CC_RERANK": "on", "CC_RERANK_MODEL": "cross-encoder/ms-marco-MiniLM-L-2-v2"},
         clear=True,
     ):
         cfg = load_config(default_repo_root=tmp_path)
     assert cfg.rerank is True
-    assert cfg.rerank_model == "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    assert cfg.rerank_model == "cross-encoder/ms-marco-MiniLM-L-2-v2"
 
 
 def test_rerank_accepts_truthy_aliases(tmp_path: Path) -> None:

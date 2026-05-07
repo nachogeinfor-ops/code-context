@@ -71,5 +71,5 @@ def test_empty_candidates_returns_empty() -> None:
 
 
 def test_model_id_includes_name_and_lib_version() -> None:
-    r = CrossEncoderReranker(model_name="cross-encoder/ms-marco-MiniLM-L-6-v2")
-    assert r.model_id.startswith("crossencoder:cross-encoder/ms-marco-MiniLM-L-6-v2")
+    r = CrossEncoderReranker(model_name="cross-encoder/ms-marco-MiniLM-L-2-v2")
+    assert r.model_id.startswith("crossencoder:cross-encoder/ms-marco-MiniLM-L-2-v2")
