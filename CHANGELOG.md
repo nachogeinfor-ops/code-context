@@ -56,7 +56,7 @@ Per-repo (hybrid_rerank):
 
 | Repo | v1.2.0 | v1.3.0 | Δ | Notes |
 |---|---|---|---|---|
-| csharp (63 q) | 0.4315 | 0.3425 | -0.089 | Markdown displacement — 24 queries regressed >0.01 NDCG; 7 had top1 switch from .cs → .md |
+| csharp (63 q) | 0.4226 | 0.3336 | -0.089 | Markdown displacement — 24 queries regressed >0.01 NDCG; 7 had top1 switch from .cs → .md |
 | python (33 q) | 0.8265 | 0.8265 | 0.000 | Pixel-perfect |
 | typescript (33 q) | 0.7783 | 0.7783 | 0.000 | Pixel-perfect |
 
@@ -82,6 +82,8 @@ Lint (`ruff check` + `ruff format --check`) clean.
 Existing call patterns, env var names, MCP tool signatures, CLI subcommands, and Python imports are **unchanged**.
 
 For source-exact lookups on repos with rich Markdown documentation, prefer `find_definition()` over `search_repo()` until Sprint 12 ships source-tier ranking for `search_repo`.
+
+**Workaround if Markdown displacement materially hurts your `search_repo` quality:** drop `.md,.markdown` from `CC_INCLUDE_EXTENSIONS` to exclude markdown from the index entirely until Sprint 12 lands the proper fix. Trade-off: `find_definition("Configuration")` (and similar) will no longer find docs sections — only worth doing if your queries primarily target source code rather than documentation.
 
 ---
 

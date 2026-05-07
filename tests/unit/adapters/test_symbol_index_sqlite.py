@@ -221,8 +221,7 @@ def test_stop_word_filter_drops_stop_words_from_fts_query() -> None:
     out = idx.find_references("loadSettings", max_count=10)
     paths = {r.path for r in out}
     assert "config.py" in paths, (
-        "find_references('loadSettings') must find config.py; "
-        f"got paths={paths!r}"
+        f"find_references('loadSettings') must find config.py; got paths={paths!r}"
     )
 
 
@@ -241,9 +240,7 @@ def test_stop_words_in_referenced_content_are_still_indexed_normally() -> None:
     # Content-token query (not stop words) should find the doc.
     out = idx.find_references("processCommit")
     paths = {r.path for r in out}
-    assert "a.py" in paths, (
-        "'and' in indexed snippet must not prevent discovery via other tokens"
-    )
+    assert "a.py" in paths, "'and' in indexed snippet must not prevent discovery via other tokens"
 
 
 def test_all_stop_words_symbol_query_falls_back_gracefully() -> None:
@@ -387,8 +384,7 @@ def test_index_with_custom_stop_words_only_filters_those(tmp_path: Path) -> None
     result = idx.find_references("loadResult", max_count=5)
     paths = {r.path for r in result}
     assert "result.py" in paths, (
-        "custom stop words 'the,a' should not filter 'loadResult'; "
-        f"got paths={paths!r}"
+        f"custom stop words 'the,a' should not filter 'loadResult'; got paths={paths!r}"
     )
 
 
@@ -407,11 +403,13 @@ def test_find_references_ranks_source_above_tests_above_docs() -> None:
     idx = SymbolIndexSqlite()
     idx.set_source_tiers(["src"])
     # Insert in reverse expected order so a sort bug would be obvious.
-    idx.populate_references_for_test([
-        ("docs/archive/config-design.md", 5, "loadConfig is described here"),
-        ("tests/ConfigTests.cs", 10, "loadConfig() called in test"),
-        ("src/Config.cs", 42, "loadConfig() implementation call"),
-    ])
+    idx.populate_references_for_test(
+        [
+            ("docs/archive/config-design.md", 5, "loadConfig is described here"),
+            ("tests/ConfigTests.cs", 10, "loadConfig() called in test"),
+            ("src/Config.cs", 42, "loadConfig() implementation call"),
+        ]
+    )
     out = idx.find_references("loadConfig", max_count=10)
     assert len(out) == 3
     # src/ must be first, tests/ second, docs/ last.
@@ -496,11 +494,13 @@ def test_find_references_stable_sort_preserves_bm25_order_within_tier() -> None:
     idx = SymbolIndexSqlite()
     idx.set_source_tiers(["src"])
     # Insert source refs first (A then B), then a docs ref.
-    idx.populate_references_for_test([
-        ("src/alpha.py", 1, "processItem called here first"),
-        ("src/beta.py", 2, "processItem called here second"),
-        ("docs/guide.md", 5, "processItem is documented here"),
-    ])
+    idx.populate_references_for_test(
+        [
+            ("src/alpha.py", 1, "processItem called here first"),
+            ("src/beta.py", 2, "processItem called here second"),
+            ("docs/guide.md", 5, "processItem is documented here"),
+        ]
+    )
     out = idx.find_references("processItem", max_count=10)
     paths = [r.path for r in out]
 
@@ -523,10 +523,12 @@ def test_find_references_with_empty_source_tiers_treats_src_as_other() -> None:
     """
     idx = SymbolIndexSqlite()
     idx.set_source_tiers([])  # empty — no source tier configured
-    idx.populate_references_for_test([
-        ("src/foo.py", 1, "checkValue returns True"),
-        ("tests/test_foo.py", 2, "checkValue is tested here"),
-    ])
+    idx.populate_references_for_test(
+        [
+            ("src/foo.py", 1, "checkValue returns True"),
+            ("tests/test_foo.py", 2, "checkValue is tested here"),
+        ]
+    )
     out = idx.find_references("checkValue", max_count=10)
     paths = [r.path for r in out]
     # tests/ (tier 1) must come before src/ (tier 3 — not in source_tiers).
@@ -586,14 +588,14 @@ def test_find_references_natural_mode_skips_tier_sort(tmp_path: Path) -> None:
     cfg = _make_config(symbol_rank="natural", tmp_path=tmp_path)
     idx = SymbolIndexSqlite(cfg)
     idx.set_source_tiers(["src"])
-    idx.populate_references_for_test([
-        ("docs/foo.md", 1, "loadWidget is documented here"),
-        ("src/foo.cs", 5, "loadWidget() implementation call"),
-    ])
-    out = idx.find_references("loadWidget", max_count=10)
-    assert len(out) == 2, (
-        f"natural mode must return all matching refs (both tiers); got {len(out)}"
+    idx.populate_references_for_test(
+        [
+            ("docs/foo.md", 1, "loadWidget is documented here"),
+            ("src/foo.cs", 5, "loadWidget() implementation call"),
+        ]
     )
+    out = idx.find_references("loadWidget", max_count=10)
+    assert len(out) == 2, f"natural mode must return all matching refs (both tiers); got {len(out)}"
     # Both paths must appear in the results — no tier-based filtering.
     paths = {r.path for r in out}
     assert "docs/foo.md" in paths, "natural mode must include docs/foo.md"
@@ -610,10 +612,12 @@ def test_find_references_source_first_mode_applies_tier_sort(tmp_path: Path) -> 
     idx = SymbolIndexSqlite(cfg)
     idx.set_source_tiers(["src"])
     # Populate docs first, then src — tier sort must override insertion order.
-    idx.populate_references_for_test([
-        ("docs/foo.md", 1, "loadWidget is documented here"),
-        ("src/foo.cs", 5, "loadWidget() implementation call"),
-    ])
+    idx.populate_references_for_test(
+        [
+            ("docs/foo.md", 1, "loadWidget is documented here"),
+            ("src/foo.cs", 5, "loadWidget() implementation call"),
+        ]
+    )
     out = idx.find_references("loadWidget", max_count=10)
     assert len(out) == 2
     # source-first: src/ (tier 0) must come before docs/ (tier 2).
@@ -634,10 +638,12 @@ def test_find_references_default_when_no_config_uses_tier_sort() -> None:
     idx = SymbolIndexSqlite()  # no config — must default to _sort_by_tier=True
     idx.set_source_tiers(["src"])
     # Populate docs first, then src — tier sort must still apply.
-    idx.populate_references_for_test([
-        ("docs/readme.md", 1, "processData is described here"),
-        ("src/core.py", 3, "processData() used here"),
-    ])
+    idx.populate_references_for_test(
+        [
+            ("docs/readme.md", 1, "processData is described here"),
+            ("src/core.py", 3, "processData() used here"),
+        ]
+    )
     out = idx.find_references("processData", max_count=10)
     assert len(out) == 2
     assert out[0].path == "src/core.py", (
@@ -701,10 +707,12 @@ def test_find_references_unknown_symbol_rank_value_falls_back_to_source_first(
     idx = SymbolIndexSqlite(cfg)
     idx.set_source_tiers(["src"])
     # Populate docs first, then src.
-    idx.populate_references_for_test([
-        ("docs/notes.md", 1, "renderView is documented here"),
-        ("src/view.py", 2, "renderView() called here"),
-    ])
+    idx.populate_references_for_test(
+        [
+            ("docs/notes.md", 1, "renderView is documented here"),
+            ("src/view.py", 2, "renderView() called here"),
+        ]
+    )
     out = idx.find_references("renderView", max_count=10)
     assert len(out) == 2
     assert out[0].path == "src/view.py", (

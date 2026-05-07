@@ -761,9 +761,7 @@ def _build_uc_multi(
     )
 
 
-def test_full_reindex_writes_source_tiers_to_metadata(
-    cache_dir: Path, repo_root: Path
-) -> None:
+def test_full_reindex_writes_source_tiers_to_metadata(cache_dir: Path, repo_root: Path) -> None:
     """Top-3 dirs by chunk count land in metadata["source_tiers"]."""
     # 10 chunks from src, 8 from tests, 5 from docs, 1 from examples
     # → top-3 = ["src", "tests", "docs"]
@@ -872,9 +870,7 @@ def test_source_tiers_top_3_only(cache_dir: Path, repo_root: Path) -> None:
     assert meta["source_tiers"] == ["aaa", "bbb", "ccc"]
 
 
-def test_dirty_set_v2_metadata_triggers_full_reindex(
-    cache_dir: Path, repo_root: Path
-) -> None:
+def test_dirty_set_v2_metadata_triggers_full_reindex(cache_dir: Path, repo_root: Path) -> None:
     """v2 metadata (no source_tiers) → dirty_set forces full reindex for schema upgrade."""
     f = repo_root / "a.py"
     f.write_text("x = 1\n", encoding="utf-8")

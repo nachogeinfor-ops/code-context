@@ -37,9 +37,12 @@ _REFS_TABLE = "symbol_refs_fts"
 _TEST_FIRST_SEGMENTS: frozenset[str] = frozenset({"tests", "test", "__tests__"})
 
 _TEST_SUFFIXES: tuple[str, ...] = (
-    "_test.py", "_tests.py",
-    ".test.ts", ".test.tsx",
-    ".spec.ts", ".spec.tsx",
+    "_test.py",
+    "_tests.py",
+    ".test.ts",
+    ".test.tsx",
+    ".spec.ts",
+    ".spec.tsx",
     "_test.go",
     "_test.rs",
 )
@@ -114,6 +117,7 @@ def _classify_path(path: str, source_tiers: list[str]) -> int:
 
     # --- Other (rank 3) ---
     return 3
+
 
 # T8 review fix — find_references over-fetches a wide pool to ensure source-tier
 # results reach the post-sort even on repos with large docs/archive corpora.

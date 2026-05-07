@@ -373,9 +373,7 @@ def test_chunks_cpp_line_ranges_match_source() -> None:
     lines = src.splitlines()
     for c in chunks:
         expected = "\n".join(lines[c.line_start - 1 : c.line_end])
-        assert c.snippet == expected, (
-            f"snippet mismatch at lines {c.line_start}-{c.line_end}"
-        )
+        assert c.snippet == expected, f"snippet mismatch at lines {c.line_start}-{c.line_end}"
 
 
 def test_chunks_cpp_no_duplicate_ranges() -> None:
@@ -498,21 +496,15 @@ def test_chunks_markdown_nested_sections() -> None:
     )
 
     # ### Bar must also be emitted as its own chunk for findability.
-    assert "### Bar" in by_first_line, (
-        f"expected '### Bar' chunk; got: {list(by_first_line)}"
-    )
+    assert "### Bar" in by_first_line, f"expected '### Bar' chunk; got: {list(by_first_line)}"
 
     # ### Baz must be emitted too.
-    assert "### Baz" in by_first_line, (
-        f"expected '### Baz' chunk; got: {list(by_first_line)}"
-    )
+    assert "### Baz" in by_first_line, f"expected '### Baz' chunk; got: {list(by_first_line)}"
 
     # ## Next must be present and NOT include ## Foo content.
     assert "## Next" in by_first_line, f"expected '## Next' chunk; got: {list(by_first_line)}"
     next_chunk = by_first_line["## Next"]
-    assert "## Foo" not in next_chunk.snippet, (
-        "## Next chunk should not include ## Foo content"
-    )
+    assert "## Foo" not in next_chunk.snippet, "## Next chunk should not include ## Foo content"
 
 
 def test_extract_definitions_markdown_uses_heading_text_as_name() -> None:
@@ -524,9 +516,7 @@ def test_extract_definitions_markdown_uses_heading_text_as_name() -> None:
     names = {d.name for d in defs}
     # Fixture headings include: "code-context", "Installation", "Configuration",
     # "Prerequisites", "Optional dependencies", "Usage", "Architecture", "Contributing", etc.
-    assert "Configuration" in names, (
-        f"expected 'Configuration' in definition names; got: {names}"
-    )
+    assert "Configuration" in names, f"expected 'Configuration' in definition names; got: {names}"
     assert "Installation" in names, f"expected 'Installation'; got: {names}"
 
     # All defs should have kind='section' and language='markdown'.
@@ -605,9 +595,7 @@ def test_chunks_markdown_fixture_snippet_roundtrip() -> None:
     lines = src.splitlines()
     for c in chunks:
         expected = "\n".join(lines[c.line_start - 1 : c.line_end])
-        assert c.snippet == expected, (
-            f"snippet mismatch at lines {c.line_start}-{c.line_end}"
-        )
+        assert c.snippet == expected, f"snippet mismatch at lines {c.line_start}-{c.line_end}"
 
 
 def test_extract_definitions_markdown_lines_are_one_indexed() -> None:

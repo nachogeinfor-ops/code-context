@@ -334,6 +334,5 @@ def test_index_with_custom_stop_words_only_filters_those(tmp_path: Path) -> None
     result = idx.search("foo bar baz", k=5)
     paths = [e.chunk.path for e, _ in result]
     assert "result.py" in paths, (
-        "custom stop words should filter 'foo' and 'bar' but keep 'baz'; "
-        f"got paths={paths!r}"
+        f"custom stop words should filter 'foo' and 'bar' but keep 'baz'; got paths={paths!r}"
     )

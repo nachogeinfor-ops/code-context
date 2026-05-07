@@ -95,9 +95,24 @@ def test_extensions_routed_to_treesitter() -> None:
     line = _Recording("line")
     d = ChunkerDispatcher(treesitter=ts, line=line)
     exts = [
-        ".py", ".js", ".ts", ".go", ".rs", ".jsx", ".tsx", ".cs",
-        ".java", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx", ".h",
-        ".md", ".markdown",
+        ".py",
+        ".js",
+        ".ts",
+        ".go",
+        ".rs",
+        ".jsx",
+        ".tsx",
+        ".cs",
+        ".java",
+        ".cpp",
+        ".cc",
+        ".cxx",
+        ".hpp",
+        ".hh",
+        ".hxx",
+        ".h",
+        ".md",
+        ".markdown",
     ]
     for ext in exts:
         d.chunk("content", f"x{ext}")
@@ -109,21 +124,18 @@ def test_extensions_routed_to_treesitter() -> None:
 # T6 — parametrized routing invariant tests
 # ---------------------------------------------------------------------------
 
+
 class _RecordingTs:
     """Stub TreeSitterChunker: always returns one chunk so we can assert routing."""
 
     version = "ts-stub"
 
     def chunk(self, content: str, path: str) -> list[Chunk]:
-        return [
-            Chunk(path=path, line_start=1, line_end=1, content_hash="y", snippet="<ts>")
-        ]
+        return [Chunk(path=path, line_start=1, line_end=1, content_hash="y", snippet="<ts>")]
 
 
 @pytest.mark.parametrize("ext,expected_lang", list(EXT_TO_LANG.items()))
-def test_dispatcher_routes_every_supported_ext_to_treesitter(
-    ext: str, expected_lang: str
-) -> None:
+def test_dispatcher_routes_every_supported_ext_to_treesitter(ext: str, expected_lang: str) -> None:
     """Every extension in EXT_TO_LANG must be routed to TreeSitterChunker first.
 
     Regression guard for the T3/T4 silent bug: extensions were added to
