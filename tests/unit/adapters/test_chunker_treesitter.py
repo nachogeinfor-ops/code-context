@@ -64,6 +64,15 @@ def test_version_starts_with_treesitter() -> None:
     assert TreeSitterChunker().version.startswith("treesitter-")
 
 
+def test_chunker_version_after_sprint_11() -> None:
+    """T7 — Pinned version string after Sprint 11 chunker changes.
+
+    Detects any future unintentional drift in the TreeSitterChunker version.
+    v3: Java/C++/Markdown additions, C++ dedup logic, level-aware Markdown sections.
+    """
+    assert TreeSitterChunker().version == "treesitter-v3"
+
+
 @pytest.mark.parametrize(
     "lang, ext, expected_first_tokens",
     [

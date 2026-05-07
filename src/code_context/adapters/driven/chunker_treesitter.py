@@ -82,7 +82,9 @@ class TreeSitterChunker:
     @property
     def version(self) -> str:
         # Bump the trailing -vN when query semantics change — invalidates the index cache.
-        return "treesitter-v2"
+        # v3: Sprint 11 — Java/C++/Markdown additions, C++ dedup logic,
+        #     level-aware Markdown sections.
+        return "treesitter-v3"
 
     def chunk(self, content: str, path: str) -> list[Chunk]:
         if not content:

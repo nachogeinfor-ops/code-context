@@ -467,6 +467,39 @@ def test_dirty_set_full_reindex_when_chunker_changes(cache_dir: Path, repo_root:
     assert s.full_reindex_required is True
 
 
+def test_dirty_set_triggers_full_reindex_when_chunker_version_changed_sprint11(
+    cache_dir: Path, repo_root: Path
+) -> None:
+    """T7 — dirty_set forces full reindex when upgrading from treesitter-v2 to v3.
+
+    Simulates a pre-Sprint-11 index (treesitter-v2 stored in metadata) being
+    read by a v1.3.0 startup that has treesitter-v3.  The dispatcher version
+    string changes, so dirty_set must return full_reindex_required=True.
+    """
+    f = repo_root / "a.py"
+    f.write_text("x = 1\n", encoding="utf-8")
+    uc = _build_uc(cache_dir, repo_root, files={f: "x = 1\n"})
+    new_dir = uc.run()
+    (cache_dir / "current.json").write_text(json.dumps({"active": new_dir.name, "version": 1}))
+
+    # Overwrite metadata with the pre-Sprint-11 dispatcher version string
+    # (treesitter-v2 instead of treesitter-v3).
+    meta_path = new_dir / "metadata.json"
+    meta = json.loads(meta_path.read_text())
+    meta["chunker_version"] = "dispatcher(treesitter-v2|line-50-10-v1)-v1"
+    meta_path.write_text(json.dumps(meta))
+
+    # The live chunker now reports treesitter-v3 (via the real ChunkerDispatcher).
+    # We simulate this by patching the fake chunker's version to the new dispatcher string.
+    class Sprint11Chunker(FakeChunker):
+        version = "dispatcher(treesitter-v3|line-50-10-v1)-v1"
+
+    uc.chunker = Sprint11Chunker()
+    s = uc.dirty_set()
+    assert s.full_reindex_required is True
+    assert "chunker" in s.reason.lower()
+
+
 def test_dirty_set_full_reindex_when_v1_metadata_lacks_file_hashes(
     cache_dir: Path, repo_root: Path
 ) -> None:
