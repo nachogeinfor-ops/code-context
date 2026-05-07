@@ -79,6 +79,14 @@ class Config:
     # "natural": skip the post-sort and return raw BM25 order (pre-T8 behavior).
     # Any other value is treated as "source-first" (defensive default).
     symbol_rank: str = "source-first"
+    # Sprint 12.5 T2 — anonymous opt-in telemetry (default OFF).
+    # Set CC_TELEMETRY=on/true/1 to enable. See docs/telemetry.md for the
+    # full privacy notice and event schema.
+    telemetry: bool = False
+    # Sprint 12.5 T2 — PostHog endpoint override (default None = use PostHog cloud).
+    # Set CC_TELEMETRY_ENDPOINT=https://... to point at a self-hosted instance or
+    # a local test mock.
+    telemetry_endpoint: str | None = None
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -135,4 +143,6 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         watch_debounce_ms=int(os.environ.get("CC_WATCH_DEBOUNCE_MS", "1000")),
         bm25_stop_words=os.environ.get("CC_BM25_STOP_WORDS", "off").lower(),
         symbol_rank=os.environ.get("CC_SYMBOL_RANK", "source-first").lower(),
+        telemetry=os.environ.get("CC_TELEMETRY", "off").lower() in ("on", "true", "1"),
+        telemetry_endpoint=os.environ.get("CC_TELEMETRY_ENDPOINT"),
     )

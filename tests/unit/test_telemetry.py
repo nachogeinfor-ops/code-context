@@ -1,4 +1,4 @@
-"""Tests for TelemetryClient (T1 — core, no-op when off).
+"""Tests for TelemetryClient (T1 — core, no-op when off; T2 — Config integration).
 
 Coverage:
 1. enabled=False is a complete no-op (no posthog import, no I/O, no network).
@@ -14,6 +14,7 @@ Coverage:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -370,6 +371,33 @@ def test_load_telemetry_config_endpoint_passthrough(tmp_path: Path) -> None:
 
     tconf = _load_telemetry_config(_FakeConfig())
     assert tconf.endpoint == "https://self-hosted.example.com"
+
+
+# ---------------------------------------------------------------------------
+# T2 — _load_telemetry_config reads from real Config (Sprint 12.5)
+# ---------------------------------------------------------------------------
+
+
+def test_load_telemetry_config_from_real_config(tmp_path: Path) -> None:
+    """T2: _load_telemetry_config correctly extracts fields from a real Config
+    object built by load_config() when CC_TELEMETRY=on and
+    CC_TELEMETRY_ENDPOINT is set."""
+    from code_context.config import load_config
+
+    endpoint = "https://self-hosted.example.com"
+    env = {
+        "CC_TELEMETRY": "on",
+        "CC_TELEMETRY_ENDPOINT": endpoint,
+        "CC_CACHE_DIR": str(tmp_path),
+    }
+    with patch.dict(os.environ, env, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+
+    tconf = _load_telemetry_config(cfg)
+
+    assert tconf.enabled is True
+    assert tconf.endpoint == endpoint
+    assert tconf.cache_dir == tmp_path
 
 
 # ---------------------------------------------------------------------------

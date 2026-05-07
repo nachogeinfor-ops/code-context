@@ -220,3 +220,44 @@ def test_symbol_rank_env_var_is_lowercased(tmp_path: Path) -> None:
     with patch.dict(os.environ, {"CC_SYMBOL_RANK": "NATURAL"}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
     assert cfg.symbol_rank == "natural"
+
+
+# ---------------------------------------------------------------------------
+# T2 — CC_TELEMETRY + CC_TELEMETRY_ENDPOINT env vars (Sprint 12.5)
+# ---------------------------------------------------------------------------
+
+
+def test_telemetry_default_is_false(tmp_path: Path) -> None:
+    """T2: CC_TELEMETRY unset -> telemetry is False (default off)."""
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.telemetry is False
+
+
+def test_telemetry_on_via_env(tmp_path: Path) -> None:
+    """T2: on/true/1 all enable telemetry."""
+    for v in ("on", "true", "1"):
+        with patch.dict(os.environ, {"CC_TELEMETRY": v}, clear=True):
+            assert load_config(default_repo_root=tmp_path).telemetry is True
+
+
+def test_telemetry_off_via_env(tmp_path: Path) -> None:
+    """T2: off/false/0/empty all leave telemetry disabled."""
+    for v in ("off", "false", "0", ""):
+        with patch.dict(os.environ, {"CC_TELEMETRY": v}, clear=True):
+            assert load_config(default_repo_root=tmp_path).telemetry is False
+
+
+def test_telemetry_endpoint_default_is_none(tmp_path: Path) -> None:
+    """T2: CC_TELEMETRY_ENDPOINT unset -> telemetry_endpoint is None."""
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.telemetry_endpoint is None
+
+
+def test_telemetry_endpoint_reads_env_var(tmp_path: Path) -> None:
+    """T2: CC_TELEMETRY_ENDPOINT passes through verbatim."""
+    endpoint = "https://example.com"
+    with patch.dict(os.environ, {"CC_TELEMETRY_ENDPOINT": endpoint}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.telemetry_endpoint == endpoint
