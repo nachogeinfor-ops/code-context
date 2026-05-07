@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from code_context.adapters.driven.chunker_dispatcher import ChunkerDispatcher
+from code_context.adapters.driven.chunker_treesitter import EXT_TO_LANG
 from code_context.domain.models import Chunk
 
 
@@ -100,3 +103,59 @@ def test_extensions_routed_to_treesitter() -> None:
         d.chunk("content", f"x{ext}")
     assert len(ts.calls) == len(exts)
     assert not line.calls
+
+
+# ---------------------------------------------------------------------------
+# T6 — parametrized routing invariant tests
+# ---------------------------------------------------------------------------
+
+class _RecordingTs:
+    """Stub TreeSitterChunker: always returns one chunk so we can assert routing."""
+
+    version = "ts-stub"
+
+    def chunk(self, content: str, path: str) -> list[Chunk]:
+        return [
+            Chunk(path=path, line_start=1, line_end=1, content_hash="y", snippet="<ts>")
+        ]
+
+
+@pytest.mark.parametrize("ext,expected_lang", list(EXT_TO_LANG.items()))
+def test_dispatcher_routes_every_supported_ext_to_treesitter(
+    ext: str, expected_lang: str
+) -> None:
+    """Every extension in EXT_TO_LANG must be routed to TreeSitterChunker first.
+
+    Regression guard for the T3/T4 silent bug: extensions were added to
+    EXT_TO_LANG in chunker_treesitter without updating the dispatcher's
+    separate _TREESITTER_EXTS set, so those files were silently routed to
+    LineChunker instead.  After T6's consolidation (dispatcher derives its
+    set from EXT_TO_LANG) this can't happen again, but the test pins the
+    invariant so any future drift is caught immediately.
+
+    ``expected_lang`` is included as a parameter so pytest IDs are readable
+    (e.g. ".java-java") and so the parametrize list stays in sync with the map.
+    """
+    ts = _RecordingTs()
+    line = _Recording("line")
+    d = ChunkerDispatcher(treesitter=ts, line=line)
+    out = d.chunk("content", f"foo{ext}")
+    # The stub always returns a non-empty list, so treesitter must win.
+    assert out[0].snippet == "<ts>", (
+        f"extension {ext!r} (lang={expected_lang!r}) was NOT routed to TreeSitterChunker"
+    )
+
+
+def test_dispatcher_routes_unknown_ext_to_line_chunker() -> None:
+    """Unknown extension falls through to LineChunker (not tree-sitter).
+
+    This is the base-case invariant: anything not in EXT_TO_LANG must never
+    go to the tree-sitter chunker.
+    """
+    ts = _RecordingTs()
+    line = _Recording("line")
+    d = ChunkerDispatcher(treesitter=ts, line=line)
+    out = d.chunk("some content\n", "foo.unknownext")
+    assert out[0].snippet == "<line>", (
+        "unknown extension was unexpectedly routed to TreeSitterChunker"
+    )

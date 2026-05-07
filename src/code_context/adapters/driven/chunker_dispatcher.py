@@ -3,6 +3,11 @@
 Tree-sitter languages → TreeSitterChunker. Everything else → LineChunker.
 If TreeSitterChunker returns [] (unsupported or parse error), LineChunker
 takes over so we don't lose the file from the index.
+
+Routing is derived from ``EXT_TO_LANG`` in ``chunker_treesitter`` — the single
+source of truth for supported extensions.  Do NOT add a separate extension list
+here; that duplication caused the T3/T4 silent regression where new languages
+were added to the chunker but the dispatcher still routed them to LineChunker.
 """
 
 from __future__ import annotations
@@ -10,14 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from code_context.adapters.driven.chunker_treesitter import EXT_TO_LANG
 from code_context.domain.models import Chunk, SymbolDef
 from code_context.domain.ports import Chunker
 
-_TREESITTER_EXTS = {
-    ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".cs",
-    ".java", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx", ".h",
-    ".md", ".markdown",
-}
+# Derived from the single source of truth in chunker_treesitter.
+# Adding a new language to EXT_TO_LANG automatically routes it here.
+_TREESITTER_EXTS: frozenset[str] = frozenset(EXT_TO_LANG.keys())
 
 
 @dataclass

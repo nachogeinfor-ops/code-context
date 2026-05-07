@@ -83,7 +83,12 @@ def cache(tmp_path: Path) -> Path:
 
 
 def test_indexer_produces_function_aligned_chunks(repo: Path, cache: Path) -> None:
-    """The dispatcher routes .py → tree-sitter, .md → line. Indexer end-to-end."""
+    """The dispatcher routes .py → tree-sitter, .md → tree-sitter (T5+). Indexer end-to-end.
+
+    Markdown with headings is chunked by TreeSitterChunker into section chunks.
+    Headingless markdown falls back to LineChunker via the dispatcher's empty-result
+    fallback path.  In this fixture README.md contains headings, so tree-sitter wins.
+    """
     chunker = ChunkerDispatcher(
         treesitter=TreeSitterChunker(),
         line=LineChunker(chunk_lines=20, overlap=5),
@@ -110,7 +115,7 @@ def test_indexer_produces_function_aligned_chunks(repo: Path, cache: Path) -> No
     assert any(s.lstrip().startswith(("def ", "class ")) for s in snippets), (
         f"no def/class-aligned chunks; snippets head:\n{head}"
     )
-    # At least one chunk from README.md (markdown, falls back to line chunker).
+    # At least one chunk from README.md (markdown routed to tree-sitter as of T5).
     assert any("README.md" in p for p in paths)
     # And version reports the dispatcher composition.
     assert chunker.version.startswith("dispatcher(")

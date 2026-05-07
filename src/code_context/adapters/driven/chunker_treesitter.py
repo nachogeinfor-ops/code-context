@@ -28,7 +28,11 @@ log = logging.getLogger(__name__)
 # the line chunker (50-line windows) so we never emit a multi-hundred-line blob.
 _SECTION_HARD_CAP = 200
 
-_EXT_TO_LANG: dict[str, str] = {
+# Public mapping: extension → tree-sitter language name.
+# This is the single source of truth for which extensions TreeSitterChunker supports.
+# ChunkerDispatcher imports this to derive its routing set — do NOT maintain a
+# separate extension list in the dispatcher (that caused the T3/T4 silent regression).
+EXT_TO_LANG: dict[str, str] = {
     ".py": "python",
     ".js": "javascript",
     ".jsx": "javascript",
@@ -52,6 +56,9 @@ _EXT_TO_LANG: dict[str, str] = {
     ".md": "markdown",
     ".markdown": "markdown",
 }
+
+# Internal alias kept for backward compatibility with helpers in this module.
+_EXT_TO_LANG = EXT_TO_LANG
 
 
 def _load_language(lang: str) -> tuple[Any, Any]:  # pragma: no cover - exercised in tests
