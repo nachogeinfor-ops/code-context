@@ -31,7 +31,7 @@ def main() -> int:
         print(f"ERROR: {keyword_db} does not exist.", file=sys.stderr)
         return 1
 
-    print(f"Inspecting keyword.sqlite at:")
+    print("Inspecting keyword.sqlite at:")
     print(f"  {keyword_db}")
     print(f"  size: {keyword_db.stat().st_size:,} bytes")
     print()
@@ -47,10 +47,7 @@ def main() -> int:
     paths = [r[0] for r in conn.execute("SELECT path FROM chunks_fts").fetchall()]
     ext_counter: Counter[str] = Counter()
     for p in paths:
-        if "." in p.rsplit("/", 1)[-1]:
-            ext = p.rsplit(".", 1)[-1].lower()
-        else:
-            ext = "<no-ext>"
+        ext = p.rsplit(".", 1)[-1].lower() if "." in p.rsplit("/", 1)[-1] else "<no-ext>"
         ext_counter[ext] += 1
     for ext, count in ext_counter.most_common(15):
         print(f"  .{ext}: {count}")

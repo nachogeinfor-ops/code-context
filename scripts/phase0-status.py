@@ -74,6 +74,7 @@ def _latest_version_data(baseline: dict) -> tuple[str, dict]:
 
 def _latest_version_data_simple(baseline: dict) -> tuple[str, dict]:
     """Return (version_key, per_config_data) — no packaging dep required."""
+
     def _ver_tuple(v: str) -> tuple[int, ...]:
         return tuple(int(x) for x in re.findall(r"\d+", v))
 
@@ -171,16 +172,18 @@ def check_languages() -> Criterion:
         status = "✓" if count >= 9 else "✗"
         return Criterion("Tree-sitter languages", "≥ 9", status, str(count), mandatory=True)
     except Exception as exc:
-        return Criterion(
-            "Tree-sitter languages", "≥ 9", "?", f"error: {exc}", mandatory=True
-        )
+        return Criterion("Tree-sitter languages", "≥ 9", "?", f"error: {exc}", mandatory=True)
 
 
 def check_tests_passing() -> Criterion:
     """Tests collected (proxy for passing) ≥ 300."""
     try:
         result = _run(
-            sys.executable, "-m", "pytest", "--collect-only", "-q",
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
             cwd=str(REPO_ROOT),
         )
         # Last non-empty line looks like: "440/443 tests collected (3 deselected)"
@@ -203,11 +206,17 @@ def check_p0_issues() -> Criterion:
     """P0 open issues = 0."""
     try:
         result = _run(
-            "gh", "issue", "list",
-            "--label", "P0",
-            "--state", "open",
-            "--json", "id",
-            "--repo", "nachogeinfor-ops/code-context",
+            "gh",
+            "issue",
+            "list",
+            "--label",
+            "P0",
+            "--state",
+            "open",
+            "--json",
+            "id",
+            "--repo",
+            "nachogeinfor-ops/code-context",
         )
         if result.returncode != 0:
             return Criterion("P0 issues open", "= 0", "?", "gh unavailable", mandatory=True)
@@ -223,11 +232,17 @@ def check_p1_issues() -> Criterion:
     """P1 open issues ≤ 3."""
     try:
         result = _run(
-            "gh", "issue", "list",
-            "--label", "P1",
-            "--state", "open",
-            "--json", "id",
-            "--repo", "nachogeinfor-ops/code-context",
+            "gh",
+            "issue",
+            "list",
+            "--label",
+            "P1",
+            "--state",
+            "open",
+            "--json",
+            "id",
+            "--repo",
+            "nachogeinfor-ops/code-context",
         )
         if result.returncode != 0:
             return Criterion("P1 issues open", "≤ 3", "?", "gh unavailable", mandatory=False)
@@ -248,9 +263,11 @@ def check_github_stars() -> Criterion:
     """GitHub stars ≥ 500."""
     try:
         result = _run(
-            "gh", "api",
+            "gh",
+            "api",
             "repos/nachogeinfor-ops/code-context",
-            "--jq", ".stargazers_count",
+            "--jq",
+            ".stargazers_count",
         )
         if result.returncode != 0:
             return Criterion("GitHub stars", "≥ 500", "?", "gh unavailable", mandatory=False)
@@ -274,13 +291,9 @@ def check_pypi_downloads() -> Criterion:
         payload = resp.json()
         count = payload.get("data", {}).get("last_month")
         if count is None:
-            return Criterion(
-                "PyPI downloads (last mo)", "≥ 2000", "?", "no data", mandatory=False
-            )
+            return Criterion("PyPI downloads (last mo)", "≥ 2000", "?", "no data", mandatory=False)
         status = "✓" if count >= 2000 else "✗"
-        return Criterion(
-            "PyPI downloads (last mo)", "≥ 2000", status, str(count), mandatory=False
-        )
+        return Criterion("PyPI downloads (last mo)", "≥ 2000", status, str(count), mandatory=False)
     except ImportError:
         return Criterion(
             "PyPI downloads (last mo)", "≥ 2000", "?", "requests not available", mandatory=False
@@ -295,9 +308,7 @@ def check_telemetry_installs() -> Criterion:
     """Active installs ≥ 50 (PostHog)."""
     api_key = os.environ.get("POSTHOG_PROJECT_API_KEY", "")
     if not api_key:
-        return Criterion(
-            "Active installs (telem.)", "≥ 50", "?", "not configured", mandatory=False
-        )
+        return Criterion("Active installs (telem.)", "≥ 50", "?", "not configured", mandatory=False)
     try:
         import requests  # noqa: PLC0415
 
@@ -314,44 +325,35 @@ def check_telemetry_installs() -> Criterion:
         # Very rough: sum of aggregated data points
         payload = resp.json()
         results = payload.get("result", [])
-        total = sum(
-            sum(series.get("data", []))
-            for series in results
-        )
+        total = sum(sum(series.get("data", [])) for series in results)
         status = "✓" if total >= 50 else "✗"
-        return Criterion(
-            "Active installs (telem.)", "≥ 50", status, str(total), mandatory=False
-        )
+        return Criterion("Active installs (telem.)", "≥ 50", status, str(total), mandatory=False)
     except ImportError:
         return Criterion(
             "Active installs (telem.)", "≥ 50", "?", "requests not available", mandatory=False
         )
     except Exception as exc:
-        return Criterion(
-            "Active installs (telem.)", "≥ 50", "?", f"error: {exc}", mandatory=False
-        )
+        return Criterion("Active installs (telem.)", "≥ 50", "?", f"error: {exc}", mandatory=False)
 
 
 def check_external_contributors() -> Criterion:
     """External contributors ≥ 5 (GitHub contributors minus maintainer)."""
     try:
         result = _run(
-            "gh", "api",
+            "gh",
+            "api",
             "repos/nachogeinfor-ops/code-context/contributors",
-            "--jq", "length",
+            "--jq",
+            "length",
         )
         if result.returncode != 0:
-            return Criterion(
-                "External contributors", "≥ 5", "?", "gh unavailable", mandatory=False
-            )
+            return Criterion("External contributors", "≥ 5", "?", "gh unavailable", mandatory=False)
         total = int(result.stdout.strip())
         external = max(0, total - 1)  # subtract maintainer
         status = "✓" if external >= 5 else "✗"
         return Criterion("External contributors", "≥ 5", status, str(external), mandatory=False)
     except Exception:
-        return Criterion(
-            "External contributors", "≥ 5", "?", "gh unavailable", mandatory=False
-        )
+        return Criterion("External contributors", "≥ 5", "?", "gh unavailable", mandatory=False)
 
 
 # ---------------------------------------------------------------------------
@@ -444,9 +446,7 @@ def check_changelog_clean() -> Criterion:
             return Criterion(
                 "CHANGELOG clean of P0", "no 'known issue'", "✗", "marker found", mandatory=True
             )
-        return Criterion(
-            "CHANGELOG clean of P0", "no 'known issue'", "✓", "clean", mandatory=True
-        )
+        return Criterion("CHANGELOG clean of P0", "no 'known issue'", "✓", "clean", mandatory=True)
     except Exception as exc:
         return Criterion(
             "CHANGELOG clean of P0", "no 'known issue'", "?", f"error: {exc}", mandatory=True
@@ -514,7 +514,7 @@ def _print_table(criteria: list[Criterion]) -> None:
             if c is None:
                 continue
             too_long = len(c.current) > current_width
-            current_display = c.current[:current_width - 1] if too_long else c.current
+            current_display = c.current[: current_width - 1] if too_long else c.current
             print(
                 f"  {c.label:<{label_width}} {c.status}  "
                 f"{current_display:<{current_width}} ({c.target})"

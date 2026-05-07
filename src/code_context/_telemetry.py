@@ -147,11 +147,7 @@ class TelemetryClient:
             return self._install_id
         # First time: derive from cache_dir mtime (anonymous, install-stable)
         self._config.cache_dir.mkdir(parents=True, exist_ok=True)
-        mtime = (
-            self._config.cache_dir.stat().st_mtime
-            if self._config.cache_dir.exists()
-            else 0.0
-        )
+        mtime = self._config.cache_dir.stat().st_mtime if self._config.cache_dir.exists() else 0.0
         seed = f"{self._config.cache_dir}:{mtime}".encode()
         self._install_id = hashlib.sha256(seed).hexdigest()[:32]
         path.write_text(self._install_id, encoding="utf-8")
@@ -198,9 +194,7 @@ class TelemetryClient:
             )
             return None
         if self._config.project_api_key is None:
-            log.warning(
-                "telemetry enabled but POSTHOG_PROJECT_API_KEY not set; events dropped"
-            )
+            log.warning("telemetry enabled but POSTHOG_PROJECT_API_KEY not set; events dropped")
             return None
         host = self._config.endpoint or "https://us.posthog.com"
         self._client = Posthog(self._config.project_api_key, host=host)

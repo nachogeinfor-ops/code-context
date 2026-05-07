@@ -24,9 +24,7 @@ def _import_script():
     if module_name in sys.modules:
         return sys.modules[module_name]
 
-    spec = importlib.util.spec_from_file_location(
-        module_name, _SCRIPTS_DIR / "phase0-status.py"
-    )
+    spec = importlib.util.spec_from_file_location(module_name, _SCRIPTS_DIR / "phase0-status.py")
     module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     sys.modules[module_name] = module
     spec.loader.exec_module(module)  # type: ignore[union-attr]
@@ -187,6 +185,7 @@ def test_check_multi_ide_row_not_found(script, tmp_path, monkeypatch):
 
 def test_main_exit_code_0_when_all_met(script, tmp_path, monkeypatch, capsys):
     """Exit 0 when all mandatory checks return ✓."""
+
     def _make_pass(label, mandatory):
         return script.Criterion(label, "test", "✓", "ok", mandatory=mandatory)
 
@@ -241,6 +240,7 @@ def test_main_exit_code_0_when_all_met(script, tmp_path, monkeypatch, capsys):
 
 def test_main_exit_code_1_when_mandatory_missed(script, tmp_path, monkeypatch, capsys):
     """Exit 1 when at least one mandatory check returns ✗."""
+
     def _make(label, status, mandatory):
         return script.Criterion(label, "test", status, "val", mandatory=mandatory)
 
@@ -253,48 +253,59 @@ def test_main_exit_code_1_when_mandatory_missed(script, tmp_path, monkeypatch, c
     with (
         patch.object(script, "check_ndcg", return_value=failing_ndcg),
         patch.object(
-            script, "check_p50_latency",
+            script,
+            "check_p50_latency",
             return_value=passing("p50 latency hybrid_rerank", True),
         ),
         patch.object(
-            script, "check_languages",
+            script,
+            "check_languages",
             return_value=passing("Tree-sitter languages", True),
         ),
         patch.object(
-            script, "check_tests_passing",
+            script,
+            "check_tests_passing",
             return_value=passing("Tests passing", True),
         ),
         patch.object(
-            script, "check_p0_issues",
+            script,
+            "check_p0_issues",
             return_value=passing("P0 issues open", True),
         ),
         patch.object(
-            script, "check_p1_issues",
+            script,
+            "check_p1_issues",
             return_value=passing("P1 issues open", False),
         ),
         patch.object(
-            script, "check_github_stars",
+            script,
+            "check_github_stars",
             return_value=passing("GitHub stars", False),
         ),
         patch.object(
-            script, "check_pypi_downloads",
+            script,
+            "check_pypi_downloads",
             return_value=passing("PyPI downloads (last mo)", False),
         ),
         patch.object(
-            script, "check_telemetry_installs",
+            script,
+            "check_telemetry_installs",
             return_value=passing("Active installs (telem.)", False),
         ),
         patch.object(
-            script, "check_external_contributors",
+            script,
+            "check_external_contributors",
             return_value=passing("External contributors", False),
         ),
         patch.object(script, "check_multi_ide", side_effect=passing),
         patch.object(
-            script, "check_release_published",
+            script,
+            "check_release_published",
             return_value=passing("v1.4.0 published", True),
         ),
         patch.object(
-            script, "check_changelog_clean",
+            script,
+            "check_changelog_clean",
             return_value=passing("CHANGELOG clean of P0", True),
         ),
     ):

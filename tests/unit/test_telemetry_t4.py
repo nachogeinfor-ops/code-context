@@ -65,6 +65,7 @@ def _make_mock_posthog_module() -> MagicMock:
 
 # Minimal fake use cases — only the method signatures telemetry calls.
 
+
 class _FakeSearchUseCase:
     """Minimal stand-in for SearchRepoUseCase."""
 
