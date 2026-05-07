@@ -83,6 +83,8 @@ All env vars use the `CC_` prefix.
 | `CC_WATCH_DEBOUNCE_MS` | `1000` | v0.9 | Watcher debounce window. |
 | `CC_BM25_STOP_WORDS` | `off` | v1.2 | `off` disables filtering; `on` uses built-in 52-word English list; comma-list overrides with a custom set. Filters stop words from BM25 keyword queries before AND-ing tokens. See `docs/configuration.md`. |
 | `CC_SYMBOL_RANK` | `source-first` | v1.2 | `source-first` post-sorts `find_references` results by source tier (source > tests > docs > other); `natural` reverts to raw BM25 order. See `docs/configuration.md`. |
+| `CC_TELEMETRY` | `off` | v1.4 | Opt-in anonymous telemetry. `on`/`true`/`1` enables weekly heartbeat + session aggregates. No PII, no query text, no code content. See `docs/telemetry.md`. |
+| `CC_TELEMETRY_ENDPOINT` | `https://us.posthog.com` | v1.4 | Custom PostHog-compatible collector URL for self-hosting. Only effective when `CC_TELEMETRY=on`. |
 
 ## CLI
 

@@ -25,6 +25,8 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_TRUST_REMOTE_CODE` | `off` | Set to `on`/`true`/`1` to allow `sentence-transformers` to execute custom Python from the HF model repo. Required for models like `jinaai/jina-embeddings-v2-base-code` that use custom architectures. **Off by default for safety.** |
 | `CC_BM25_STOP_WORDS` | `off` | `off` disables filtering; `on` uses built-in 52-word English list; comma-list sets a custom stop-word set. See "BM25 stop-word filtering" below. **Since v1.2.0.** |
 | `CC_SYMBOL_RANK` | `source-first` | `source-first` post-sorts `find_references` by source tier; `natural` reverts to raw BM25 order. See "`find_references` source-tier ranking" below. **Since v1.2.0.** |
+| `CC_TELEMETRY` | `off` | Opt-in anonymous telemetry. `on`/`true`/`1` enables weekly heartbeat + session aggregates. No PII, no query text, no code content. See "Opt-in telemetry" below. **Since v1.4.0.** |
+| `CC_TELEMETRY_ENDPOINT` | `https://us.posthog.com` | Custom PostHog-compatible collector URL (self-host). Only effective when `CC_TELEMETRY=on`. **Since v1.4.0.** |
 
 ## Examples
 
@@ -249,6 +251,36 @@ staleness check — no user action required.
 export CC_SYMBOL_RANK=natural
 
 code-context-server
+```
+
+---
+
+## Opt-in telemetry (`CC_TELEMETRY` / `CC_TELEMETRY_ENDPOINT`) — since v1.4.0
+
+### `CC_TELEMETRY` — opt-in anonymous telemetry (since v1.4.0)
+
+| Value | Effect |
+|---|---|
+| `off` (default) | No telemetry. Complete no-op — `posthog` package is not even imported. |
+| `on` / `true` / `1` | Send anonymous heartbeat (weekly) + session aggregates to PostHog Cloud. |
+
+**Hard exclusions**: no PII, no query text, no code content, no repo paths, no IPs.
+
+See [`docs/telemetry.md`](telemetry.md) for the full event schema, what's NOT collected, and how the install ID is anonymized.
+
+Disable: `CC_TELEMETRY=off` (or unset).
+
+### `CC_TELEMETRY_ENDPOINT` — telemetry collector URL (since v1.4.0)
+
+| Default | `https://us.posthog.com` (PostHog Cloud) |
+|---|---|
+
+Override to self-host. Any PostHog-compatible endpoint works. Requires `POSTHOG_PROJECT_API_KEY` env var to authenticate. Only effective when `CC_TELEMETRY=on`.
+
+```bash
+export CC_TELEMETRY=on
+export CC_TELEMETRY_ENDPOINT=https://your-posthog.example.com
+export POSTHOG_PROJECT_API_KEY=phc_yourkey
 ```
 
 ---

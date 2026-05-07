@@ -113,6 +113,11 @@ Configured via env vars. See [`docs/configuration.md`](docs/configuration.md) fo
 | `CC_INCLUDE_EXTENSIONS` | `.py,.js,.ts,.jsx,.tsx,.go,.rs,.java,.c,.cpp,.h,.hpp,.md,.yaml,.yml,.json` |
 | `CC_CHUNKER` | `treesitter` (AST-aware for 9 languages: Python, JavaScript, TypeScript, Go, Rust, C#, Java, C++, Markdown — line fallback for the rest) — set `line` for v0.1.x behavior |
 | `CC_CACHE_DIR` | platformdirs user cache |
+| `CC_TELEMETRY` | `off` (opt-in; see below) |
+
+### Telemetry (opt-in)
+
+`CC_TELEMETRY=on` enables anonymous usage telemetry — weekly heartbeat + session aggregates sent to PostHog Cloud. Default off. No PII, no query text, no code content. See [`docs/telemetry.md`](docs/telemetry.md) for the full schema and privacy notice.
 
 ## Documentation
 
