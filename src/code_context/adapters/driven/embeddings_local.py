@@ -58,7 +58,7 @@ def _detect_device() -> str:
 
 
 def _load_model(
-    model_name: str, *, trust_remote_code: bool = False, device: str = "cpu"
+    model_name: str, *, trust_remote_code: bool = False, device: str
 ) -> Any:  # pragma: no cover - integration-tested
     """Lazy import + load. Patched in unit tests."""
     from sentence_transformers import SentenceTransformer

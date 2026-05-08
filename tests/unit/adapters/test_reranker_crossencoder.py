@@ -94,7 +94,7 @@ def _make_fake_model() -> MagicMock:
 
 
 def test_device_cuda_when_cuda_available() -> None:
-    """When torch.cuda.is_available() is True, _load_model receives device='cuda'."""
+    """When _detect_device returns 'cuda', _load_model receives device='cuda'."""
     captured: dict[str, str] = {}
 
     def fake_load(model_name: str, device: str) -> MagicMock:
@@ -103,7 +103,7 @@ def test_device_cuda_when_cuda_available() -> None:
 
     with (
         patch(f"{_RERANKER_MOD}._load_model", side_effect=fake_load),
-        patch("torch.cuda.is_available", return_value=True),
+        patch(f"{_RERANKER_MOD}._detect_device", return_value="cuda"),
     ):
         r = CrossEncoderReranker()
         r.rerank("q", [(_entry("a.py", "x"), 0.5)], k=1)
@@ -113,20 +113,16 @@ def test_device_cuda_when_cuda_available() -> None:
 
 
 def test_device_mps_when_mps_available_cuda_not() -> None:
-    """When cuda is unavailable but mps is available, device='mps' is used."""
+    """When _detect_device returns 'mps', _load_model receives device='mps'."""
     captured: dict[str, str] = {}
 
     def fake_load(model_name: str, device: str) -> MagicMock:
         captured["device"] = device
         return _make_fake_model()
 
-    mock_backends = MagicMock()
-    mock_backends.mps.is_available.return_value = True
-
     with (
         patch(f"{_RERANKER_MOD}._load_model", side_effect=fake_load),
-        patch("torch.cuda.is_available", return_value=False),
-        patch("torch.backends", mock_backends),
+        patch(f"{_RERANKER_MOD}._detect_device", return_value="mps"),
     ):
         r = CrossEncoderReranker()
         r.rerank("q", [(_entry("a.py", "x"), 0.5)], k=1)
@@ -136,20 +132,16 @@ def test_device_mps_when_mps_available_cuda_not() -> None:
 
 
 def test_device_cpu_when_neither_available() -> None:
-    """When neither cuda nor mps is available, device='cpu' is used."""
+    """When _detect_device returns 'cpu', _load_model receives device='cpu'."""
     captured: dict[str, str] = {}
 
     def fake_load(model_name: str, device: str) -> MagicMock:
         captured["device"] = device
         return _make_fake_model()
 
-    mock_backends = MagicMock()
-    mock_backends.mps.is_available.return_value = False
-
     with (
         patch(f"{_RERANKER_MOD}._load_model", side_effect=fake_load),
-        patch("torch.cuda.is_available", return_value=False),
-        patch("torch.backends", mock_backends),
+        patch(f"{_RERANKER_MOD}._detect_device", return_value="cpu"),
     ):
         r = CrossEncoderReranker()
         r.rerank("q", [(_entry("a.py", "x"), 0.5)], k=1)
@@ -171,7 +163,7 @@ def test_fallback_to_cpu_on_oserror(caplog) -> None:
 
     with (
         patch(f"{_RERANKER_MOD}._load_model", side_effect=fake_load),
-        patch("torch.cuda.is_available", return_value=True),
+        patch(f"{_RERANKER_MOD}._detect_device", return_value="cuda"),
         caplog.at_level(logging.WARNING, logger=_RERANKER_LOGGER),
     ):
         r = CrossEncoderReranker()
@@ -179,6 +171,6 @@ def test_fallback_to_cpu_on_oserror(caplog) -> None:
 
     assert r._device == "cpu"
     assert call_count == 2  # first cuda (fails), then cpu (succeeds)
-    assert any(
-        "fall" in rec.message.lower() or "cpu" in rec.message.lower() for rec in caplog.records
-    )
+    warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert any("fall" in r.message.lower() or "cpu" in r.message.lower() for r in warnings)
+    assert len(warnings) >= 1
