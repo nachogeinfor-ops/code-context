@@ -67,24 +67,29 @@ def _warmup_models(
     ``stdio_server`` is also running. Loading the weights up front, on
     the main thread, before entering ``stdio_server`` avoids that
     deadlock entirely. The cost is ~3 s of extra startup time, paid
-    once per server lifetime.
+    once per server lifetime. On a fresh install with no Hugging Face
+    cache, this includes the initial model download (30–60 s);
+    subsequent starts pay only the load cost (~3 s).
 
     sys.stdout is temporarily redirected to sys.stderr because
     sentence-transformers and the Hugging Face Hub print progress bars
     and warnings on stdout, which would otherwise corrupt the JSON-RPC
     stream that stdio_server will own immediately after this returns.
     """
+    # Lazy imports: this helper runs once at startup; deferring keeps
+    # server.py's module-load surface narrow.
     import hashlib
 
     import numpy as np
 
     from code_context.domain.models import Chunk, IndexEntry
 
-    log = logging.getLogger(__name__)
     log.info("warming up embeddings model on main thread (pre-stdio)")
     saved_stdout = sys.stdout
     sys.stdout = sys.stderr
     try:
+        # "__cc_warmup__" is a synthetic identifier; the entry is never persisted,
+        # so a real-repo file with the same name would not collide.
         embeddings.embed(["__cc_warmup__"])
         if reranker is not None:
             # Trigger lazy load of the cross-encoder. rerank() short-
@@ -100,6 +105,7 @@ def _warmup_models(
                 content_hash=hashlib.sha256(warm_snippet.encode()).hexdigest(),
                 snippet=warm_snippet,
             )
+            # Shape doesn't matter — reranker.rerank() only reads chunk.snippet, never vector.
             warm_vec = np.zeros(1, dtype=np.float32)
             warm_entry = IndexEntry(chunk=warm_chunk, vector=warm_vec)
             reranker.rerank(
