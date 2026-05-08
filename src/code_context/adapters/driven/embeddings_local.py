@@ -44,18 +44,52 @@ MODEL_REGISTRY: dict[str, dict[str, int | str]] = {
 _MAX_EMBED_CHARS = 2048
 
 
+def _detect_device() -> str:
+    """Detect best available torch device for inference."""
+    try:
+        import torch
+    except ImportError:
+        return "cpu"
+    if torch.cuda.is_available():
+        return "cuda"
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
 def _load_model(
-    model_name: str, *, trust_remote_code: bool = False
+    model_name: str, *, trust_remote_code: bool = False, device: str = "cpu"
 ) -> Any:  # pragma: no cover - integration-tested
     """Lazy import + load. Patched in unit tests."""
     from sentence_transformers import SentenceTransformer
 
     log.info(
-        "loading sentence-transformers model: %s (trust_remote_code=%s)",
+        "loading sentence-transformers model: %s on device=%s (trust_remote_code=%s)",
         model_name,
+        device,
         trust_remote_code,
     )
-    return SentenceTransformer(model_name, trust_remote_code=trust_remote_code)
+    return SentenceTransformer(model_name, trust_remote_code=trust_remote_code, device=device)
+
+
+def _load_model_with_fallback(
+    model_name: str, *, trust_remote_code: bool = False, device: str = "cpu"
+) -> tuple[Any, str]:
+    """Try to load on device; fall back to cpu on OSError/RuntimeError.
+
+    Returns (model, actual_device).
+    """
+    try:
+        return _load_model(model_name, trust_remote_code=trust_remote_code, device=device), device
+    except (OSError, RuntimeError) as exc:
+        if device == "cpu":
+            raise  # already on cpu, can't fall back further
+        log.warning(
+            "model load failed on device=%s (%s); falling back to cpu",
+            device,
+            exc,
+        )
+        return _load_model(model_name, trust_remote_code=trust_remote_code, device="cpu"), "cpu"
 
 
 def _lib_version() -> str:
@@ -83,6 +117,7 @@ class LocalST:
         self.model_name = model_name
         self.trust_remote_code = trust_remote_code
         self._model: Any = None
+        self._device: str = "cpu"
 
     @property
     def dimension(self) -> int:
@@ -108,4 +143,9 @@ class LocalST:
 
     def _ensure_loaded(self) -> None:
         if self._model is None:
-            self._model = _load_model(self.model_name, trust_remote_code=self.trust_remote_code)
+            device = _detect_device()
+            self._model, self._device = _load_model_with_fallback(
+                self.model_name,
+                trust_remote_code=self.trust_remote_code,
+                device=device,
+            )

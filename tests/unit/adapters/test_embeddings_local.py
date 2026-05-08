@@ -77,7 +77,7 @@ def test_trust_remote_code_passed_to_load_model() -> None:
     """trust_remote_code constructor arg flows through to _load_model."""
     captured: dict[str, object] = {}
 
-    def fake_load(model_name: str, *, trust_remote_code: bool = False):
+    def fake_load(model_name: str, *, trust_remote_code: bool = False, device: str = "cpu"):
         captured["name"] = model_name
         captured["trust"] = trust_remote_code
         fake_model = MagicMock()
@@ -92,7 +92,8 @@ def test_trust_remote_code_passed_to_load_model() -> None:
         adapter = LocalST(model_name="some/model", trust_remote_code=True)
         adapter.embed(["hello"])
 
-    assert captured == {"name": "some/model", "trust": True}
+    assert captured["name"] == "some/model"
+    assert captured["trust"] is True
 
 
 def test_embed_truncates_long_snippets() -> None:
@@ -113,3 +114,111 @@ def test_embed_truncates_long_snippets() -> None:
         long_text = "x" * 5000
         adapter.embed([long_text])
     assert len(captured[0][0]) <= 2048  # truncated
+
+
+# ---------------------------------------------------------------------------
+# GPU auto-detection tests
+# ---------------------------------------------------------------------------
+
+_EMBED_MOD = "code_context.adapters.driven.embeddings_local"
+_EMBED_LOGGER = f"{_EMBED_MOD}"
+
+
+def _make_fake_embed_model() -> MagicMock:
+    fake = MagicMock()
+    fake.get_embedding_dimension.return_value = 4
+    fake.encode.return_value = np.zeros((1, 4), dtype=np.float32)
+    return fake
+
+
+def _fake_load_capturing(captured: dict[str, str]):  # type: ignore[return]
+    """Return a _load_model stub that records the device kwarg."""
+
+    def _inner(
+        model_name: str, *, trust_remote_code: bool = False, device: str = "cpu"
+    ) -> MagicMock:
+        captured["device"] = device
+        return _make_fake_embed_model()
+
+    return _inner
+
+
+def test_device_cuda_when_cuda_available() -> None:
+    """When torch.cuda.is_available() is True, _load_model receives device='cuda'."""
+    captured: dict[str, str] = {}
+
+    with (
+        patch(f"{_EMBED_MOD}._load_model", side_effect=_fake_load_capturing(captured)),
+        patch("torch.cuda.is_available", return_value=True),
+    ):
+        adapter = LocalST(model_name="all-MiniLM-L6-v2")
+        adapter.embed(["hello"])
+
+    assert captured["device"] == "cuda"
+    assert adapter._device == "cuda"
+
+
+def test_device_mps_when_mps_available_cuda_not() -> None:
+    """When cuda is unavailable but mps is available, device='mps' is used."""
+    captured: dict[str, str] = {}
+
+    mock_backends = MagicMock()
+    mock_backends.mps.is_available.return_value = True
+
+    with (
+        patch(f"{_EMBED_MOD}._load_model", side_effect=_fake_load_capturing(captured)),
+        patch("torch.cuda.is_available", return_value=False),
+        patch("torch.backends", mock_backends),
+    ):
+        adapter = LocalST(model_name="all-MiniLM-L6-v2")
+        adapter.embed(["hello"])
+
+    assert captured["device"] == "mps"
+    assert adapter._device == "mps"
+
+
+def test_device_cpu_when_neither_available() -> None:
+    """When neither cuda nor mps is available, device='cpu' is used."""
+    captured: dict[str, str] = {}
+
+    mock_backends = MagicMock()
+    mock_backends.mps.is_available.return_value = False
+
+    with (
+        patch(f"{_EMBED_MOD}._load_model", side_effect=_fake_load_capturing(captured)),
+        patch("torch.cuda.is_available", return_value=False),
+        patch("torch.backends", mock_backends),
+    ):
+        adapter = LocalST(model_name="all-MiniLM-L6-v2")
+        adapter.embed(["hello"])
+
+    assert captured["device"] == "cpu"
+    assert adapter._device == "cpu"
+
+
+def test_fallback_to_cpu_on_oserror(caplog) -> None:
+    """If model load raises OSError on cuda, fall back to cpu with a warning log."""
+    call_count = 0
+
+    def fake_load(
+        model_name: str, *, trust_remote_code: bool = False, device: str = "cpu"
+    ) -> MagicMock:
+        nonlocal call_count
+        call_count += 1
+        if device != "cpu":
+            raise OSError("CUDA driver not compatible")
+        return _make_fake_embed_model()
+
+    with (
+        patch(f"{_EMBED_MOD}._load_model", side_effect=fake_load),
+        patch("torch.cuda.is_available", return_value=True),
+        caplog.at_level(logging.WARNING, logger=_EMBED_LOGGER),
+    ):
+        adapter = LocalST(model_name="all-MiniLM-L6-v2")
+        adapter.embed(["hello"])
+
+    assert adapter._device == "cpu"
+    assert call_count == 2  # first cuda (fails), then cpu (succeeds)
+    assert any(
+        "fall" in rec.message.lower() or "cpu" in rec.message.lower() for rec in caplog.records
+    )
