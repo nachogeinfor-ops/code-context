@@ -50,8 +50,66 @@ from code_context._watcher import RepoWatcher
 from code_context.adapters.driving.mcp_server import register
 from code_context.config import Config, load_config
 from code_context.domain.index_bus import IndexUpdateBus
+from code_context.domain.ports import EmbeddingsProvider, Reranker
 
 log = logging.getLogger("code_context")
+
+
+def _warmup_models(
+    embeddings: EmbeddingsProvider,
+    reranker: Reranker | None,
+) -> None:
+    """Pre-load embedding (and reranker) weights on the main thread.
+
+    Sprint 13.0: on Windows, the asyncio Proactor IOCP event loop
+    deadlocks if sentence-transformers tries to load model weights for
+    the first time inside an ``asyncio.to_thread`` worker while
+    ``stdio_server`` is also running. Loading the weights up front, on
+    the main thread, before entering ``stdio_server`` avoids that
+    deadlock entirely. The cost is ~3 s of extra startup time, paid
+    once per server lifetime.
+
+    sys.stdout is temporarily redirected to sys.stderr because
+    sentence-transformers and the Hugging Face Hub print progress bars
+    and warnings on stdout, which would otherwise corrupt the JSON-RPC
+    stream that stdio_server will own immediately after this returns.
+    """
+    import hashlib
+
+    import numpy as np
+
+    from code_context.domain.models import Chunk, IndexEntry
+
+    log = logging.getLogger(__name__)
+    log.info("warming up embeddings model on main thread (pre-stdio)")
+    saved_stdout = sys.stdout
+    sys.stdout = sys.stderr
+    try:
+        embeddings.embed(["__cc_warmup__"])
+        if reranker is not None:
+            # Trigger lazy load of the cross-encoder. rerank() short-
+            # circuits on empty candidates; we therefore pass a single
+            # synthetic IndexEntry whose only purpose is to make
+            # rerank() reach the model.predict() path so the weights
+            # load. The score it returns is discarded.
+            warm_snippet = "warmup"
+            warm_chunk = Chunk(
+                path="__cc_warmup__",
+                line_start=0,
+                line_end=0,
+                content_hash=hashlib.sha256(warm_snippet.encode()).hexdigest(),
+                snippet=warm_snippet,
+            )
+            warm_vec = np.zeros(1, dtype=np.float32)
+            warm_entry = IndexEntry(chunk=warm_chunk, vector=warm_vec)
+            reranker.rerank(
+                query="warmup",
+                candidates=[(warm_entry, 0.0)],
+                k=1,
+            )
+    finally:
+        sys.stdout = saved_stdout
+    log.info("warmup done")
 
 
 async def _run_server(cfg: Config) -> None:
@@ -89,6 +147,10 @@ async def _run_server(cfg: Config) -> None:
         bus=bus,
         reload_callback=reload_cb,
     )
+
+    # Sprint 13.0: pre-load model weights so the first tools/call doesn't
+    # deadlock on Windows. See _warmup_models() docstring for why.
+    _warmup_models(embeddings, search.reranker)
 
     bg = None
     if cfg.bg_reindex:
