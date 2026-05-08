@@ -82,6 +82,12 @@ class Config:
     # Sprint 12 T5 — query embed-result cache capacity (default 256).
     # Set CC_EMBED_CACHE_SIZE=0 to disable caching entirely.
     embed_cache_size: int = 256
+    # Sprint 12 T6 — cross-encoder per-call batch size (default None = all-in-one).
+    # When set to a positive int, passes batch_size=N to CrossEncoder.predict().
+    # Non-positive values (0, negative) are treated as None (use sentence-transformers'
+    # built-in default of 32) — 0 would mean "no batching" which is meaningless for
+    # predict; negative values are nonsensical.
+    rerank_batch_size: int | None = None
     # Sprint 12.5 T2 — anonymous opt-in telemetry (default OFF).
     # Set CC_TELEMETRY=on/true/1 to enable. See docs/telemetry.md for the
     # full privacy notice and event schema.
@@ -121,6 +127,14 @@ def load_config(default_repo_root: Path | None = None) -> Config:
     else:
         exts = list(_DEFAULT_EXTENSIONS)
 
+    _rerank_bs_raw = os.environ.get("CC_RERANK_BATCH_SIZE")
+    # Non-positive values (0, negative) are coerced to None — 0 means "no
+    # batching" which is meaningless for predict; negative is nonsensical.
+    # None means "use sentence-transformers built-in default (32)".
+    rerank_batch_size = int(_rerank_bs_raw) if _rerank_bs_raw else None
+    if rerank_batch_size is not None and rerank_batch_size <= 0:
+        rerank_batch_size = None
+
     return Config(
         repo_root=repo_root.resolve(),
         embeddings_provider=embeddings,
@@ -152,4 +166,5 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         # accidental CC_EMBED_CACHE_SIZE=-1 which would make FIFO evict
         # immediately on every insert.
         embed_cache_size=max(0, int(os.environ.get("CC_EMBED_CACHE_SIZE", "256"))),
+        rerank_batch_size=rerank_batch_size,
     )

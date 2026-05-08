@@ -65,8 +65,13 @@ def _lib_version() -> str:
 
 
 class CrossEncoderReranker:
-    def __init__(self, model_name: str = _DEFAULT_RERANK_MODEL) -> None:
+    def __init__(
+        self,
+        model_name: str = _DEFAULT_RERANK_MODEL,
+        batch_size: int | None = None,
+    ) -> None:
         self.model_name = model_name
+        self.batch_size = batch_size
         self._model: Any = None
         self._device: str = "cpu"
 
@@ -90,7 +95,10 @@ class CrossEncoderReranker:
             device = _detect_device()
             self._model, self._device = _load_model_with_fallback(self.model_name, device)
         pairs = [(query, e.chunk.snippet[:2048]) for e, _ in candidates]
-        scores = self._model.predict(pairs)
+        if self.batch_size is not None:
+            scores = self._model.predict(pairs, batch_size=self.batch_size)
+        else:
+            scores = self._model.predict(pairs)
         scored = [(c[0], float(s)) for c, s in zip(candidates, scores, strict=True)]
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:k]

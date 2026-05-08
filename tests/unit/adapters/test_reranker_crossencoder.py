@@ -174,3 +174,57 @@ def test_fallback_to_cpu_on_oserror(caplog) -> None:
     warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
     assert any("fall" in r.message.lower() or "cpu" in r.message.lower() for r in warnings)
     assert len(warnings) >= 1
+
+
+# ---------------------------------------------------------------------------
+# T6 — batch_size parameter (Sprint 12)
+# ---------------------------------------------------------------------------
+
+
+def test_batch_size_passed_to_predict_when_set() -> None:
+    """T6: when batch_size is set, CrossEncoder.predict receives batch_size=N."""
+    captured_kwargs: dict = {}
+
+    def fake_load(model_name: str, device: str) -> MagicMock:
+        fake = MagicMock()
+
+        def fake_predict(pairs, **kwargs):
+            captured_kwargs.update(kwargs)
+            return np.array([0.5] * len(pairs))
+
+        fake.predict.side_effect = fake_predict
+        return fake
+
+    with (
+        patch(f"{_RERANKER_MOD}._load_model", side_effect=fake_load),
+        patch(f"{_RERANKER_MOD}._detect_device", return_value="cpu"),
+    ):
+        r = CrossEncoderReranker(batch_size=16)
+        r.rerank("q", [(_entry("a.py", "x"), 0.5)], k=1)
+
+    assert "batch_size" in captured_kwargs
+    assert captured_kwargs["batch_size"] == 16
+
+
+def test_batch_size_omitted_from_predict_when_none() -> None:
+    """T6: when batch_size is None, CrossEncoder.predict is called WITHOUT batch_size kwarg."""
+    captured_kwargs: dict = {}
+
+    def fake_load(model_name: str, device: str) -> MagicMock:
+        fake = MagicMock()
+
+        def fake_predict(pairs, **kwargs):
+            captured_kwargs.update(kwargs)
+            return np.array([0.5] * len(pairs))
+
+        fake.predict.side_effect = fake_predict
+        return fake
+
+    with (
+        patch(f"{_RERANKER_MOD}._load_model", side_effect=fake_load),
+        patch(f"{_RERANKER_MOD}._detect_device", return_value="cpu"),
+    ):
+        r = CrossEncoderReranker(batch_size=None)
+        r.rerank("q", [(_entry("a.py", "x"), 0.5)], k=1)
+
+    assert "batch_size" not in captured_kwargs

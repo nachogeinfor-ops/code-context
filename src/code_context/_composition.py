@@ -175,6 +175,7 @@ def build_reranker(cfg: Config) -> Reranker | None:
         return None
     return CrossEncoderReranker(
         model_name=cfg.rerank_model or _DEFAULT_RERANK_MODEL,
+        batch_size=cfg.rerank_batch_size,
     )
 
 

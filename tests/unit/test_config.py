@@ -294,3 +294,34 @@ def test_embed_cache_size_negative_coerced_to_zero(tmp_path: Path) -> None:
     with patch.dict(os.environ, {"CC_EMBED_CACHE_SIZE": "-1"}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
     assert cfg.embed_cache_size == 0
+
+
+# ---------------------------------------------------------------------------
+# T6 — CC_RERANK_BATCH_SIZE env var (Sprint 12)
+# ---------------------------------------------------------------------------
+
+
+def test_rerank_batch_size_default_is_none(tmp_path: Path) -> None:
+    """T6: CC_RERANK_BATCH_SIZE unset -> rerank_batch_size is None (all-in-one batch)."""
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.rerank_batch_size is None
+
+
+def test_rerank_batch_size_reads_env_var(tmp_path: Path) -> None:
+    """T6: CC_RERANK_BATCH_SIZE=64 -> rerank_batch_size is 64."""
+    with patch.dict(os.environ, {"CC_RERANK_BATCH_SIZE": "64"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.rerank_batch_size == 64
+
+
+def test_rerank_batch_size_zero_or_negative_treated_as_none(tmp_path: Path) -> None:
+    """T6: non-positive values fall back to None (use sentence-transformers default).
+
+    0 means 'no batching' which is meaningless for predict; negative is nonsense.
+    Both are coerced to None so the caller uses the library default.
+    """
+    for v in ("0", "-1", "-32"):
+        with patch.dict(os.environ, {"CC_RERANK_BATCH_SIZE": v}, clear=True):
+            cfg = load_config(default_repo_root=tmp_path)
+            assert cfg.rerank_batch_size is None, f"expected None for CC_RERANK_BATCH_SIZE={v}"
