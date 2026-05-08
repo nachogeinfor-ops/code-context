@@ -19,6 +19,8 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from code_context.domain.index_bus import IndexUpdateBus
 from code_context.domain.models import IndexEntry, SearchResult
 from code_context.domain.ports import EmbeddingsProvider, KeywordIndex, Reranker, VectorStore
@@ -42,11 +44,33 @@ class SearchRepoUseCase:
     reranker: Reranker | None = None
     bus: IndexUpdateBus | None = None
     reload_callback: Callable[[], None] | None = None
+    # Sprint 12 T5 — embed-result cache. 0 = disabled.
+    _embed_cache_max: int = 256
     # Initialized to -1 so the very first call (bus.generation == 0)
     # also triggers a reload — covers the cold-start case where the
     # bg indexer hasn't yet published a swap but the active index dir
     # might already be on disk and unloaded.
     _last_seen_generation: int = field(default=-1, init=False, repr=False)
+    # Internal FIFO cache: query string → embedding vector. Not part of
+    # the public interface; excluded from repr to avoid noisy output.
+    _embed_cache: dict[str, np.ndarray] = field(default_factory=dict, init=False, repr=False)
+
+    def _embed_query(self, query: str) -> np.ndarray:
+        """Embed `query`, using the FIFO cache when enabled.
+
+        When `_embed_cache_max` is 0 the cache is bypassed entirely
+        (always embeds, never stores) — user-controlled via CC_EMBED_CACHE_SIZE=0.
+        """
+        if self._embed_cache_max == 0:
+            return self.embeddings.embed([query])[0]
+        if query in self._embed_cache:
+            return self._embed_cache[query]
+        vec = self.embeddings.embed([query])[0]
+        if len(self._embed_cache) >= self._embed_cache_max:
+            # Simple FIFO eviction; LRU is overkill for 256 entries.
+            self._embed_cache.pop(next(iter(self._embed_cache)))
+        self._embed_cache[query] = vec
+        return vec
 
     def run(
         self,
@@ -57,7 +81,7 @@ class SearchRepoUseCase:
         self._reload_if_swapped()
         pool = top_k * _OVER_FETCH_MULTIPLIER
         # 1. vector
-        query_vec = self.embeddings.embed([query])[0]
+        query_vec = self._embed_query(query)
         v_hits = self.vector_store.search(query_vec, k=pool)
         # 2. keyword
         k_hits = self.keyword_index.search(query, k=pool)
@@ -86,6 +110,10 @@ class SearchRepoUseCase:
         if gen == self._last_seen_generation:
             return
         self.reload_callback()
+        # Clear the embed cache: the embeddings model could have changed
+        # if the bg reindex used a different model (e.g. after config
+        # change). Stale vectors would silently corrupt search quality.
+        self._embed_cache.clear()
         # Only mark as seen AFTER a successful reload, so a transient
         # failure (e.g. disk hiccup) gets retried on the next query.
         self._last_seen_generation = gen

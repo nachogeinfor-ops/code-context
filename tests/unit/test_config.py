@@ -261,3 +261,36 @@ def test_telemetry_endpoint_reads_env_var(tmp_path: Path) -> None:
     with patch.dict(os.environ, {"CC_TELEMETRY_ENDPOINT": endpoint}, clear=True):
         cfg = load_config(default_repo_root=tmp_path)
     assert cfg.telemetry_endpoint == endpoint
+
+
+# ---------------------------------------------------------------------------
+# T5 — CC_EMBED_CACHE_SIZE env var (Sprint 12)
+# ---------------------------------------------------------------------------
+
+
+def test_embed_cache_size_default_is_256(tmp_path: Path) -> None:
+    """T5: CC_EMBED_CACHE_SIZE unset -> embed_cache_size is 256."""
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.embed_cache_size == 256
+
+
+def test_embed_cache_size_reads_env_var(tmp_path: Path) -> None:
+    """T5: CC_EMBED_CACHE_SIZE=512 -> embed_cache_size is 512."""
+    with patch.dict(os.environ, {"CC_EMBED_CACHE_SIZE": "512"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.embed_cache_size == 512
+
+
+def test_embed_cache_size_zero_disables(tmp_path: Path) -> None:
+    """T5: CC_EMBED_CACHE_SIZE=0 -> embed_cache_size is 0 (disabled)."""
+    with patch.dict(os.environ, {"CC_EMBED_CACHE_SIZE": "0"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.embed_cache_size == 0
+
+
+def test_embed_cache_size_negative_coerced_to_zero(tmp_path: Path) -> None:
+    """T5: negative values are coerced to 0 so FIFO eviction can't break."""
+    with patch.dict(os.environ, {"CC_EMBED_CACHE_SIZE": "-1"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.embed_cache_size == 0

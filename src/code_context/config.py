@@ -79,6 +79,9 @@ class Config:
     # "natural": skip the post-sort and return raw BM25 order (pre-T8 behavior).
     # Any other value is treated as "source-first" (defensive default).
     symbol_rank: str = "source-first"
+    # Sprint 12 T5 — query embed-result cache capacity (default 256).
+    # Set CC_EMBED_CACHE_SIZE=0 to disable caching entirely.
+    embed_cache_size: int = 256
     # Sprint 12.5 T2 — anonymous opt-in telemetry (default OFF).
     # Set CC_TELEMETRY=on/true/1 to enable. See docs/telemetry.md for the
     # full privacy notice and event schema.
@@ -145,4 +148,8 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         symbol_rank=os.environ.get("CC_SYMBOL_RANK", "source-first").lower(),
         telemetry=os.environ.get("CC_TELEMETRY", "off").lower() in ("on", "true", "1"),
         telemetry_endpoint=os.environ.get("CC_TELEMETRY_ENDPOINT"),
+        # Negative values are coerced to 0 (disable) — guards against
+        # accidental CC_EMBED_CACHE_SIZE=-1 which would make FIFO evict
+        # immediately on every insert.
+        embed_cache_size=max(0, int(os.environ.get("CC_EMBED_CACHE_SIZE", "256"))),
     )

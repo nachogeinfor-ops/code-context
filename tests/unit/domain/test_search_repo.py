@@ -309,3 +309,134 @@ def test_reload_failure_does_not_swallow_search_errors() -> None:
     out = uc.run(query="x", top_k=1)
     assert out and out[0].path == "a.py"
     assert fail_count[0] == 2
+
+
+# ----- Sprint 12 T5: embed-result cache -----
+
+
+class CountingEmbeddings:
+    """FakeEmbeddings that counts embed() calls for cache testing."""
+
+    dimension = 4
+    model_id = "counting-v0"
+
+    def __init__(self) -> None:
+        self.call_count = 0
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        self.call_count += 1
+        out = np.zeros((len(texts), 4), dtype=np.float32)
+        for i, t in enumerate(texts):
+            h = hash(t)
+            for j in range(4):
+                out[i, j] = ((h >> (j * 8)) & 0xFF) / 255.0
+        return out
+
+
+def _make_uc_with_counter(
+    embed_cache_max: int = 256,
+    entries: list | None = None,
+) -> tuple[SearchRepoUseCase, CountingEmbeddings]:
+    embeddings = CountingEmbeddings()
+    if entries is None:
+        entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    uc = SearchRepoUseCase(
+        embeddings=embeddings,
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        _embed_cache_max=embed_cache_max,
+    )
+    return uc, embeddings
+
+
+def test_embed_cache_hit_returns_same_vec_without_re_embedding() -> None:
+    """Same query twice → embedder called once; cache returns identical object."""
+    uc, embeddings = _make_uc_with_counter()
+
+    # We need to intercept the vector before it goes to store.search to
+    # compare identity. Instead, verify embed call count: first run (which
+    # triggers reload with _last_seen_generation=-1 and bus=None so no
+    # reload) calls embed once; second run with same query must NOT call
+    # embed again.
+    uc.run("foo", top_k=1)
+    after_first = embeddings.call_count
+    uc.run("foo", top_k=1)
+    after_second = embeddings.call_count
+
+    # embed was called for "foo" on first run; second run hits cache.
+    assert after_second == after_first  # no extra embed call
+
+
+def test_embed_cache_miss_calls_embed_for_new_query() -> None:
+    """Two distinct queries → two embed calls."""
+    uc, embeddings = _make_uc_with_counter()
+
+    uc.run("foo", top_k=1)
+    after_foo = embeddings.call_count
+    uc.run("bar", top_k=1)
+    after_bar = embeddings.call_count
+
+    assert after_bar == after_foo + 1
+
+
+def test_embed_cache_evicts_fifo_at_capacity() -> None:
+    """With capacity=2, after inserting a/b/c the cache holds only b and c."""
+    uc, _ = _make_uc_with_counter(embed_cache_max=2)
+
+    uc.run("a", top_k=1)
+    uc.run("b", top_k=1)
+    uc.run("c", top_k=1)
+
+    assert set(uc._embed_cache.keys()) == {"b", "c"}
+
+
+def test_embed_cache_disabled_when_max_is_zero() -> None:
+    """_embed_cache_max=0 disables the cache; embed called for every call."""
+    uc, embeddings = _make_uc_with_counter(embed_cache_max=0)
+
+    uc.run("foo", top_k=1)
+    after_first = embeddings.call_count
+    uc.run("foo", top_k=1)
+    after_second = embeddings.call_count
+
+    # Cache disabled: both runs call embed.
+    assert after_second == after_first + 1
+    # Cache is empty (we never stored anything).
+    assert len(uc._embed_cache) == 0
+
+
+def test_embed_cache_cleared_on_reload() -> None:
+    """Bus tick forces reload, which clears the cache; next query re-embeds."""
+    from code_context.domain.index_bus import IndexUpdateBus
+
+    bus = IndexUpdateBus()
+
+    def reload_cb() -> None:
+        pass  # no-op; we only care about cache clearing
+
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    embeddings = CountingEmbeddings()
+    uc = SearchRepoUseCase(
+        embeddings=embeddings,
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        bus=bus,
+        reload_callback=reload_cb,
+        _embed_cache_max=256,
+    )
+
+    # First run: reload fires (gen 0 != -1), embed called once, cached.
+    uc.run("foo", top_k=1)
+    after_first = embeddings.call_count
+    assert "foo" in uc._embed_cache
+
+    # Second run: no bus advance → cache hit, no extra embed.
+    uc.run("foo", top_k=1)
+    assert embeddings.call_count == after_first
+
+    # Advance the bus (simulate background reindex swap).
+    bus.publish_swap("/tmp/new")
+    uc.run("foo", top_k=1)
+
+    # reload fired again, cleared cache, so embed was called once more.
+    assert embeddings.call_count == after_first + 1
