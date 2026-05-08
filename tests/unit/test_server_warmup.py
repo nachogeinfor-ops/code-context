@@ -11,6 +11,8 @@ from __future__ import annotations
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 async def test_warmup_runs_before_stdio_server() -> None:
     """_run_server calls _warmup_models BEFORE stdio_server context."""
@@ -33,7 +35,7 @@ async def test_warmup_runs_before_stdio_server() -> None:
             call_order.append("stdio_exit")
 
     fake_server = MagicMock()
-    fake_server.run = MagicMock(return_value=_async_noop())
+    fake_server.run = MagicMock(side_effect=lambda *a, **kw: _async_noop())
     fake_server.create_initialization_options = MagicMock(return_value={})
 
     cfg = MagicMock(
@@ -91,6 +93,22 @@ def test_warmup_redirects_stdout_during_embed() -> None:
     assert sys.stdout is saved, "stdout must be restored after warmup"
     assert captured, "embed should have been called"
     assert captured[0] is sys.stderr, "stdout should have been redirected to stderr during warmup"
+
+
+def test_warmup_restores_stdout_when_embed_raises() -> None:
+    """If embed raises, stdout MUST still be restored (try/finally)."""
+    from code_context.server import _warmup_models
+
+    fake_embeddings = MagicMock()
+    fake_embeddings.embed = MagicMock(side_effect=RuntimeError("boom"))
+
+    saved = sys.stdout
+    with pytest.raises(RuntimeError, match="boom"):
+        _warmup_models(fake_embeddings, reranker=None)
+    assert sys.stdout is saved, (
+        "stdout must be restored even when embed raises; otherwise the "
+        "JSON-RPC stream will be corrupted by stderr-bound output"
+    )
 
 
 def test_warmup_skips_reranker_when_none() -> None:
