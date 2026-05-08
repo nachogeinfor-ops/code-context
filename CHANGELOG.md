@@ -1,5 +1,71 @@
 # Changelog
 
+## v1.5.1 — 2026-05-08
+
+Sprint 13.0 — fix `search_repo` MCP server hang on Windows.
+
+> **Hotfix on v1.5.0.** All v1.x users on Windows should upgrade. macOS
+> and Linux are unaffected by the underlying deadlock; the fix is
+> harmless on those platforms.
+
+### Fixed
+
+- **`search_repo` MCP hang on Windows.** When the cache was warm but the
+  embeddings model was cold (the typical state on a user's second-or-
+  later Claude Code session against an already-indexed repo), the first
+  `search_repo` MCP call would hang indefinitely. Root cause: the
+  asyncio Proactor IOCP event loop deadlocks if sentence-transformers
+  loads model weights for the first time inside an `asyncio.to_thread`
+  worker while `stdio_server` is also actively reading/writing. Bug
+  shipped in v1.0.0; never caught because the eval suite uses an
+  in-process call path that doesn't exercise stdio + to_thread. macOS
+  and Linux were never affected (Selector loop, not Proactor).
+
+### Added
+
+- **Server startup warmup** in `code_context.server._run_server`. Loads
+  embeddings (and cross-encoder, when `CC_RERANK=on`) weights on the
+  main thread before `stdio_server` takes over. Adds ~3 s startup time
+  on a warm Hugging Face cache, or 30–60 s on a fresh install (the
+  first model download). Steady-state per-query latency is unchanged.
+- **Subprocess MCP integration test** for `search_repo`
+  (`tests/integration/test_mcp_search_repo.py`). Pre-seeds the cache
+  in-process, then spawns the MCP server pointing at the warm cache so
+  the cold-model deadlock condition is reproduced. Opt-in via
+  `CC_INTEGRATION=on`.
+- **Unit tests** pinning the warmup-before-stdio wiring contract and
+  the `sys.stdout` → `sys.stderr` redirect during model load
+  (`tests/unit/test_server_warmup.py`).
+
+### Quality
+
+T4 eval (3 configs × 3 repos × 129 queries):
+
+| Config | v1.5.0 NDCG@10 | v1.5.1 NDCG@10 | Δ |
+|---|---:|---:|---:|
+| vector_only | 0.6064 | 0.6064 | 0.0000 |
+| hybrid | 0.5894 | 0.5894 | 0.0000 |
+| hybrid_rerank | 0.5656 | 0.5656 | 0.0000 |
+
+Bit-perfect identical scores across all three configs and 129 queries:
+the warmup affects only the timing of the first model load, never the
+output of subsequent queries.
+
+### Migration
+
+No action required. On startup, expect ~3 s of additional latency
+before the server is ready to accept tools/calls. The first
+`search_repo` query then returns in normal time (no model load delay).
+
+### Notes
+
+- The regression integration test runs only when `CC_INTEGRATION=on`,
+  to keep the default CI fast and free of `sentence-transformers`
+  installation requirements. A future sprint should add a Windows-only
+  matrix step that runs this suite.
+
+---
+
 ## v1.5.0 — 2026-05-08
 
 Sprint 12 (Latency): make `CC_RERANK=on` viable as a default. v1.0–v1.4 measured CPU p50 ~6.3 s — unusable interactively. v1.5 hits **1.1 s p50** (4.2× speedup) with NDCG drop within 0.01 of the v1.3.0 baseline. Adds GPU auto-detect, an in-process query embedding cache, and a knob for memory-constrained hosts.
