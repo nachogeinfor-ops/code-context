@@ -21,6 +21,8 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_KEYWORD_INDEX` | `sqlite` | Keyword index strategy: `sqlite` (FTS5 BM25, default) or `none` (vector-only). |
 | `CC_RERANK` | `off` | Set to `on`/`true`/`1` to activate cross-encoder reranking on the fused top-N candidates. ~17 MB model download on first use. |
 | `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-2-v2` | Override the cross-encoder model. Only consulted when `CC_RERANK=on`. |
+| `CC_EMBED_CACHE_SIZE` | `256` | In-process FIFO cache for query embeddings. Skips re-embedding repeated queries within a session. Set to `0` to disable. Negative values coerced to `0`. |
+| `CC_RERANK_BATCH_SIZE` | (unset) | Optional cap on the cross-encoder per-call batch size. Default delegates to sentence-transformers' internal batching (32). Useful for memory-constrained hosts. Non-positive values treated as unset. |
 | `CC_SYMBOL_INDEX` | `sqlite` | Symbol-index strategy: `sqlite` (default, FTS5-backed) or `none` (disables `find_definition`/`find_references`). |
 | `CC_TRUST_REMOTE_CODE` | `off` | Set to `on`/`true`/`1` to allow `sentence-transformers` to execute custom Python from the HF model repo. Required for models like `jinaai/jina-embeddings-v2-base-code` that use custom architectures. **Off by default for safety.** |
 | `CC_BM25_STOP_WORDS` | `off` | `off` disables filtering; `on` uses built-in 52-word English list; comma-list sets a custom stop-word set. See "BM25 stop-word filtering" below. **Since v1.2.0.** |
@@ -111,6 +113,16 @@ This downloads ~17 MB on first reindex (`cross-encoder/ms-marco-MiniLM-L-2-v2`)
 and adds ~100-300 ms per query on CPU. Default off because the latency
 trade-off doesn't pay off on every repo; enable it on a per-repo basis if
 you find that hybrid retrieval still misranks queries you care about.
+
+### GPU auto-detection — since v1.5.0
+
+Both the embedding model (`LocalST`) and the cross-encoder reranker auto-detect the best available torch device on first model load:
+
+- **CUDA** if `torch.cuda.is_available()` returns true (Linux/Windows with CUDA toolkit + driver).
+- **MPS** (Apple Silicon) if `torch.backends.mps.is_available()` returns true and CUDA is unavailable.
+- **CPU** otherwise.
+
+No env var is needed. If the auto-detected device fails at model load (a known footgun on Windows with mismatched CUDA toolkit, and on some MPS / cross-encoder operation combos), the loader catches the OSError/RuntimeError, logs a warning, and falls back to CPU. Force-CPU is therefore implicit: install a CPU-only torch wheel.
 
 ### Disabling the keyword leg
 

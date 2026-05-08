@@ -70,6 +70,16 @@ export OPENAI_API_KEY=sk-...
 claude mcp add code-context --command code-context-server
 ```
 
+### GPU support
+
+`code-context` auto-detects the best available device for embeddings and cross-encoder rerank:
+
+- **CUDA**: install torch with the CUDA wheels (`pip install torch --index-url https://download.pytorch.org/whl/cu121`). The first query after a cold start will use GPU automatically. Expect cross-encoder p50 ≤ 100 ms on most consumer GPUs.
+- **Apple Silicon (MPS)**: detected automatically on macOS with M-series chips. Some sentence-transformers operations are not yet stable on MPS; if the model fails to load, `code-context` logs a warning and falls back to CPU.
+- **CPU**: the default fallback. With v1.5's distilled cross-encoder (`MiniLM-L-2-v2`), hybrid rerank p50 is ~1.1 s on CPU — usable interactively from Claude Code.
+
+No env var or config flag is required.
+
 ## Making Claude actually use these tools
 
 Claude Code defaults to its built-in tools (`Bash`, `Grep`, `Glob`, `Read`) over MCP servers because it knows them best. To get the value of `code-context`, give Claude an explicit hint by adding a section like this to your project's `CLAUDE.md`:

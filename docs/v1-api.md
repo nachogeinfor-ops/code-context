@@ -75,6 +75,8 @@ All env vars use the `CC_` prefix.
 | `CC_KEYWORD_INDEX` | `sqlite` | v0.4 | `sqlite` (FTS5 BM25) or `none` (vector-only). |
 | `CC_RERANK` | `off` | v0.4 | `on` enables cross-encoder reranking. |
 | `CC_RERANK_MODEL` | `cross-encoder/ms-marco-MiniLM-L-2-v2` | v0.4 | Cross-encoder model id. |
+| `CC_EMBED_CACHE_SIZE` | `256` | v1.5 | In-process FIFO cache for query embeddings. Skips re-embedding repeated queries; `0` disables. Cleared on background-reindex swap. |
+| `CC_RERANK_BATCH_SIZE` | (unset) | v1.5 | Optional cap on cross-encoder per-call batch size. Default delegates to sentence-transformers (32). Useful for memory-constrained hosts. |
 | `CC_SYMBOL_INDEX` | `sqlite` | v0.5 | `sqlite` or `none`. |
 | `CC_TRUST_REMOTE_CODE` | `off` | v0.5 | Allow HuggingFace models with custom code. |
 | `CC_BG_REINDEX` | `on` | v0.9 | `on` enables background reindex thread; `off` falls back to synchronous startup. |

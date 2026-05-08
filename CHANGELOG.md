@@ -1,5 +1,70 @@
 # Changelog
 
+## v1.5.0 — 2026-05-08
+
+Sprint 12 (Latency): make `CC_RERANK=on` viable as a default. v1.0–v1.4 measured CPU p50 ~6.3 s — unusable interactively. v1.5 hits **1.1 s p50** (4.2× speedup) with NDCG drop within 0.01 of the v1.3.0 baseline. Adds GPU auto-detect, an in-process query embedding cache, and a knob for memory-constrained hosts.
+
+> **Phase 0 latency criterion met.** The mandatory `p50 ≤ 1.5 s on CPU` threshold is now verified green for `hybrid_rerank`.
+
+### Added
+
+- **Distilled cross-encoder default**: swapped `cross-encoder/ms-marco-MiniLM-L-6-v2` (22M params)
+  for `cross-encoder/ms-marco-MiniLM-L-2-v2` (4M params, ~17 MB download). Eval shows combined
+  NDCG@10 drop of −0.0079 vs v1.3.0 across csharp / python / typescript (gate: ≤ −0.03). T1.
+- **GPU auto-detection** in `LocalST` and `CrossEncoderReranker`: cuda → mps → cpu, with
+  warn-and-fallback to CPU on OSError/RuntimeError during model load. T2.
+- **`CC_EMBED_CACHE_SIZE`** env var (default `256`, `0` disables): in-process FIFO cache
+  for query embeddings. Skips re-embedding repeated queries; cleared automatically on
+  background-reindex swap. T5.
+- **`CC_RERANK_BATCH_SIZE`** env var (optional, default delegates to sentence-transformers):
+  caps the cross-encoder per-call batch size for memory-constrained hosts. T6.
+
+### Performance
+
+| Metric | Before (v1.4) | After (v1.5) | Δ |
+|---|---|---|---|
+| hybrid_rerank p50 (CPU) | 4734 ms | **1116 ms** | **4.2×** |
+| hybrid_rerank p95 (CPU) | 7259 ms | 1265 ms | 5.7× |
+| Phase 0 criterion (`p50 ≤ 1.5 s`) | ✗ | **✓** | — |
+
+### Quality
+
+Combined hybrid_rerank NDCG@10 vs v1.3.0 baseline:
+
+| Repo | v1.3.0 | v1.5.0 | Δ |
+|---|---|---|---|
+| csharp (63 q) | 0.3336 | 0.3155 | −0.0181 |
+| python (33 q) | 0.8265 | 0.8168 | −0.0097 |
+| typescript (33 q) | 0.7783 | 0.7916 | +0.0133 |
+| **combined** | **0.5735** | **0.5656** | **−0.0079** |
+
+Gate threshold: ≤ −0.03 combined. Gate: **green**. vector_only and hybrid (no rerank) configs unchanged within noise.
+
+### Tests
+
+**474 passing** (was ~446 in v1.4.0; +28 across Sprint 12 tasks):
+
+- T1: distilled model — unit tests for `cross-encoder/ms-marco-MiniLM-L-2-v2` default, model-id override.
+- T2: GPU auto-detect — cuda/mps/cpu selection logic, OSError/RuntimeError fallback to CPU path.
+- T5: embed cache — FIFO eviction at size limit, `CC_EMBED_CACHE_SIZE=0` disables, negative coerced to 0, cache cleared on reindex swap.
+- T6: batch_size knob — non-positive treated as unset, delegates to sentence-transformers default.
+
+Lint (`ruff check` + `ruff format --check`) clean.
+
+### Notes
+
+- T3 (MPS smoke test) is docs-only: this maintainer is on Windows; the MPS path is
+  auto-detected and falls back to CPU on errors. User reports welcome.
+- T4 (batched rerank) was already implemented in the current code (`predict()` is called
+  on the full pair list); the plan's "loop" premise was outdated. T6 adds the explicit
+  `batch_size` knob.
+
+### Migration
+
+No action required. Upgrading from v1.4.0: the distilled cross-encoder model (~17 MB) is downloaded automatically on first `CC_RERANK=on` query. No reindex is triggered. All new env vars are opt-in or default to sensible values.
+
+---
+
 ## v1.4.0 — 2026-05-07
 
 Sprint 12.5 — pre-launch hardening: opt-in anonymous telemetry, multi-IDE smoke checklist, Phase 0 maturity script. Default behavior unchanged.
