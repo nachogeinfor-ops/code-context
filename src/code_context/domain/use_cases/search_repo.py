@@ -45,7 +45,7 @@ class SearchRepoUseCase:
     bus: IndexUpdateBus | None = None
     reload_callback: Callable[[], None] | None = None
     # Sprint 12 T5 — embed-result cache. 0 = disabled.
-    _embed_cache_max: int = 256
+    embed_cache_max: int = 256
     # Initialized to -1 so the very first call (bus.generation == 0)
     # also triggers a reload — covers the cold-start case where the
     # bg indexer hasn't yet published a swap but the active index dir
@@ -58,15 +58,15 @@ class SearchRepoUseCase:
     def _embed_query(self, query: str) -> np.ndarray:
         """Embed `query`, using the FIFO cache when enabled.
 
-        When `_embed_cache_max` is 0 the cache is bypassed entirely
+        When `embed_cache_max` is 0 the cache is bypassed entirely
         (always embeds, never stores) — user-controlled via CC_EMBED_CACHE_SIZE=0.
         """
-        if self._embed_cache_max == 0:
+        if self.embed_cache_max == 0:
             return self.embeddings.embed([query])[0]
         if query in self._embed_cache:
             return self._embed_cache[query]
         vec = self.embeddings.embed([query])[0]
-        if len(self._embed_cache) >= self._embed_cache_max:
+        if len(self._embed_cache) >= self.embed_cache_max:
             # Simple FIFO eviction; LRU is overkill for 256 entries.
             self._embed_cache.pop(next(iter(self._embed_cache)))
         self._embed_cache[query] = vec

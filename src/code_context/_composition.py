@@ -243,7 +243,7 @@ def build_use_cases(
             reranker=reranker,
             bus=bus,
             reload_callback=reload_callback,
-            _embed_cache_max=cfg.embed_cache_size,
+            embed_cache_max=cfg.embed_cache_size,
         ),
         RecentChangesUseCase(git_source=git_source, repo_root=cfg.repo_root),
         GetSummaryUseCase(introspector=introspector, repo_root=cfg.repo_root),

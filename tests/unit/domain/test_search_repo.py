@@ -344,7 +344,7 @@ def _make_uc_with_counter(
         embeddings=embeddings,
         vector_store=FakeVectorStore(entries),
         keyword_index=FakeKeywordIndex(),
-        _embed_cache_max=embed_cache_max,
+        embed_cache_max=embed_cache_max,
     )
     return uc, embeddings
 
@@ -391,7 +391,7 @@ def test_embed_cache_evicts_fifo_at_capacity() -> None:
 
 
 def test_embed_cache_disabled_when_max_is_zero() -> None:
-    """_embed_cache_max=0 disables the cache; embed called for every call."""
+    """embed_cache_max=0 disables the cache; embed called for every call."""
     uc, embeddings = _make_uc_with_counter(embed_cache_max=0)
 
     uc.run("foo", top_k=1)
@@ -422,7 +422,7 @@ def test_embed_cache_cleared_on_reload() -> None:
         keyword_index=FakeKeywordIndex(),
         bus=bus,
         reload_callback=reload_cb,
-        _embed_cache_max=256,
+        embed_cache_max=256,
     )
 
     # First run: reload fires (gen 0 != -1), embed called once, cached.
