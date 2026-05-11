@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,6 +21,33 @@ pytestmark = pytest.mark.skipif(
     os.environ.get("CC_INTEGRATION") != "on",
     reason="set CC_INTEGRATION=on to run subprocess MCP integration tests",
 )
+
+
+def _materialize_git_repo(src: Path, dest: Path) -> Path:
+    """Copy `src` into `dest` and turn it into a git repo with one commit.
+
+    The python_repo fixture isn't a git repo; without `.git`, GitCliSource
+    short-circuits in is_repo() and the subprocess.run path is never
+    exercised, so the deadlock can't reproduce. We materialize a real git
+    repo so the handler reaches the failing code path.
+    """
+    shutil.copytree(src, dest, dirs_exist_ok=True)
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "cc-test",
+        "GIT_AUTHOR_EMAIL": "cc-test@example.invalid",
+        "GIT_COMMITTER_NAME": "cc-test",
+        "GIT_COMMITTER_EMAIL": "cc-test@example.invalid",
+    }
+    subprocess.run(["git", "init", "-q", "--initial-branch=main"], cwd=dest, env=env, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=dest, env=env, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "fixture: initial commit"],
+        cwd=dest,
+        env=env,
+        check=True,
+    )
+    return dest
 
 
 def _seed_cache(repo: Path, cache_dir: Path) -> None:
@@ -52,16 +81,17 @@ async def test_explain_diff_via_mcp_returns_within_20s(tmp_path: Path) -> None:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    fixture_repo = (Path(__file__).parents[2] / "tests" / "fixtures" / "python_repo").resolve()
+    fixture_src = (Path(__file__).parents[2] / "tests" / "fixtures" / "python_repo").resolve()
+    repo = _materialize_git_repo(fixture_src, tmp_path / "repo")
     cache_dir = tmp_path / "cc-cache"
-    _seed_cache(fixture_repo, cache_dir)
+    _seed_cache(repo, cache_dir)
 
     params = StdioServerParameters(
         command=sys.executable,
         args=["-u", "-m", "code_context.server"],
         env={
             **os.environ,
-            "CC_REPO_ROOT": str(fixture_repo),
+            "CC_REPO_ROOT": str(repo),
             "CC_CACHE_DIR": str(cache_dir),
             "CC_KEYWORD_INDEX": "sqlite",
             "CC_RERANK": "off",
