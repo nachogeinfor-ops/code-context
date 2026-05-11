@@ -96,6 +96,16 @@ class Config:
     # Set CC_TELEMETRY_ENDPOINT=https://... to point at a self-hosted instance or
     # a local test mock.
     telemetry_endpoint: str | None = None
+    # Sprint 14 — additional log destination. When set, server/CLI logs are
+    # written to this file IN ADDITION to stderr. Useful for debugging an MCP
+    # server whose stderr is captured by the MCP client and not surfaced.
+    # Set via CC_LOG_FILE=/path/to/code-context.log.
+    log_file: str | None = None
+    # Sprint 14 — surface HF Hub / transformers / sentence-transformers
+    # warnings (HF_TOKEN reminders, tokenizer parallelism, model registry
+    # spam). Default False — those loggers are clamped to ERROR. Set
+    # CC_HF_HUB_VERBOSE=on to bring them back.
+    hf_hub_verbose: bool = False
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -167,4 +177,6 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         # immediately on every insert.
         embed_cache_size=max(0, int(os.environ.get("CC_EMBED_CACHE_SIZE", "256"))),
         rerank_batch_size=rerank_batch_size,
+        log_file=os.environ.get("CC_LOG_FILE") or None,
+        hf_hub_verbose=os.environ.get("CC_HF_HUB_VERBOSE", "off").lower() in ("on", "true", "1"),
     )

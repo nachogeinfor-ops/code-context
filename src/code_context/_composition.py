@@ -550,8 +550,42 @@ def wrap_indexer_with_telemetry(
 
 
 def setup_logging(cfg: Config) -> None:
-    logging.basicConfig(
-        level=cfg.log_level,
-        stream=sys.stderr,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    """Configure root logging plus optional file handler and HF Hub silencing.
+
+    Sprint 14:
+      - CC_LOG_FILE: when set, logs are appended to this file IN ADDITION to
+        stderr. The MCP server's stderr is often captured and hidden by the
+        client; a file handler restores observability without touching stdout
+        (which JSON-RPC owns).
+      - CC_HF_HUB_VERBOSE: when off (default), the huggingface_hub /
+        transformers / sentence_transformers loggers are clamped to ERROR so
+        the HF_TOKEN reminder and tokenizer-parallelism spam don't drown out
+        real warnings during warmup.
+    """
+    fmt = logging.Formatter(fmt="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    handlers: list[logging.Handler] = []
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(fmt)
+    handlers.append(stderr_handler)
+
+    if cfg.log_file:
+        try:
+            file_handler = logging.FileHandler(cfg.log_file, encoding="utf-8")
+            file_handler.setFormatter(fmt)
+            handlers.append(file_handler)
+        except OSError as exc:
+            # Don't crash on bad CC_LOG_FILE — log a warning to stderr only and
+            # continue. force=True below means this warning still surfaces.
+            log.warning("could not open CC_LOG_FILE %r: %s", cfg.log_file, exc)
+
+    # force=True lets us override any earlier basicConfig (e.g., from a test
+    # harness or pytest's caplog setup) without surprising side effects.
+    logging.basicConfig(level=cfg.log_level, handlers=handlers, force=True)
+
+    if not cfg.hf_hub_verbose:
+        # Silence the most common warmup-time spam: HF_TOKEN reminders and
+        # transformers/sentence-transformers progress chatter. Set
+        # CC_HF_HUB_VERBOSE=on to bring it back during debugging.
+        for noisy in ("huggingface_hub", "transformers", "sentence_transformers"):
+            logging.getLogger(noisy).setLevel(logging.ERROR)
