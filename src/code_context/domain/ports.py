@@ -99,7 +99,7 @@ class GitSource(Protocol):
 
     def is_repo(self, root: Path) -> bool: ...
 
-    async def head_sha(self, root: Path) -> str:
+    def head_sha(self, root: Path) -> str:
         """Empty string if not a repo."""
 
     async def commits(

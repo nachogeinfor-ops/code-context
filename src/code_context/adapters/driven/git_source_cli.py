@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -56,13 +57,28 @@ class GitCliSource:
         # Pure filesystem check; no subprocess, no asyncio interaction.
         return (root / ".git").exists()
 
-    async def head_sha(self, root: Path) -> str:
+    def head_sha(self, root: Path) -> str:
+        """Sync because the only caller (IndexerUseCase, BackgroundIndexer)
+        runs in sync contexts that pre-date the MCP request loop. Keeping
+        it sync avoids forcing the entire indexer to become async without
+        a real driver. The deadlock risk addressed by Sprint 13.1 only
+        applies to handlers invoked from inside the stdio asyncio loop;
+        head_sha is never called from there.
+        """
         if not self.is_repo(root):
             return ""
         try:
-            stdout, _ = await _run_git(["rev-parse", "HEAD"], cwd=root)
-            return stdout.strip()
-        except _GitFailed as exc:
+            res = subprocess.run(  # noqa: S603 — argv is a fixed literal
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+            )
+            return (res.stdout or "").strip()
+        except subprocess.CalledProcessError as exc:
             log.warning("git rev-parse HEAD failed: %s", exc)
             return ""
 
