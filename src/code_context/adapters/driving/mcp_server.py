@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from code_context._time_parse import InvalidSinceError, parse_since
 from code_context.domain.use_cases.explain_diff import ExplainDiffUseCase
 from code_context.domain.use_cases.find_definition import FindDefinitionUseCase
 from code_context.domain.use_cases.find_references import FindReferencesUseCase
@@ -76,7 +76,13 @@ def register(
                     "properties": {
                         "since": {
                             "type": "string",
-                            "description": "ISO 8601 cutoff; defaults to 7 days ago.",
+                            "description": (
+                                "Cutoff for commits. Accepts ISO 8601 "
+                                "('2026-05-08T00:00:00Z'), relative phrases "
+                                "('4 hours ago', '2 weeks ago'), or keywords "
+                                "('yesterday', 'today', 'last week'). "
+                                "Defaults to 7 days ago when omitted."
+                            ),
                         },
                         "paths": {"type": "array", "items": {"type": "string"}},
                         "max": {"type": "integer", "default": 20},
@@ -266,7 +272,18 @@ def _handle_search(uc: SearchRepoUseCase, args: dict[str, Any]) -> list[TextCont
 async def _handle_recent(uc: RecentChangesUseCase, args: dict[str, Any]) -> list[TextContent]:
     since = None
     if args.get("since"):
-        since = datetime.fromisoformat(args["since"])
+        # Sprint 14: accept ISO format OR natural-language phrases like
+        # "4 hours ago" / "yesterday" — the UX CLAUDE.md has documented since v1.
+        try:
+            since = parse_since(args["since"])
+        except InvalidSinceError as exc:
+            log.warning("recent_changes: bad since=%r — %s", args.get("since"), exc)
+            return [
+                TextContent(
+                    type="text",
+                    text=_to_json({"error": "invalid_since", "message": str(exc)}),
+                )
+            ]
     commits = await uc.run(
         since=since,
         paths=args.get("paths"),
