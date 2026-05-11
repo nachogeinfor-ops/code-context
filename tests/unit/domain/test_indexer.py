@@ -297,6 +297,68 @@ def test_no_repo_means_always_stale(cache_dir: Path, repo_root: Path) -> None:
     assert uc.is_stale() is True  # always stale when not a git repo
 
 
+# ---------------------------------------------------------------------------
+# Sprint 14 — progress logging during full reindex
+# ---------------------------------------------------------------------------
+
+
+def test_run_emits_progress_logs_for_large_repo(cache_dir: Path, repo_root: Path, caplog) -> None:
+    """Cold-start no longer looks frozen — at least one mid-walk progress log
+    line fires when the file count exceeds the _PROGRESS_FILES threshold (25)."""
+    import logging
+
+    # Build 60 fake files so we cross the _PROGRESS_FILES = 25 threshold twice.
+    files = {}
+    for i in range(60):
+        f = repo_root / f"f{i:03d}.py"
+        f.write_text(f"def x{i}(): pass\n", encoding="utf-8")
+        files[f] = f"def x{i}(): pass\n"
+
+    uc = _build_uc(cache_dir, repo_root, files=files)
+
+    with caplog.at_level(logging.INFO, logger="code_context.domain.use_cases.indexer"):
+        uc.run()
+
+    messages = [r.getMessage() for r in caplog.records]
+    # Must see the start line.
+    assert any("full reindex starting" in m and "60 files" in m for m in messages), (
+        f"missing start log; got: {messages}"
+    )
+    # Must see at least one mid-walk progress line (e.g., "read 25/60").
+    walk_progress = [m for m in messages if "read" in m and "/60 files" in m]
+    assert walk_progress, f"no mid-walk progress log; got: {messages}"
+    # Must see the embed transition line.
+    assert any("walked 60 files" in m and "embedding" in m for m in messages), (
+        f"missing walk-done transition; got: {messages}"
+    )
+    # Must see the completion line.
+    assert any("full reindex complete" in m for m in messages), (
+        f"missing completion log; got: {messages}"
+    )
+
+
+def test_run_skips_progress_logs_for_tiny_repo(cache_dir: Path, repo_root: Path, caplog) -> None:
+    """A 2-file repo finishes well below the cadence threshold — no mid-walk
+    progress lines should fire (would be noise). Start + complete still fire."""
+    import logging
+
+    files = {}
+    for i in range(2):
+        f = repo_root / f"f{i}.py"
+        f.write_text(f"def x{i}(): pass\n", encoding="utf-8")
+        files[f] = f"def x{i}(): pass\n"
+
+    uc = _build_uc(cache_dir, repo_root, files=files)
+
+    with caplog.at_level(logging.INFO, logger="code_context.domain.use_cases.indexer"):
+        uc.run()
+
+    messages = [r.getMessage() for r in caplog.records]
+    walk_progress = [m for m in messages if "read" in m and "/2 files" in m]
+    assert not walk_progress, f"unexpected mid-walk progress for tiny repo: {walk_progress}"
+    assert any("full reindex complete" in m for m in messages)
+
+
 def test_run_persists_keyword_index_alongside_vector(cache_dir: Path, repo_root: Path) -> None:
     """Indexer adds entries to the keyword index AND persists keyword.sqlite to the new dir."""
     f = repo_root / "a.py"

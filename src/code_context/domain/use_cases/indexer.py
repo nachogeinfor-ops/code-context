@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,14 @@ from code_context.domain.ports import (
 log = logging.getLogger(__name__)
 
 _BATCH_SIZE = 64
+# Sprint 14 — progress reporting cadence. The indexer was largely silent
+# between its "reindexing N files" and "complete" log lines, so a 60s
+# cold-start looked frozen. We now emit a progress line every PROGRESS_FILES
+# files (during walk) and every batch (during embed) — whichever comes
+# first relative to a PROGRESS_SECONDS wall-clock budget. The seconds budget
+# keeps small repos from being noisy and large repos from being silent.
+_PROGRESS_FILES = 25
+_PROGRESS_SECONDS = 5.0
 _CURRENT_FILE = "current.json"
 # v1: original schema (no file_hashes).
 # v2: Sprint 6 — adds file_hashes for incremental reindex.
@@ -177,6 +186,7 @@ class IndexerUseCase:
         if active is None or prior is None:
             return self.run()
 
+        inc_start = time.monotonic()
         log.info("indexer-incremental: %s", stale.reason)
 
         self.vector_store.load(active)
@@ -267,6 +277,13 @@ class IndexerUseCase:
         }
         (new_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
 
+        log.info(
+            "indexer-incremental: complete in %.1fs (%d chunks added, %d files)",
+            time.monotonic() - inc_start,
+            len(new_entries),
+            len(new_file_hashes),
+        )
+
         return new_dir
 
     def run(self) -> Path:
@@ -274,11 +291,18 @@ class IndexerUseCase:
 
         Caller (composition root) is responsible for the atomic swap of
         current.json after this returns.
+
+        Sprint 14: emits granular progress log lines so a 60s cold-start
+        no longer looks frozen. Cadence is `_PROGRESS_FILES` files OR
+        `_PROGRESS_SECONDS` seconds (whichever first) during the walk
+        phase, and per-batch during embed.
         """
+        run_start = time.monotonic()
         files = self.code_source.list_files(
             self.repo_root, self.include_extensions, self.max_file_bytes
         )
-        log.info("indexer: reindexing %d files", len(files))
+        n_files = len(files)
+        log.info("indexer: full reindex starting (%d files)", n_files)
 
         all_entries: list[IndexEntry] = []
         all_defs: list[SymbolDef] = []
@@ -287,7 +311,10 @@ class IndexerUseCase:
         # Per-file SHA stamped into metadata so dirty_set() has a baseline
         # for the next run. Computed inline so we don't re-read every file.
         file_hashes: dict[str, str] = {}
-        for f in files:
+
+        walk_start = time.monotonic()
+        last_progress = walk_start
+        for idx, f in enumerate(files):
             try:
                 content = self.code_source.read(f)
             except (OSError, UnicodeDecodeError) as exc:
@@ -305,12 +332,53 @@ class IndexerUseCase:
                 except Exception as exc:  # noqa: BLE001 - extractor failure must not abort indexing
                     log.warning("indexer: symbol extract failed for %s (%s)", rel, exc)
 
+            now = time.monotonic()
+            done = idx + 1
+            if (
+                n_files > 0
+                and (done % _PROGRESS_FILES == 0 or now - last_progress > _PROGRESS_SECONDS)
+                and done < n_files
+            ):
+                pct = done / n_files * 100
+                log.info(
+                    "indexer: read %d/%d files (%.0f%%, %d chunks so far)",
+                    done,
+                    n_files,
+                    pct,
+                    len(chunks_with_paths),
+                )
+                last_progress = now
+
+        n_chunks = len(chunks_with_paths)
+        log.info(
+            "indexer: walked %d files, produced %d chunks in %.1fs — embedding...",
+            n_files,
+            n_chunks,
+            time.monotonic() - walk_start,
+        )
+
         # Batch-embed.
-        for i in range(0, len(chunks_with_paths), _BATCH_SIZE):
+        embed_start = time.monotonic()
+        n_batches = (n_chunks + _BATCH_SIZE - 1) // _BATCH_SIZE if n_chunks else 0
+        last_progress = embed_start
+        for i in range(0, n_chunks, _BATCH_SIZE):
             batch = chunks_with_paths[i : i + _BATCH_SIZE]
             vectors = self.embeddings.embed([c.snippet for c in batch])
             for chunk, vec in zip(batch, vectors, strict=True):
                 all_entries.append(IndexEntry(chunk=chunk, vector=vec))
+            batch_idx = i // _BATCH_SIZE + 1
+            now = time.monotonic()
+            if n_batches > 0 and (
+                now - last_progress > _PROGRESS_SECONDS or batch_idx == n_batches
+            ):
+                pct = batch_idx / n_batches * 100
+                log.info(
+                    "indexer: embedded batch %d/%d (%.0f%%)",
+                    batch_idx,
+                    n_batches,
+                    pct,
+                )
+                last_progress = now
 
         # Reset and add.
         head = self.git_source.head_sha(self.repo_root) or "no-git"
@@ -349,6 +417,13 @@ class IndexerUseCase:
             "source_tiers": source_tiers,
         }
         (new_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
+
+        log.info(
+            "indexer: full reindex complete in %.1fs (%d chunks, %d files)",
+            time.monotonic() - run_start,
+            len(all_entries),
+            len(file_hashes),
+        )
 
         return new_dir
 
