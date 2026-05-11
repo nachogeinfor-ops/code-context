@@ -1,5 +1,59 @@
 # Changelog
 
+## v1.8.0 — 2026-05-11
+
+Sprint 16 — first-run UX. Eliminates the silent ~60s cold-start that
+greeted first-time users with no output at all.
+
+### Added
+
+- **First-run setup banner.** On the very first invocation against a repo,
+  `code-context-server` (MCP) and the `code-context` CLI both print a
+  multi-line stderr banner explaining:
+    - the embeddings model being downloaded and its approximate size,
+    - the directory it'll land in (`HF_HOME` or the Hugging Face cache),
+    - the per-repo cache subdirectory that's about to be created,
+    - the expected ~60s duration and the ~<2s steady-state cost.
+  The banner emits before model loading so the wait is no longer silent.
+  Subsequent runs are silent (a marker file in the repo's cache subdir
+  records that the banner was shown).
+- **Interactive telemetry consent on first run (CLI only).** When
+  `code-context reindex`, `code-context query`, or `code-context status`
+  is run on a fresh repo and stdin is a tty, the user is asked
+  `Enable now? [y/N]:`. The answer is persisted in the marker file and
+  honored on subsequent runs without re-prompting. Non-tty CLI calls
+  (piped, scripted) skip the prompt and default to no telemetry — they
+  do NOT block. `CC_TELEMETRY` env var always wins over the marker.
+  The MCP server never prompts (stdin is owned by JSON-RPC); it only
+  emits the banner.
+- **`Config.first_run_marker_path()`** — per-repo `.first_run_completed`
+  marker stored in the repo cache subdir. Each repo gets its own
+  first-run experience.
+
+### Changed
+
+- **`_show_first_run_notice` removed from `_telemetry.py`.** Its
+  responsibility (telling the user telemetry was enabled) is now
+  covered by the unified first-run banner and the explicit consent
+  prompt. No user-visible behavior change for telemetry-enabled users:
+  they still see exactly one mention of `CC_TELEMETRY` and a pointer
+  to `docs/telemetry.md` on first run.
+- **`load_config` now honors marker-persisted telemetry consent** when
+  `CC_TELEMETRY` is unset in the environment. Explicit env values
+  (including `off`) always override the marker.
+
+### Internal
+
+- New private module `code_context._first_run` exposes
+  `is_first_run`, `mark_first_run_complete`, `setup_banner`,
+  `prompt_telemetry_consent`, and `estimate_model_size_mb`. All
+  guarded behind the marker file; no impact on non-first-run startup.
+- 22 new unit tests across `tests/unit/test_first_run.py` and
+  `tests/unit/test_config.py`. The dedicated legacy notice test file
+  `tests/unit/test_telemetry_t5.py` was deleted with the legacy code.
+
+---
+
 ## v1.6.1 — 2026-05-11
 
 Sprint 14 hotfix — pin `tree-sitter-language-pack` to `<1.8`.

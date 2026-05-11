@@ -271,6 +271,16 @@ code-context-server
 
 ## Opt-in telemetry (`CC_TELEMETRY` / `CC_TELEMETRY_ENDPOINT`) — since v1.4.0
 
+### First-run prompt (since v1.8.0)
+
+When `code-context query`/`reindex`/`status` runs against a repo
+for the first time AND stdin is a tty AND `CC_TELEMETRY` is unset
+in the environment, the CLI asks once whether to enable telemetry.
+The choice is persisted in `<cache_dir>/<repo-hash>/.first_run_completed`
+(JSON, key `telemetry_opt_in`) and honored on subsequent runs without
+re-prompting. The MCP stdio server never prompts. Setting
+`CC_TELEMETRY` (any value) in the environment overrides the marker.
+
 ### `CC_TELEMETRY` — opt-in anonymous telemetry (since v1.4.0)
 
 | Value | Effect |

@@ -155,7 +155,20 @@ Configured via env vars. See [`docs/configuration.md`](docs/configuration.md) fo
 
 ### Telemetry (opt-in)
 
-`CC_TELEMETRY=on` enables anonymous usage telemetry — weekly heartbeat + session aggregates sent to PostHog Cloud. Default off. No PII, no query text, no code content. See [`docs/telemetry.md`](docs/telemetry.md) for the full schema and privacy notice.
+Telemetry is **off by default** and **always opt-in**. On your first
+run against a new repo, the CLI (`code-context query`/`reindex`/`status`)
+asks once whether to enable it; your answer is persisted in the
+per-repo cache and respected on subsequent runs. Non-interactive
+callers (piped CLI, MCP stdio server) never prompt and default to
+off — set `CC_TELEMETRY=on` explicitly to opt in for those.
+
+What's collected when enabled: a weekly heartbeat and session
+aggregates to PostHog Cloud. **Never** PII, query text, code content,
+repo paths, file names, or IPs. See [`docs/telemetry.md`](docs/telemetry.md)
+for the full schema, what's not collected, and how the anonymous
+install ID is derived.
+
+`CC_TELEMETRY` env var always overrides the per-repo marker.
 
 ## Documentation
 
