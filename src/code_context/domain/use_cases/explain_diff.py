@@ -23,8 +23,8 @@ class ExplainDiffUseCase:
     git_source: GitSource
     repo_root: Path
 
-    def run(self, ref: str, max_chunks: int = 50) -> list[DiffChunk]:
-        diff_files = self.git_source.diff_files(self.repo_root, ref)
+    async def run(self, ref: str, max_chunks: int = 50) -> list[DiffChunk]:
+        diff_files = await self.git_source.diff_files(self.repo_root, ref)
         results: list[DiffChunk] = []
         seen: set[tuple[str, int, int]] = set()  # (path, line_start, line_end)
 

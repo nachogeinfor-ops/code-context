@@ -20,7 +20,7 @@ class RecentChangesUseCase:
     git_source: GitSource
     repo_root: Path
 
-    def run(
+    async def run(
         self,
         since: datetime | None = None,
         paths: list[str] | None = None,
@@ -31,6 +31,6 @@ class RecentChangesUseCase:
             return []
         if since is None:
             since = datetime.now(UTC) - timedelta(days=_DEFAULT_LOOKBACK_DAYS)
-        return self.git_source.commits(
+        return await self.git_source.commits(
             self.repo_root, since=since, paths=paths, max_count=max_count
         )
