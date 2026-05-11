@@ -80,6 +80,28 @@ claude mcp add code-context --command code-context-server
 
 No env var or config flag is required.
 
+### Windows: Microsoft Store Python sandbox
+
+If you installed Python from the **Microsoft Store** (the default in some Windows
+SKUs), the OS silently redirects writes from `%LOCALAPPDATA%` (where
+platformdirs places the default cache) to a per-app sandbox under:
+
+```
+%LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.X_qbz5n2kfra8p0\LocalCache\Local\code-context\
+```
+
+This is fine — the index works — but `code-context` reports the *nominal*
+cache path, not the sandboxed real path. If you can't find the cache where
+`code-context status` prints, look under `Packages\...\LocalCache\...`
+or set `CC_CACHE_DIR` explicitly to a path outside the sandbox:
+
+```powershell
+$env:CC_CACHE_DIR = "C:\Users\<you>\code-context-cache"
+```
+
+To avoid the sandbox entirely, install Python from
+[python.org](https://www.python.org/downloads/) instead of the Microsoft Store.
+
 ## Making Claude actually use these tools
 
 Claude Code defaults to its built-in tools (`Bash`, `Grep`, `Glob`, `Read`) over MCP servers because it knows them best. To get the value of `code-context`, give Claude an explicit hint by adding a section like this to your project's `CLAUDE.md`:
@@ -106,11 +128,17 @@ Without this hint, Claude will work fine — it just won't reach for the MCP too
 
 ```bash
 code-context status              # print index health + dirty/deleted counts
+code-context doctor              # run env + index health checks (no side effects)
 code-context reindex             # incremental by default (only changed files)
 code-context reindex --force     # full reindex (post-model-upgrade or cache reset)
 code-context query "where do we validate user emails"   # debug, no MCP
 code-context clear --yes         # delete the cache for this repo
 ```
+
+`doctor` is the first stop when something looks wrong — it surfaces missing
+dependencies, an unwritable cache, an absent HF model cache, a corrupted
+index, etc., without doing anything destructive. Exit code is 0 if every
+check passed, 1 if anything failed.
 
 ## Configuration
 

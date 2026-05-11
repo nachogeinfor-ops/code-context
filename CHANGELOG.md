@@ -1,5 +1,80 @@
 # Changelog
 
+## v1.6.0 — 2026-05-11
+
+Sprint 14 — quick-win UX and operability batch. Eight discrete improvements
+landed together; none breaks existing behavior.
+
+### Added
+
+- **`code-context doctor` CLI command.** Runs a 21+ check health report
+  spanning environment (Python version, platform, repo root, git, cache
+  writability), required and optional dependencies, embedding-model cache
+  presence, reranker config, and active index state (n_files, n_chunks,
+  indexed_at, head_sha). Exits 0 on success, 1 if any check fails. Side
+  effect-free — does not trigger a reindex or model download. First stop
+  when something looks wrong.
+- **`CC_LOG_FILE` env var.** When set, server/CLI logs are appended to the
+  specified path in addition to stderr. The MCP stdio server's stderr is
+  often captured and hidden by the client; a file handler restores
+  observability without touching stdout (which JSON-RPC owns). Bad paths
+  warn rather than crash.
+- **Natural-language `since` parsing for `recent_changes`.** Accepts
+  ISO 8601 (current behavior), `"N <unit> ago"` phrases (`"4 hours ago"`,
+  `"30 minutes ago"`, `"2 weeks ago"`), and keywords (`"yesterday"`,
+  `"today"`, `"now"`, `"last week"`, `"last month"`, `"last year"`).
+  Trailing `"ago"` is optional. CLAUDE.md has documented this UX since
+  v1; prior to Sprint 14 it raised `ValueError: Invalid isoformat string`.
+- **Granular indexer progress logs.** Walk and embed phases each emit a
+  progress line every 25 files / batches OR every 5 wall-clock seconds,
+  whichever comes first. Cold-start no longer looks frozen between the
+  "reindexing N files" and "complete" lines; tiny repos still finish
+  silently.
+- **`CC_HF_HUB_VERBOSE` env var.** Re-surfaces the `huggingface_hub`,
+  `transformers`, and `sentence_transformers` warnings when set (default
+  off). The default Sprint 14 behavior clamps these loggers to ERROR
+  because their warmup-time spam (HF_TOKEN reminders, tokenizer
+  parallelism notices) drowned out real warnings.
+- **Microsoft Store Python sandbox documentation** in the README. Explains
+  the `Packages\PythonSoftwareFoundation.Python.3.X_qbz5n2kfra8p0\LocalCache\...`
+  redirect that surprises Windows users when they `code-context status`
+  shows one path but the actual cache lives somewhere else. Offers
+  `CC_CACHE_DIR` override and the python.org install as workarounds.
+
+### Changed
+
+- **`scripts/phase0-status.py` auto-detects current version** from
+  `pyproject.toml` rather than hardcoding `v1.4.0`. The "Releases" check
+  row tracks every bump automatically; prior to this it silently
+  reported NOT READY after each tag because the published-on-PyPI check
+  pointed at the prior version.
+- **GitHub Actions runner versions.** `actions/upload-artifact@v4` and
+  `actions/download-artifact@v4` (Node 20) bumped to v5 (Node 24);
+  `actions/github-script@v7` bumped to v8. Pre-emptive — Node 20 reaches
+  end-of-life in GitHub-hosted runners in June 2026.
+
+### Internal
+
+- New `code_context._time_parse` module exposes `parse_since(s)` and
+  `InvalidSinceError`. 28 unit tests cover relative phrases, keywords,
+  ISO passthrough, and error paths.
+- New `code_context._doctor` module hosts the health-check engine
+  (`run_checks`, `render`, `doctor_main`, individual `_check_*` functions).
+  22 unit tests cover each check independently plus orchestration and
+  CLI registration.
+- New `tests/unit/test_setup_logging.py` (11 tests) pins behavior for
+  `CC_LOG_FILE` (default, env read, attachment, write smoke, bad path)
+  and `CC_HF_HUB_VERBOSE` (default-off clamps loggers to ERROR; on
+  leaves them alone).
+
+### Migration
+
+None — every change is additive. Existing `since="2026-05-08T00:00:00+00:00"`
+calls keep working; the natural-language parser only kicks in when ISO
+parsing fails.
+
+---
+
 ## v1.5.2 — 2026-05-11
 
 Sprint 13.1 — fix `recent_changes` and `explain_diff` MCP server hangs on Windows.
