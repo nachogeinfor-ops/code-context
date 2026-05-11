@@ -82,6 +82,31 @@ def _latest_version_data_simple(baseline: dict) -> tuple[str, dict]:
     return latest, baseline[latest]
 
 
+def _current_version() -> str:
+    """Read the current project version from pyproject.toml.
+
+    Auto-detection beats a hardcoded baseline so phase0-status doesn't drift
+    on every release. Sprint 14 — prior to this, `check_release_published`
+    was pinned to v1.4.0 and reported NOT READY every time we bumped past
+    that, even when the new tag was published on PyPI.
+
+    Returns "v<MAJOR>.<MINOR>.<PATCH>". Falls back to "v0.0.0" if pyproject
+    is missing or unparseable so the table still renders something readable.
+    """
+    pyproject = REPO_ROOT / "pyproject.toml"
+    if not pyproject.exists():
+        return "v0.0.0"
+    try:
+        text = pyproject.read_text(encoding="utf-8")
+        # version = "1.5.2" — simple regex; avoids depending on tomllib for a 1-line field.
+        m = re.search(r'^version\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
+        if not m:
+            return "v0.0.0"
+        return f"v{m.group(1)}"
+    except OSError:
+        return "v0.0.0"
+
+
 # ---------------------------------------------------------------------------
 # Technical quality (6)
 # ---------------------------------------------------------------------------
@@ -457,47 +482,55 @@ def check_changelog_clean() -> Criterion:
 # Output formatter
 # ---------------------------------------------------------------------------
 
-_SECTIONS: list[tuple[str, list[str]]] = [
-    (
-        "Technical quality",
-        [
-            "NDCG@10 hybrid_rerank",
-            "p50 latency hybrid_rerank",
-            "Tree-sitter languages",
-            "Tests passing",
-            "P0 issues open",
-            "P1 issues open",
-        ],
-    ),
-    (
-        "Real-world signal",
-        [
-            "GitHub stars",
-            "PyPI downloads (last mo)",
-            "Active installs (telem.)",
-            "External contributors",
-        ],
-    ),
-    (
-        "Multi-IDE compatibility",
-        [
-            "Claude Code",
-            "Cursor",
-            "Continue",
-            "Cline",
-        ],
-    ),
-    (
-        "Releases",
-        [
-            "v1.4.0 published",
-            "CHANGELOG clean of P0",
-        ],
-    ),
-]
+def _sections(current_version: str) -> list[tuple[str, list[str]]]:
+    """Return the section layout, parameterised on the current version.
+
+    Pulled out of a module-level constant so the "Releases" section's first
+    row tracks pyproject.toml automatically (Sprint 14). Prior to this it
+    was hardcoded to "v1.4.0 published" and silently fell out of sync on
+    every release.
+    """
+    return [
+        (
+            "Technical quality",
+            [
+                "NDCG@10 hybrid_rerank",
+                "p50 latency hybrid_rerank",
+                "Tree-sitter languages",
+                "Tests passing",
+                "P0 issues open",
+                "P1 issues open",
+            ],
+        ),
+        (
+            "Real-world signal",
+            [
+                "GitHub stars",
+                "PyPI downloads (last mo)",
+                "Active installs (telem.)",
+                "External contributors",
+            ],
+        ),
+        (
+            "Multi-IDE compatibility",
+            [
+                "Claude Code",
+                "Cursor",
+                "Continue",
+                "Cline",
+            ],
+        ),
+        (
+            "Releases",
+            [
+                f"{current_version} published",
+                "CHANGELOG clean of P0",
+            ],
+        ),
+    ]
 
 
-def _print_table(criteria: list[Criterion]) -> None:
+def _print_table(criteria: list[Criterion], current_version: str) -> None:
     by_label = {c.label: c for c in criteria}
 
     label_width = max(len(c.label) for c in criteria) + 2
@@ -507,7 +540,7 @@ def _print_table(criteria: list[Criterion]) -> None:
     print("Phase 0 maturity criteria")
     print()
 
-    for section_name, labels in _SECTIONS:
+    for section_name, labels in _sections(current_version):
         print(f"{section_name}:")
         for lbl in labels:
             c = by_label.get(lbl)
@@ -528,6 +561,7 @@ def _print_table(criteria: list[Criterion]) -> None:
 
 
 def main() -> int:
+    current_version = _current_version()
     criteria = [
         check_ndcg(),
         check_p50_latency(),
@@ -543,11 +577,11 @@ def main() -> int:
         check_multi_ide("Cursor", mandatory=True),
         check_multi_ide("Continue", mandatory=False),
         check_multi_ide("Cline", mandatory=False),
-        check_release_published("v1.4.0"),
+        check_release_published(current_version),
         check_changelog_clean(),
     ]
 
-    _print_table(criteria)
+    _print_table(criteria, current_version)
 
     total = len(criteria)
     met = sum(1 for c in criteria if c.status == "✓")

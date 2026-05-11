@@ -408,3 +408,43 @@ All good.
 
     c = script.check_changelog_clean()
     assert c.status == "✗", f"Expected ✗, got {c.status!r}"
+
+
+# ---------------------------------------------------------------------------
+# Sprint 14 — _current_version reads from pyproject.toml
+# ---------------------------------------------------------------------------
+
+
+def test_current_version_reads_pyproject(script, tmp_path, monkeypatch):
+    """Sprint 14: _current_version pulls the version from pyproject.toml so
+    the 'Releases' check row always tracks the bump."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "code-context-mcp"\nversion = "1.5.2"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(script, "REPO_ROOT", tmp_path)
+    assert script._current_version() == "v1.5.2"
+
+
+def test_current_version_falls_back_when_missing(script, tmp_path, monkeypatch):
+    """No pyproject.toml → 'v0.0.0' sentinel so the report still renders."""
+    monkeypatch.setattr(script, "REPO_ROOT", tmp_path)
+    assert script._current_version() == "v0.0.0"
+
+
+def test_current_version_falls_back_when_unparseable(script, tmp_path, monkeypatch):
+    """Malformed pyproject.toml → 'v0.0.0' sentinel."""
+    (tmp_path / "pyproject.toml").write_text(
+        "no version field at all\nzz garbage", encoding="utf-8"
+    )
+    monkeypatch.setattr(script, "REPO_ROOT", tmp_path)
+    assert script._current_version() == "v0.0.0"
+
+
+def test_sections_includes_current_version_published(script):
+    """_sections('vX.Y.Z') must put 'vX.Y.Z published' under Releases."""
+    sections = script._sections("v9.9.9")
+    releases = next(rows for (name, rows) in sections if name == "Releases")
+    assert "v9.9.9 published" in releases
+    assert "CHANGELOG clean of P0" in releases
