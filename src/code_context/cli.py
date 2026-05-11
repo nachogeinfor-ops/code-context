@@ -1,4 +1,4 @@
-"""code-context CLI: reindex, status, query, clear."""
+"""code-context CLI: reindex, status, query, clear, doctor."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from code_context._composition import (
     safe_reindex,
     setup_logging,
 )
+from code_context._doctor import doctor_main
 from code_context.config import load_config
 
 log = logging.getLogger("code_context")
@@ -128,6 +129,20 @@ def _cmd_clear(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    """Sprint 14: end-to-end health check.
+
+    Runs through environment, dependencies, model cache, and active index
+    state. Exits 0 if every check is ok/warn/info; exits 1 if anything failed.
+    No side effects — does not trigger a reindex, doesn't download models.
+    """
+    cfg = load_config()
+    # Intentionally skip setup_logging here — doctor output goes straight to
+    # stdout and we don't want stray INFO lines (e.g., from build_*) leaking
+    # into the report.
+    return doctor_main(cfg)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="code-context", description="code-context CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -152,6 +167,12 @@ def main() -> int:
     c = sub.add_parser("clear", help="Delete the cache for this repo")
     c.add_argument("--yes", action="store_true", help="Confirm deletion")
     c.set_defaults(func=_cmd_clear)
+
+    d = sub.add_parser(
+        "doctor",
+        help="Run environment + index health checks (no side effects)",
+    )
+    d.set_defaults(func=_cmd_doctor)
 
     args = parser.parse_args()
     return int(args.func(args))
