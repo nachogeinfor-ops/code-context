@@ -1,10 +1,10 @@
-"""GitCliSource — subprocess to `git` with ASCII unit-separator parsing."""
+"""GitCliSource — asyncio subprocess to `git` with ASCII unit-separator parsing."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -16,29 +16,57 @@ _FS = "\x1f"  # ASCII unit separator
 _PRETTY = f"%H{_FS}%aI{_FS}%an{_FS}%s"
 
 
+class _GitFailed(RuntimeError):
+    """Raised by _run_git when git exits non-zero."""
+
+    def __init__(self, returncode: int, stderr: str) -> None:
+        super().__init__(f"git exited {returncode}: {stderr.strip()[:200]}")
+        self.returncode = returncode
+        self.stderr = stderr
+
+
+async def _run_git(argv: list[str], *, cwd: Path) -> tuple[str, str]:
+    """Run `git <argv>` async, returning (stdout, stderr).
+
+    Replaces subprocess.run because subprocess.run from inside an
+    asyncio loop on Windows (Proactor IOCP) deadlocks. Decodes both
+    streams as UTF-8 with errors='replace' for the same reason
+    documented in the original adapter: git diff may emit mixed-
+    encoding source bytes that crash strict decoders.
+
+    Raises _GitFailed on non-zero exit.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        *argv,
+        cwd=str(cwd),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out_bytes, err_bytes = await proc.communicate()
+    stdout = out_bytes.decode("utf-8", errors="replace")
+    stderr = err_bytes.decode("utf-8", errors="replace")
+    if proc.returncode != 0:
+        raise _GitFailed(proc.returncode or -1, stderr)
+    return stdout, stderr
+
+
 class GitCliSource:
     def is_repo(self, root: Path) -> bool:
+        # Pure filesystem check; no subprocess, no asyncio interaction.
         return (root / ".git").exists()
 
-    def head_sha(self, root: Path) -> str:
+    async def head_sha(self, root: Path) -> str:
         if not self.is_repo(root):
             return ""
         try:
-            out = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=str(root),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=True,
-            )
-            return (out.stdout or "").strip()
-        except subprocess.CalledProcessError as exc:
+            stdout, _ = await _run_git(["rev-parse", "HEAD"], cwd=root)
+            return stdout.strip()
+        except _GitFailed as exc:
             log.warning("git rev-parse HEAD failed: %s", exc)
             return ""
 
-    def commits(
+    async def commits(
         self,
         root: Path,
         since: datetime | None = None,
@@ -48,88 +76,44 @@ class GitCliSource:
         if not self.is_repo(root):
             return []
 
-        cmd = ["git", "log", f"--pretty=format:{_PRETTY}", "--name-only", f"-{max_count}"]
+        argv = ["log", f"--pretty=format:{_PRETTY}", "--name-only", f"-{max_count}"]
         if since is not None:
-            cmd.append(f"--since={since.isoformat()}")
+            argv.append(f"--since={since.isoformat()}")
         if paths:
-            cmd.append("--")
-            cmd.extend(paths)
+            argv.append("--")
+            argv.extend(paths)
 
         try:
-            res = subprocess.run(
-                cmd,
-                cwd=str(root),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=True,
-            )
-        except subprocess.CalledProcessError as exc:
+            stdout, _ = await _run_git(argv, cwd=root)
+        except _GitFailed as exc:
             log.warning("git log failed: %s", exc)
             return []
 
-        return _parse(res.stdout or "")
+        return _parse(stdout)
 
-    def diff_files(self, root: Path, ref: str) -> list[DiffFile]:
-        """Use git diff-tree + numstat-like parsing to get hunks per file.
-
-        Strategy: `git diff <ref>^! --unified=0 --no-color` gives a unified
-        diff with zero context lines. Each hunk header line is:
-            @@ -<old_start>,<old_count> +<new_start>,<new_count> @@
-        We parse those into (new_start, new_start + new_count - 1) pairs.
-
-        For ref == HEAD, the worktree diff (uncommitted changes) is excluded;
-        we always show the committed diff. To diff worktree, the caller would
-        pass an explicit ref like "HEAD" with a different strategy — out of
-        scope for v0.7.0.
+    async def diff_files(self, root: Path, ref: str) -> list[DiffFile]:
+        """Same strategy as before: try `git diff <ref>^! --unified=0`,
+        fall back to `git diff --root <ref>` for the initial commit.
+        Critical Windows note retained: utf-8 decoding with errors=replace
+        because git diff output may contain mixed-encoding source bytes.
         """
         if not self.is_repo(root):
             return []
 
-        # ^! syntax means "this commit's changes vs its parent". Equivalent to
-        # `git diff <ref>~1 <ref>` for non-merge commits. For the initial
-        # commit, ^! is invalid; fall back to `git diff --root <ref>`.
-        #
-        # Critical Windows note: text=True alone uses Python's default
-        # locale encoding (cp1252 on Windows), which CANNOT decode many
-        # bytes that legitimately appear in git diff output (binary chunks,
-        # mixed-encoding source files). When the reader thread fails to
-        # decode, `res.stdout` becomes None even though the subprocess
-        # exited successfully. We force UTF-8 + errors="replace" to ensure
-        # we always get a string back, and we defensively guard against
-        # None in case future git versions change the behavior again.
         try:
-            res = subprocess.run(
-                ["git", "diff", f"{ref}^!", "--unified=0", "--no-color"],
-                cwd=str(root),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=True,
+            diff_text, _ = await _run_git(
+                ["diff", f"{ref}^!", "--unified=0", "--no-color"], cwd=root
             )
-            diff_text = res.stdout
-        except subprocess.CalledProcessError:
-            # Probably the initial commit. Try --root.
+        except _GitFailed:
+            # Probably the initial commit. Fall back to --root.
             try:
-                res = subprocess.run(
-                    ["git", "diff", "--root", "--unified=0", "--no-color", ref],
-                    cwd=str(root),
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    check=True,
+                diff_text, _ = await _run_git(
+                    ["diff", "--root", "--unified=0", "--no-color", ref], cwd=root
                 )
-                diff_text = res.stdout
-            except subprocess.CalledProcessError as exc:
+            except _GitFailed as exc:
                 log.warning("git diff failed for ref %r: %s", ref, exc)
                 return []
 
-        if diff_text is None:
-            log.warning("git diff returned None stdout for ref %r — empty []", ref)
-            return []
         return _parse_diff(diff_text)
 
 
