@@ -1,5 +1,78 @@
 # Changelog
 
+## v1.5.2 — 2026-05-11
+
+Sprint 13.1 — fix `recent_changes` and `explain_diff` MCP server hangs on Windows.
+
+> **Hotfix on v1.5.1.** All Windows users using either `recent_changes`
+> or `explain_diff` should upgrade. v1.5.1 fixed `search_repo`; this
+> release closes the second class of the same root-cause bug.
+
+### Fixed
+
+- **`recent_changes` and `explain_diff` MCP hangs on Windows.** Both
+  handlers invoked `subprocess.run(["git", ...])` from inside an
+  asyncio coroutine (originally via `asyncio.to_thread`). On Windows,
+  `subprocess.run` from inside the asyncio Proactor IOCP loop deadlocks
+  because the loop's child watcher and the synchronous wait fight over
+  the same kernel handles. The Sprint 13.0 `_warmup_models` fix applied
+  to model loading; it did not help here because git cannot be
+  pre-warmed. This release migrates the affected code paths to
+  `asyncio.create_subprocess_exec`, which is asyncio-native and
+  integrates cleanly with the Proactor child watcher. Additionally,
+  spawned git processes now use `stdin=asyncio.subprocess.DEVNULL` —
+  without this, git inherited the MCP server's stdin pipe handle (held
+  open by the JSON-RPC client) and hung waiting for EOF.
+
+### Changed
+
+- **`GitSource.commits` and `GitSource.diff_files` are now async**
+  (`asyncio.create_subprocess_exec`). `head_sha` and `is_repo` remain
+  sync because their only callers (`IndexerUseCase`, `BackgroundIndexer`)
+  run in sync contexts that pre-date the MCP request loop.
+- **`RecentChangesUseCase.run` and `ExplainDiffUseCase.run` are now**
+  **`async def`**. MCP handlers (`_handle_recent`, `_handle_explain_diff`)
+  await them directly — they no longer go through `asyncio.to_thread`.
+  Other handlers (`search_repo`, `find_definition`, `find_references`,
+  `get_file_tree`, `get_summary`) continue to use `to_thread` because
+  they do CPU-bound or filesystem work where blocking the loop would
+  be worse.
+
+### Added
+
+- **Subprocess MCP integration tests** for `recent_changes`
+  (`tests/integration/test_mcp_recent_changes.py`) and `explain_diff`
+  (`tests/integration/test_mcp_explain_diff.py`). Each materializes a
+  minimal git repo from the `python_repo` fixture (the fixture is not
+  itself a git repo) so the handler reaches the failing subprocess
+  path, then verifies the MCP call returns within 20 seconds. Opt-in
+  via `CC_INTEGRATION=on`.
+- **Unit tests** for the new async `GitCliSource`
+  (`tests/unit/adapters/test_git_source_async.py`). Pins `_run_git`'s
+  return shape, the `stdin=DEVNULL` invariant (regression guard for
+  the Windows pipe-inheritance hang), `_GitFailed` on non-zero exit,
+  non-UTF-8 byte tolerance, repo-not-found short-circuit in `commits`,
+  and the `diff --root` fallback in `diff_files` for initial commits.
+
+### Removed
+
+- `tests/unit/adapters/test_git_source_cli.py` (9 tests). These patched
+  `subprocess.run`, which the adapter no longer uses. Coverage
+  preserved by `test_git_source_async.py`.
+
+### Migration
+
+External users with a custom `GitSource` adapter must convert their
+`commits` and `diff_files` implementations to `async def` and use
+`asyncio.create_subprocess_exec` (or any async-aware subprocess
+strategy). `head_sha` and `is_repo` remain sync.
+
+In-process callers of `RecentChangesUseCase.run` or
+`ExplainDiffUseCase.run` must now `await` the call. Plain synchronous
+invocation raises `RuntimeWarning: coroutine ... was never awaited`.
+
+---
+
 ## v1.5.1 — 2026-05-08
 
 Sprint 13.0 — fix `search_repo` MCP server hang on Windows.
