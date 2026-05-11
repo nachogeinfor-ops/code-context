@@ -83,7 +83,7 @@ def test_get_file_tree_max_depth_caps_recursion(repo: Path) -> None:
     assert src_node.children == ()  # depth cap reached.
 
 
-def test_explain_diff_returns_chunks_for_a_real_commit(repo: Path) -> None:
+async def test_explain_diff_returns_chunks_for_a_real_commit(repo: Path) -> None:
     """Make a 2nd commit that modifies a Python file; explain_diff should
     surface the changed function as a DiffChunk."""
     py_file = repo / "src" / "sample_app" / "utils.py"
@@ -113,7 +113,7 @@ def test_explain_diff_returns_chunks_for_a_real_commit(repo: Path) -> None:
         git_source=GitCliSource(),
         repo_root=repo,
     )
-    chunks = uc.run("HEAD")
+    chunks = await uc.run("HEAD")
 
     assert chunks, "explain_diff returned empty for a known commit"
     # At least one chunk must point at utils.py.
@@ -124,7 +124,7 @@ def test_explain_diff_returns_chunks_for_a_real_commit(repo: Path) -> None:
     assert any("format_message" in c.snippet for c in utils_chunks)
 
 
-def test_explain_diff_empty_for_non_repo(tmp_path: Path) -> None:
+async def test_explain_diff_empty_for_non_repo(tmp_path: Path) -> None:
     """When repo_root is not a git repo, explain_diff returns []."""
     chunker = ChunkerDispatcher(
         treesitter=TreeSitterChunker(),
@@ -136,4 +136,4 @@ def test_explain_diff_empty_for_non_repo(tmp_path: Path) -> None:
         git_source=GitCliSource(),
         repo_root=tmp_path,  # no .git/.
     )
-    assert uc.run("HEAD") == []
+    assert await uc.run("HEAD") == []

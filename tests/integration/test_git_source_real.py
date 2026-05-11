@@ -44,23 +44,23 @@ def test_is_repo_and_head_sha(initialized_repo: Path) -> None:
     assert len(head) == 40
 
 
-def test_commits_returns_two(initialized_repo: Path) -> None:
+async def test_commits_returns_two(initialized_repo: Path) -> None:
     src = GitCliSource()
-    commits = src.commits(initialized_repo, max_count=10)
+    commits = await src.commits(initialized_repo, max_count=10)
     assert len(commits) == 2
     assert commits[0].summary == "second"  # most recent first
     assert commits[1].summary == "first"
 
 
-def test_commits_filtered_by_path(initialized_repo: Path) -> None:
+async def test_commits_filtered_by_path(initialized_repo: Path) -> None:
     src = GitCliSource()
-    commits = src.commits(initialized_repo, paths=["b.py"], max_count=10)
+    commits = await src.commits(initialized_repo, paths=["b.py"], max_count=10)
     assert len(commits) == 1
     assert commits[0].summary == "second"
 
 
-def test_no_repo(tmp_path: Path) -> None:
+async def test_no_repo(tmp_path: Path) -> None:
     src = GitCliSource()
     assert src.is_repo(tmp_path) is False
     assert src.head_sha(tmp_path) == ""
-    assert src.commits(tmp_path) == []
+    assert await src.commits(tmp_path) == []

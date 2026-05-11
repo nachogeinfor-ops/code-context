@@ -18,10 +18,10 @@ class _FakeGit:
     def head_sha(self, root):
         return "abc"
 
-    def commits(self, root, since=None, paths=None, max_count=20):
+    async def commits(self, root, since=None, paths=None, max_count=20):
         return []
 
-    def diff_files(self, root, ref):
+    async def diff_files(self, root, ref):
         return self._files
 
 
@@ -51,7 +51,7 @@ class _FakeChunker:
         return self._chunks.get(path, [])
 
 
-def test_explain_diff_returns_chunks_overlapping_hunks(tmp_path: Path) -> None:
+async def test_explain_diff_returns_chunks_overlapping_hunks(tmp_path: Path) -> None:
     diff_files = [DiffFile(path="a.py", hunks=((10, 15),))]
     code = {str(tmp_path / "a.py"): "x" * 200}
     chunks = {
@@ -78,7 +78,7 @@ def test_explain_diff_returns_chunks_overlapping_hunks(tmp_path: Path) -> None:
         git_source=_FakeGit(diff_files),
         repo_root=tmp_path,
     )
-    out = uc.run("HEAD")
+    out = await uc.run("HEAD")
     # Hunk (10, 15) overlaps chunk (8, 20) but not (30, 40).
     assert len(out) == 1
     assert out[0].path == "a.py"
@@ -86,7 +86,7 @@ def test_explain_diff_returns_chunks_overlapping_hunks(tmp_path: Path) -> None:
     assert out[0].snippet == "def foo(): pass"
 
 
-def test_explain_diff_emits_fragment_when_no_chunk_overlaps(tmp_path: Path) -> None:
+async def test_explain_diff_emits_fragment_when_no_chunk_overlaps(tmp_path: Path) -> None:
     """Hunk falls in top-of-file imports; chunker has no chunks for that range."""
     diff_files = [DiffFile(path="a.py", hunks=((1, 3),))]
     code = {str(tmp_path / "a.py"): "import os\nimport sys\nimport json\n"}
@@ -107,13 +107,13 @@ def test_explain_diff_emits_fragment_when_no_chunk_overlaps(tmp_path: Path) -> N
         git_source=_FakeGit(diff_files),
         repo_root=tmp_path,
     )
-    out = uc.run("HEAD")
+    out = await uc.run("HEAD")
     assert len(out) == 1
     assert out[0].kind == "fragment"
     assert out[0].lines == (1, 3)
 
 
-def test_explain_diff_max_chunks_cap(tmp_path: Path) -> None:
+async def test_explain_diff_max_chunks_cap(tmp_path: Path) -> None:
     diff_files = [DiffFile(path=f"f{i}.py", hunks=((1, 5),)) for i in range(10)]
     code = {str(tmp_path / f"f{i}.py"): "content" for i in range(10)}
     chunks = {
@@ -134,5 +134,5 @@ def test_explain_diff_max_chunks_cap(tmp_path: Path) -> None:
         git_source=_FakeGit(diff_files),
         repo_root=tmp_path,
     )
-    out = uc.run("HEAD", max_chunks=3)
+    out = await uc.run("HEAD", max_chunks=3)
     assert len(out) == 3
