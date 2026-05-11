@@ -90,14 +90,19 @@ class CodeSource(Protocol):
 
 
 class GitSource(Protocol):
-    """Reads git state. Default: GitCliSource."""
+    """Read-only git port. All methods are async because the canonical
+    adapter (GitCliSource) uses asyncio.create_subprocess_exec to invoke
+    git, which is the only reliable way to call subprocesses from inside
+    an asyncio loop on Windows (subprocess.run deadlocks with Proactor
+    IOCP). is_repo stays sync because it's a pure filesystem check.
+    """
 
     def is_repo(self, root: Path) -> bool: ...
 
-    def head_sha(self, root: Path) -> str:
+    async def head_sha(self, root: Path) -> str:
         """Empty string if not a repo."""
 
-    def commits(
+    async def commits(
         self,
         root: Path,
         since: datetime | None = None,
@@ -105,7 +110,7 @@ class GitSource(Protocol):
         max_count: int = 20,
     ) -> list[Change]: ...
 
-    def diff_files(self, root: Path, ref: str) -> list[DiffFile]:
+    async def diff_files(self, root: Path, ref: str) -> list[DiffFile]:
         """Return per-file diff hunks for the commit at `ref` (or worktree
         diff against HEAD if ref=='HEAD' is given the current behavior).
         Each DiffFile.hunks is a tuple of (start_line, end_line) ranges in
