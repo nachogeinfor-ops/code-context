@@ -221,10 +221,18 @@ def register(
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        # Sprint 13.1: git-using handlers are async (asyncio.create_subprocess_exec)
+        # and integrate with the Proactor event loop. They do NOT go through
+        # asyncio.to_thread, which on Windows interacts badly with subprocess
+        # invocation.
+        if name == "recent_changes":
+            return await _handle_recent(recent_changes, arguments)
+        if name == "explain_diff":
+            return await _handle_explain_diff(explain_diff, arguments)
+        # CPU-bound or filesystem-walk handlers stay on to_thread to avoid
+        # blocking the asyncio loop with potentially long synchronous work.
         if name == "search_repo":
             return await asyncio.to_thread(_handle_search, search_repo, arguments)
-        if name == "recent_changes":
-            return await asyncio.to_thread(_handle_recent, recent_changes, arguments)
         if name == "get_summary":
             return await asyncio.to_thread(_handle_summary, get_summary, arguments)
         if name == "find_definition":
@@ -233,8 +241,6 @@ def register(
             return await asyncio.to_thread(_handle_find_references, find_references, arguments)
         if name == "get_file_tree":
             return await asyncio.to_thread(_handle_file_tree, get_file_tree, arguments)
-        if name == "explain_diff":
-            return await asyncio.to_thread(_handle_explain_diff, explain_diff, arguments)
         raise ValueError(f"unknown tool: {name}")
 
 
@@ -257,11 +263,11 @@ def _handle_search(uc: SearchRepoUseCase, args: dict[str, Any]) -> list[TextCont
     return [TextContent(type="text", text=_to_json(payload))]
 
 
-def _handle_recent(uc: RecentChangesUseCase, args: dict[str, Any]) -> list[TextContent]:
+async def _handle_recent(uc: RecentChangesUseCase, args: dict[str, Any]) -> list[TextContent]:
     since = None
     if args.get("since"):
         since = datetime.fromisoformat(args["since"])
-    commits = uc.run(
+    commits = await uc.run(
         since=since,
         paths=args.get("paths"),
         max_count=int(args.get("max", 20)),
@@ -343,8 +349,8 @@ def _serialize_tree_node(node) -> dict[str, Any]:
     return out
 
 
-def _handle_explain_diff(uc: ExplainDiffUseCase, args: dict[str, Any]) -> list[TextContent]:
-    chunks = uc.run(
+async def _handle_explain_diff(uc: ExplainDiffUseCase, args: dict[str, Any]) -> list[TextContent]:
+    chunks = await uc.run(
         ref=args["ref"],
         max_chunks=int(args.get("max_chunks", 50)),
     )
