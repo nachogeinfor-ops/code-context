@@ -29,6 +29,8 @@ All configuration is via environment variables. See `src/code_context/config.py`
 | `CC_SYMBOL_RANK` | `source-first` | `source-first` post-sorts `find_references` by source tier; `natural` reverts to raw BM25 order. See "`find_references` source-tier ranking" below. **Since v1.2.0.** |
 | `CC_TELEMETRY` | `off` | Opt-in anonymous telemetry. `on`/`true`/`1` enables weekly heartbeat + session aggregates. No PII, no query text, no code content. See "Opt-in telemetry" below. **Since v1.4.0.** |
 | `CC_TELEMETRY_ENDPOINT` | `https://us.posthog.com` | Custom PostHog-compatible collector URL (self-host). Only effective when `CC_TELEMETRY=on`. **Since v1.4.0.** |
+| `CC_LOG_FILE` | (unset) | Append server/CLI logs to this file in addition to stderr. Useful when the MCP client captures stderr and you need to inspect what's happening. Bad paths warn rather than crash. **Since v1.6.0.** |
+| `CC_HF_HUB_VERBOSE` | `off` | When `off` (default), the `huggingface_hub`, `transformers`, and `sentence_transformers` loggers are clamped to `ERROR` to silence warmup-time spam (HF_TOKEN reminders, tokenizer parallelism notices). Set `on`/`true`/`1` to bring them back during debugging. **Since v1.6.0.** |
 
 ## Examples
 
