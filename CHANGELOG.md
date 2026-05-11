@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.6.1 — 2026-05-11
+
+Sprint 14 hotfix — pin `tree-sitter-language-pack` to `<1.8`.
+
+> **Hotfix on v1.6.0.** All users should upgrade. v1.6.0's only difference
+> from v1.5.2 plus this pin is the additive Sprint 14 features (doctor,
+> CC_LOG_FILE, natural-language since, progress logs).
+
+### Fixed
+
+- **`tree-sitter-language-pack 1.8.0` ships a broken `get_parser`** that
+  returns a stub `builtins.Parser` object with no `.parse()` method.
+  Every chunker call hits this and returns `[]`, which silently breaks
+  `find_definition`, `find_references`, and `search_repo` quality. 33
+  tests fail in clean-environment CI because of it. Pin to `<1.8` until
+  upstream ships a working 1.8.x or a 1.7.x patch.
+
+  This bug affected v1.5.0 onward in any environment where pip resolved
+  the latest `tree-sitter-language-pack`; existing installs with the
+  cached 1.6.x kept working. The Sprint 14 CI run for v1.6.0 caught it.
+
+---
+
 ## v1.6.0 — 2026-05-11
 
 Sprint 14 — quick-win UX and operability batch. Eight discrete improvements

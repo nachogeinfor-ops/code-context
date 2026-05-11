@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "code-context-mcp"
-version = "1.6.0"
+version = "1.6.1"
 description = "MCP server with local RAG for Claude Code repo context"
 readme = "README.md"
 license = { text = "MIT" }
@@ -34,7 +34,11 @@ dependencies = [
   "filelock>=3.13",
   "sentence-transformers>=2.7",
   "tree-sitter>=0.22",
-  "tree-sitter-language-pack>=0.7",
+  # Pin to <1.8: tree-sitter-language-pack 1.8.0 ships a broken `get_parser`
+  # that returns a stub `builtins.Parser` with no .parse() method, which makes
+  # every chunker call return [] (33 tests failed in CI v1.5.2 onward). Drop
+  # the pin once upstream ships a working 1.8.x or a 1.7.x patch release.
+  "tree-sitter-language-pack>=0.7,<1.8",
 ]
 
 [project.optional-dependencies]
