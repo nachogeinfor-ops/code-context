@@ -93,11 +93,24 @@ runs:
     assert cfg.runs[0].queries == q
 
 
-def test_cache_dir_env_var_expanded(tmp_path: Path, queries_file: Path) -> None:
+def test_cache_dir_env_var_expanded(
+    tmp_path: Path, queries_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`${VAR}` placeholders in cache_dir paths must expand via os.path.expandvars.
+
+    `TEMP` is the canonical example because it's documented in the README. On
+    Linux CI the env var doesn't exist by default (it's a Windows convention),
+    so we set it explicitly here — the test is about expansion behavior, not
+    about the platform's default env var inventory.
+    """
     from benchmarks.eval.config_models import MultiRepoConfig
 
     repo = tmp_path / "repo"
     repo.mkdir()
+
+    # Pick a deterministic value so the assertion is portable. On Windows TEMP
+    # is normally set; we still override it so the test is hermetic.
+    monkeypatch.setenv("TEMP", str(tmp_path / "expanded-temp"))
 
     yaml_text = f"""\
 runs:
@@ -109,8 +122,7 @@ runs:
     yaml_path = _write_yaml(tmp_path, yaml_text)
     cfg = MultiRepoConfig.from_yaml(yaml_path)
 
-    temp = os.environ.get("TEMP", os.environ.get("TMPDIR", "/tmp"))
-    expected = Path(temp) / "mytest-cache"
+    expected = Path(os.environ["TEMP"]) / "mytest-cache"
     assert cfg.runs[0].cache_dir == expected
 
 
