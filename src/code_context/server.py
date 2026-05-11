@@ -40,11 +40,15 @@ from code_context._composition import (
     wrap_indexer_with_telemetry,
     wrap_search_with_telemetry,
 )
+from code_context._first_run import (
+    is_first_run,
+    mark_first_run_complete,
+    setup_banner,
+)
 from code_context._telemetry import (
     TelemetryClient,
     TelemetryHeartbeatThread,
     _load_telemetry_config,
-    _show_first_run_notice,
 )
 from code_context._watcher import RepoWatcher
 from code_context.adapters.driving.mcp_server import register
@@ -119,6 +123,15 @@ def _warmup_models(
 
 
 async def _run_server(cfg: Config) -> None:
+    # Capture first_run state up-front: once we start populating the cache,
+    # is_first_run() will flip to False mid-startup, so we'd lose the signal
+    # for the "drop the marker" step below.
+    first_run = is_first_run(cfg)
+    if first_run:
+        # MCP stdio servers can't prompt the user (stdin is owned by JSON-RPC),
+        # so we just print a loud multi-line banner to stderr before any model
+        # download starts. Banner MUST go to stderr — stdout corrupts JSON-RPC.
+        print(setup_banner(cfg), file=sys.stderr, flush=True)
     indexer, store, embeddings, keyword_index, symbol_index = build_indexer_and_store(cfg)
     bus = IndexUpdateBus()
 
@@ -174,7 +187,6 @@ async def _run_server(cfg: Config) -> None:
     if cfg.telemetry:
         tconf = _load_telemetry_config(cfg)
         tel_client = TelemetryClient(tconf)
-        _show_first_run_notice(tel_client)
         heartbeat_thread = TelemetryHeartbeatThread(
             client=tel_client,
             # chunk_count_fn: len of the store's internal chunk list
@@ -219,6 +231,12 @@ async def _run_server(cfg: Config) -> None:
         get_file_tree=file_tree,
         explain_diff=explain_diff,
     )
+
+    if first_run:
+        # Banner has been shown; drop the marker now so a restart during the
+        # bg reindex doesn't re-show the banner. The marker says "we showed
+        # the first-run banner," not "indexing is complete."
+        mark_first_run_complete(cfg)
 
     try:
         async with stdio_server() as (read_stream, write_stream):

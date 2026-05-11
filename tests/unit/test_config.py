@@ -325,3 +325,61 @@ def test_rerank_batch_size_zero_or_negative_treated_as_none(tmp_path: Path) -> N
         with patch.dict(os.environ, {"CC_RERANK_BATCH_SIZE": v}, clear=True):
             cfg = load_config(default_repo_root=tmp_path)
             assert cfg.rerank_batch_size is None, f"expected None for CC_RERANK_BATCH_SIZE={v}"
+
+
+# ---------------------------------------------------------------------------
+# Sprint 16 T3 — load_config reads telemetry_opt_in from the first-run marker
+# ---------------------------------------------------------------------------
+
+
+def test_telemetry_opt_in_from_marker_when_no_env(tmp_path: Path, monkeypatch) -> None:
+    """When CC_TELEMETRY is unset, the marker's telemetry_opt_in=True is honored."""
+    import hashlib
+    import json
+
+    monkeypatch.delenv("CC_TELEMETRY", raising=False)
+    cache_dir = tmp_path / "cache"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    h = hashlib.sha256(str(repo_root.resolve()).encode("utf-8")).hexdigest()[:16]
+    marker_dir = cache_dir / h
+    marker_dir.mkdir(parents=True)
+    (marker_dir / ".first_run_completed").write_text(
+        json.dumps({"completed_at": "2026-05-11T00:00:00+00:00", "telemetry_opt_in": True}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CC_CACHE_DIR", str(cache_dir))
+    monkeypatch.setenv("CC_REPO_ROOT", str(repo_root))
+    cfg = load_config()
+    assert cfg.telemetry is True
+
+
+def test_telemetry_env_overrides_marker(tmp_path: Path, monkeypatch) -> None:
+    """Explicit CC_TELEMETRY=off wins over marker telemetry_opt_in=True."""
+    import hashlib
+    import json
+
+    monkeypatch.setenv("CC_TELEMETRY", "off")
+    cache_dir = tmp_path / "cache"
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    h = hashlib.sha256(str(repo_root.resolve()).encode("utf-8")).hexdigest()[:16]
+    marker_dir = cache_dir / h
+    marker_dir.mkdir(parents=True)
+    (marker_dir / ".first_run_completed").write_text(
+        json.dumps({"completed_at": "2026-05-11T00:00:00+00:00", "telemetry_opt_in": True}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CC_CACHE_DIR", str(cache_dir))
+    monkeypatch.setenv("CC_REPO_ROOT", str(repo_root))
+    cfg = load_config()
+    assert cfg.telemetry is False
+
+
+def test_telemetry_default_off_when_no_env_no_marker(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("CC_TELEMETRY", raising=False)
+    monkeypatch.setenv("CC_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("CC_REPO_ROOT", str(tmp_path / "repo"))
+    (tmp_path / "repo").mkdir()
+    cfg = load_config()
+    assert cfg.telemetry is False

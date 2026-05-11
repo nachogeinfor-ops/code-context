@@ -15,14 +15,31 @@ from code_context._composition import (
     setup_logging,
 )
 from code_context._doctor import doctor_main
+from code_context._first_run import (
+    is_first_run,
+    mark_first_run_complete,
+    prompt_telemetry_consent,
+    setup_banner,
+)
 from code_context.config import load_config
 
 log = logging.getLogger("code_context")
 
 
+def _first_run_setup(cfg) -> None:
+    """If this is a first run, show the banner and (if interactive) ask
+    about telemetry. Records the marker so this only happens once."""
+    if not is_first_run(cfg):
+        return
+    print(setup_banner(cfg), file=sys.stderr, flush=True)
+    consent = prompt_telemetry_consent()
+    mark_first_run_complete(cfg, telemetry_opt_in=consent)
+
+
 def _cmd_reindex(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
+    _first_run_setup(cfg)
     indexer, _, _, _, _ = build_indexer_and_store(cfg)
     if args.force:
         log.info("reindexing %s (forced full)", cfg.repo_root)
@@ -40,6 +57,7 @@ def _cmd_reindex(args: argparse.Namespace) -> int:
 def _cmd_status(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
+    _first_run_setup(cfg)
     indexer, _, _, _, _ = build_indexer_and_store(cfg)
     current = indexer.current_index_dir()
     print(f"repo_root:  {cfg.repo_root}")
@@ -72,6 +90,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
 def _cmd_query(args: argparse.Namespace) -> int:
     cfg = load_config()
     setup_logging(cfg)
+    _first_run_setup(cfg)
     indexer, store, embeddings, keyword_index, symbol_index = build_indexer_and_store(cfg)
     current = indexer.current_index_dir()
     if current is None:

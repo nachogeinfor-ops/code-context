@@ -3,11 +3,43 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import platformdirs
+
+
+def _repo_hash(repo_root: Path) -> str:
+    """Stable hash of a repo's resolved path, used to namespace cache subdirs.
+
+    Centralized so `Config.repo_cache_subdir` and the first-run marker reader
+    in `_read_persisted_telemetry_opt_in` stay in sync — the marker file's
+    location is defined by this hash, and any change to it would invalidate
+    every existing per-repo cache and marker.
+    """
+    return hashlib.sha256(str(repo_root.resolve()).encode("utf-8")).hexdigest()[:16]
+
+
+def _read_persisted_telemetry_opt_in(cache_dir: Path, repo_root: Path) -> bool:
+    """Return the marker-file's telemetry_opt_in if present, else False.
+
+    The marker lives at <cache_dir>/<repo-hash>/.first_run_completed and is
+    written by mark_first_run_complete(). Never raises.
+
+    Inlined (rather than importing from `_first_run`) to avoid a circular
+    import — `_first_run` imports `config.Config`.
+    """
+    marker = cache_dir / _repo_hash(repo_root) / ".first_run_completed"
+    if not marker.exists():
+        return False
+    try:
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(payload.get("telemetry_opt_in", False))
+
 
 _DEFAULT_EXTENSIONS = [
     ".py",
@@ -109,8 +141,10 @@ class Config:
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
-        h = hashlib.sha256(str(self.repo_root.resolve()).encode("utf-8")).hexdigest()[:16]
-        return self.cache_dir / h
+        return self.cache_dir / _repo_hash(self.repo_root)
+
+    def first_run_marker_path(self) -> Path:
+        return self.repo_cache_subdir() / ".first_run_completed"
 
 
 def load_config(default_repo_root: Path | None = None) -> Config:
@@ -145,6 +179,16 @@ def load_config(default_repo_root: Path | None = None) -> Config:
     if rerank_batch_size is not None and rerank_batch_size <= 0:
         rerank_batch_size = None
 
+    # Sprint 16 T3: env explicit wins; otherwise honor a persisted
+    # telemetry_opt_in choice from the first-run marker. This lets the CLI
+    # wizard's "y" answer carry over to subsequent runs without forcing the
+    # user to also export CC_TELEMETRY.
+    _cc_tel_raw = os.environ.get("CC_TELEMETRY")
+    if _cc_tel_raw is not None:
+        telemetry = _cc_tel_raw.lower() in ("on", "true", "1")
+    else:
+        telemetry = _read_persisted_telemetry_opt_in(cache_dir, repo_root)
+
     return Config(
         repo_root=repo_root.resolve(),
         embeddings_provider=embeddings,
@@ -170,7 +214,7 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         watch_debounce_ms=int(os.environ.get("CC_WATCH_DEBOUNCE_MS", "1000")),
         bm25_stop_words=os.environ.get("CC_BM25_STOP_WORDS", "off").lower(),
         symbol_rank=os.environ.get("CC_SYMBOL_RANK", "source-first").lower(),
-        telemetry=os.environ.get("CC_TELEMETRY", "off").lower() in ("on", "true", "1"),
+        telemetry=telemetry,
         telemetry_endpoint=os.environ.get("CC_TELEMETRY_ENDPOINT"),
         # Negative values are coerced to 0 (disable) — guards against
         # accidental CC_EMBED_CACHE_SIZE=-1 which would make FIFO evict
