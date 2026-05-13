@@ -138,6 +138,14 @@ class Config:
     # spam). Default False — those loggers are clamped to ERROR. Set
     # CC_HF_HUB_VERBOSE=on to bring them back.
     hf_hub_verbose: bool = False
+    # Sprint 15.1 — optional cap on sentence-transformers encode() batch_size
+    # for the LocalST embeddings adapter. Default None = sentence-transformers'
+    # internal default (32). Positive int = explicit cap. Non-positive values
+    # (0, negative) coerced to None. Lower values trade encode throughput for
+    # memory pressure and help large-context models (e.g. nomic-ai/CodeRankEmbed
+    # at 8192 max_seq) avoid pathological attention-matrix sizes that have
+    # been reproducibly observed to stall the indexer on large repos.
+    embed_batch_size: int | None = None
 
     def repo_cache_subdir(self) -> Path:
         """Cache subdir specific to this repo (hashed for collision safety)."""
@@ -178,6 +186,13 @@ def load_config(default_repo_root: Path | None = None) -> Config:
     rerank_batch_size = int(_rerank_bs_raw) if _rerank_bs_raw else None
     if rerank_batch_size is not None and rerank_batch_size <= 0:
         rerank_batch_size = None
+
+    _embed_bs_raw = os.environ.get("CC_EMBED_BATCH_SIZE")
+    # Same coercion as CC_RERANK_BATCH_SIZE: positive int caps batch; non-
+    # positive coerced to None (use sentence-transformers default of 32).
+    embed_batch_size = int(_embed_bs_raw) if _embed_bs_raw else None
+    if embed_batch_size is not None and embed_batch_size <= 0:
+        embed_batch_size = None
 
     # Sprint 16 T3: env explicit wins; otherwise honor a persisted
     # telemetry_opt_in choice from the first-run marker. This lets the CLI
@@ -223,4 +238,5 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         rerank_batch_size=rerank_batch_size,
         log_file=os.environ.get("CC_LOG_FILE") or None,
         hf_hub_verbose=os.environ.get("CC_HF_HUB_VERBOSE", "off").lower() in ("on", "true", "1"),
+        embed_batch_size=embed_batch_size,
     )

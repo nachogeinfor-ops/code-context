@@ -186,6 +186,7 @@ class LocalST:
         model_name: str = "all-MiniLM-L6-v2",
         *,
         trust_remote_code: bool = False,
+        batch_size: int | None = None,
     ) -> None:
         if model_name not in MODEL_REGISTRY:
             log.warning(
@@ -195,6 +196,12 @@ class LocalST:
             )
         self.model_name = model_name
         self.trust_remote_code = trust_remote_code
+        # Sprint 15.1: optional cap on sentence-transformers encode() batch_size.
+        # None = sentence-transformers default (32). Positive int = explicit cap.
+        # Lower values trade encode throughput for memory pressure and avoid
+        # pathological attention-matrix sizes on large-context models (e.g.
+        # nomic-ai/CodeRankEmbed at 8192 max_seq).
+        self.batch_size = batch_size
         self._model: Any = None
         self._device: str = "cpu"
 
@@ -217,7 +224,10 @@ class LocalST:
         if not texts:
             return np.empty((0, self.dimension), dtype=np.float32)
         truncated = [t[:_MAX_EMBED_CHARS] for t in texts]
-        out = self._model.encode(truncated, convert_to_numpy=True, show_progress_bar=False)
+        encode_kwargs: dict[str, Any] = {"convert_to_numpy": True, "show_progress_bar": False}
+        if self.batch_size is not None:
+            encode_kwargs["batch_size"] = self.batch_size
+        out = self._model.encode(truncated, **encode_kwargs)
         return out.astype(np.float32, copy=False)
 
     def _ensure_loaded(self) -> None:

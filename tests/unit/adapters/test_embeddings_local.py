@@ -333,3 +333,40 @@ def test_shim_pretrained_config_no_op_when_attr_already_present(monkeypatch, att
 
     _install_jina_compat_shim()
     assert getattr(transformers.PretrainedConfig, attr) is sentinel
+
+
+# Sprint 15.1 — CC_EMBED_BATCH_SIZE knob plumbing
+
+
+def test_embed_passes_batch_size_when_set() -> None:
+    """Explicit batch_size flows through to sentence-transformers encode()."""
+    fake_model = MagicMock()
+    fake_model.get_embedding_dimension.return_value = 384
+    fake_model.encode.return_value = np.zeros((3, 384), dtype=np.float32)
+
+    with patch(
+        "code_context.adapters.driven.embeddings_local._load_model",
+        return_value=fake_model,
+    ):
+        adapter = LocalST(model_name="test-model", batch_size=4)
+        adapter.embed(["a", "b", "c"])
+
+    call_kwargs = fake_model.encode.call_args.kwargs
+    assert call_kwargs["batch_size"] == 4
+
+
+def test_embed_omits_batch_size_when_none() -> None:
+    """When batch_size is None (default), no batch_size kwarg is sent to encode()."""
+    fake_model = MagicMock()
+    fake_model.get_embedding_dimension.return_value = 384
+    fake_model.encode.return_value = np.zeros((2, 384), dtype=np.float32)
+
+    with patch(
+        "code_context.adapters.driven.embeddings_local._load_model",
+        return_value=fake_model,
+    ):
+        adapter = LocalST(model_name="test-model")  # batch_size defaults to None
+        adapter.embed(["a", "b"])
+
+    call_kwargs = fake_model.encode.call_args.kwargs
+    assert "batch_size" not in call_kwargs

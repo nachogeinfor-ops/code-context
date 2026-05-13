@@ -126,6 +126,7 @@ def build_embeddings(cfg: Config) -> EmbeddingsProvider:
     return LocalST(
         model_name=cfg.embeddings_model or "all-MiniLM-L6-v2",
         trust_remote_code=cfg.trust_remote_code,
+        batch_size=cfg.embed_batch_size,
     )
 
 

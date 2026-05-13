@@ -383,3 +383,30 @@ def test_telemetry_default_off_when_no_env_no_marker(tmp_path: Path, monkeypatch
     (tmp_path / "repo").mkdir()
     cfg = load_config()
     assert cfg.telemetry is False
+
+
+# ---------------------------------------------------------------------------
+# CC_EMBED_BATCH_SIZE env var (Sprint 15.1)
+# ---------------------------------------------------------------------------
+
+
+def test_embed_batch_size_default_is_none(tmp_path: Path) -> None:
+    """CC_EMBED_BATCH_SIZE unset -> embed_batch_size is None (use ST default 32)."""
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.embed_batch_size is None
+
+
+def test_embed_batch_size_reads_env_var(tmp_path: Path) -> None:
+    """CC_EMBED_BATCH_SIZE=4 -> embed_batch_size is 4."""
+    with patch.dict(os.environ, {"CC_EMBED_BATCH_SIZE": "4"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.embed_batch_size == 4
+
+
+def test_embed_batch_size_zero_or_negative_treated_as_none(tmp_path: Path) -> None:
+    """Non-positive CC_EMBED_BATCH_SIZE coerces to None (use ST default)."""
+    for v in ("0", "-1", "-8"):
+        with patch.dict(os.environ, {"CC_EMBED_BATCH_SIZE": v}, clear=True):
+            cfg = load_config(default_repo_root=tmp_path)
+            assert cfg.embed_batch_size is None, f"expected None for CC_EMBED_BATCH_SIZE={v}"
