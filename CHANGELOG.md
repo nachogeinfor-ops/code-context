@@ -1,5 +1,54 @@
 # Changelog
 
+## v1.9.2 — 2026-05-13
+
+Sprint 15.1 — documentation patch. Investigation outcome on the
+`nomic-ai/CodeRankEmbed` hybrid-mode stall first reported in v1.9.0.
+
+### Investigation summary (no code fix)
+
+The Sprint 15.0 release flagged a 2h+ stall when running nomic in hybrid
+mode on the 305-file C# WinServiceScheduler fixture. Sprint 15.1
+narrowed the failure mode:
+
+- **Small repos work.** nomic hybrid mode completes correctly on
+  `tests/fixtures/python_repo` (16 files, NDCG 0.7993) and
+  `tests/fixtures/ts_repo` (20 files, NDCG 0.7776). Both finish in
+  ~10 minutes of wall clock with full cold reindex + queries on Windows
+  CPU. The vector-only mode of the same model also works on C#
+  (Sprint 15 baseline: NDCG 0.6774, completed in ~30 min).
+- **Hang is reproducible only in hybrid mode on the large C# repo.**
+  Same fingerprint as Sprint 15.0: ~30 min then 151 MB/s memory-mapped
+  reads with zero index disk writes, ~4 GB worker RSS, high CPU.
+- **Threading is not the cause.** Re-running with
+  `OMP_NUM_THREADS=4 MKL_NUM_THREADS=4` reduced the worker from 30 to
+  21 threads but reproduced the identical 151 MB/s read / zero write
+  fingerprint after 29 min wall clock. The Hypothesis-D path from the
+  Sprint 15.1 plan is ruled out.
+
+The remaining hypotheses (batch size, sequence length, tokenizer
+fast/slow) all require code changes to test. Further investigation is
+deferred — at this point the practical operational guidance is more
+valuable than a definitive root cause.
+
+### Changed
+
+- **`docs/configuration.md` "Choosing a model" row for nomic** is updated
+  with the Sprint 15.1 findings: hybrid mode is safe on small/medium
+  repos (verified on 16 + 20-file fixtures), but unsafe on the 305-file
+  C# fixture. Users with large code-heavy repos should stick to
+  `CC_KEYWORD_INDEX=none` (vector-only) when using nomic, or pick a
+  different model (MiniLM as default, or `BAAI/bge-base-en-v1.5`).
+
+### What this release does NOT do
+
+- No code changes to embeddings adapters, composition, or the runtime.
+  Strictly a documentation + version bump release.
+- Does not file the upstream issue with `nomic-ai`. That is a manual
+  follow-up still owed by the maintainer.
+
+---
+
 ## v1.9.1 — 2026-05-13
 
 Sprint 15.2 — Partial compatibility shim for `jinaai/*` embedding models on
