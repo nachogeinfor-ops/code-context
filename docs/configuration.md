@@ -64,21 +64,28 @@ get a warning at startup.
 | Model | Size | Dim | Best for | Notes |
 |---|---|---|---|---|
 | `all-MiniLM-L6-v2` (default) | ~90 MB | 384 | General-purpose | Smallest install, ships with sentence-transformers natively. No `trust_remote_code` required. |
-| `jinaai/jina-embeddings-v2-base-code` | ~640 MB | 768 | Code (functions, identifiers) | Apache-2.0. Trained on GitHub + 150M code+docstring pairs. **Requires `CC_TRUST_REMOTE_CODE=true`** because the model uses a custom JinaBert architecture. Recommended code-tuned alternative as of v0.6.0. |
+| `jinaai/jina-embeddings-v2-base-code` | ~640 MB | 768 | Code (functions, identifiers) | Apache-2.0. Trained on GitHub + 150M code+docstring pairs. **Requires `CC_TRUST_REMOTE_CODE=true`** because the model uses a custom JinaBert architecture. **As of v1.9.0**, the JinaBert custom code calls `find_pruneable_heads_and_indices` from `transformers.pytorch_utils`, which newer `transformers` releases have removed — load fails on a fresh install. Pin `transformers<4.49` or use one of the v1.9.0 alternatives below. |
+| `nomic-ai/CodeRankEmbed` | ~520 MB | 768 | Code (top pick for C# / Razor in Sprint 15 eval) | MIT. NomicBert architecture, 8192 max_seq. **Requires `CC_TRUST_REMOTE_CODE=on` + `pip install einops`.** Sprint 15 eval (vector_only) showed a massive lift on C# (NDCG +0.245 vs MiniLM, hit@1 doubled), small regression on the small Python fixture, neutral on TypeScript. Hybrid + hybrid_rerank cells were not measured — a CPU stall on the WinServiceScheduler fixture during the Sprint 15 run blocked full coverage. **Since v1.9.0.** |
+| `BAAI/bge-base-en-v1.5` | ~440 MB | 768 | General-purpose BERT-family | MIT. Drop-in (no `trust_remote_code`). Sprint 15 eval: small gain on C# vector_only (+0.04 NDCG) but mean across the 9-cell matrix regressed -0.016 (Python -0.05, hybrid_rerank C# -0.073). Registered for completeness; do not expect a uniform improvement over MiniLM. **Since v1.9.0.** |
 
 > **Note on `trust_remote_code`.** Some Hugging Face models ship custom Python
 > code (a custom architecture, a custom tokenizer wrapper) that
 > `sentence-transformers` evaluates at load time. By default
 > `code-context` refuses to evaluate that code (`CC_TRUST_REMOTE_CODE=off`).
 > Set it to `on` ONLY for models you have personally vetted on the HF model
-> page. The `jinaai/jina-embeddings-v2-base-code` model is the one we
-> recommend in this category as of v0.6.0.
+> page. `nomic-ai/CodeRankEmbed` and `jinaai/jina-embeddings-v2-base-code` are
+> the two code-tuned candidates `code-context` ships pre-characterised in
+> the registry.
 
-> **Note (v0.3.3).** v0.3.0–v0.3.2 shipped a default of `BAAI/bge-code-v1.5`
-> which does not exist on Hugging Face — a planning error. v0.3.3 reverted
-> the default to `all-MiniLM-L6-v2`. The CI job `hf-guard` (added in v0.6.0)
-> pings the HF API for every registered model on every push, so this class
-> of bug can't recur silently.
+> **Note (v0.3.3 / Sprint 15).** v0.3.0–v0.3.2 shipped a default of
+> `BAAI/bge-code-v1.5` which does not exist on Hugging Face — a planning
+> error. v0.3.3 reverted the default to `all-MiniLM-L6-v2`. Sprint 15
+> (v1.9.0) re-confirmed: the identifier still returns 404 on HF Hub.
+> The CI job `hf-guard` (added in v0.6.0) pings the HF API for every
+> registered model on every push, so this class of bug can't recur silently.
+> Sprint 15 added `nomic-ai/CodeRankEmbed` and `BAAI/bge-base-en-v1.5` to
+> the registry as opt-in alternatives; the default stays MiniLM until a
+> full 9-cell eval matrix clears the +0.03 mean / -0.02 per-cell gate.
 
 If you put an unknown model in `CC_EMBEDDINGS_MODEL`, it'll work but you'll get
 a warning at startup.

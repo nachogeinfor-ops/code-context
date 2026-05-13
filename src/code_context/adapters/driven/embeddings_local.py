@@ -33,6 +33,17 @@ MODEL_REGISTRY: dict[str, dict[str, int | str]] = {
     # Verified existing on HF as of v0.6.0 release; CI's hf-guard job re-checks
     # on every push.
     "jinaai/jina-embeddings-v2-base-code": {"dimension": 768, "kind": "code"},
+    # BGE base English v1.5 — general-purpose BERT-family encoder. 110M params
+    # (~440 MB FP32), MIT, 768-dim, max_seq=512. Sprint 15 candidate for the
+    # default swap after `BAAI/bge-code-v1.5` (which the plan named) was
+    # confirmed not to exist on HF Hub — same class of bug as v0.3.0.
+    # Verified existing on HF 2026-05-11.
+    "BAAI/bge-base-en-v1.5": {"dimension": 768, "kind": "general"},
+    # Nomic CodeRankEmbed — code-tuned NomicBertModel. 137M params, MIT,
+    # 768-dim, max_seq=8192. Requires CC_TRUST_REMOTE_CODE=on and `einops`.
+    # Sprint 15 candidate after `BAAI/bge-code-v1.5` (missing) and
+    # `jinaai/jina-embeddings-v2-base-code` (broken on current transformers).
+    "nomic-ai/CodeRankEmbed": {"dimension": 768, "kind": "code"},
 }
 
 
