@@ -7,6 +7,7 @@ trigger torch loading. The model is loaded on first `embed()` call.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import numpy as np
@@ -51,8 +52,17 @@ MODEL_REGISTRY: dict[str, dict[str, int | str]] = {
 # 512-token context of BERT-family encoders. We embed the truncated head; the
 # full snippet is preserved in the chunk for the search response payload, so
 # users still see the complete code. 2048 chars ~= 512 tokens for code-heavy
-# text.
-_MAX_EMBED_CHARS = 2048
+# text. Sprint 15.1: configurable via CC_EMBED_MAX_CHARS — lower values
+# (e.g. 512) reduce attention-matrix size on long-context models and unlock
+# nomic-ai/CodeRankEmbed in hybrid mode on large code-heavy repos where
+# the default 2048 reproducibly stalls the indexer.
+_DEFAULT_MAX_EMBED_CHARS = 2048
+try:
+    _MAX_EMBED_CHARS = int(os.environ.get("CC_EMBED_MAX_CHARS", _DEFAULT_MAX_EMBED_CHARS))
+    if _MAX_EMBED_CHARS <= 0:
+        _MAX_EMBED_CHARS = _DEFAULT_MAX_EMBED_CHARS
+except ValueError:
+    _MAX_EMBED_CHARS = _DEFAULT_MAX_EMBED_CHARS
 
 
 def _detect_device() -> str:

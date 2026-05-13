@@ -370,3 +370,43 @@ def test_embed_omits_batch_size_when_none() -> None:
 
     call_kwargs = fake_model.encode.call_args.kwargs
     assert "batch_size" not in call_kwargs
+
+
+# Sprint 15.1 — CC_EMBED_MAX_CHARS env knob (read at module load)
+
+
+def test_max_embed_chars_default_is_2048() -> None:
+    """Without CC_EMBED_MAX_CHARS set, _MAX_EMBED_CHARS defaults to 2048."""
+    import importlib
+
+    import code_context.adapters.driven.embeddings_local as mod
+
+    with patch.dict("os.environ", {}, clear=True):
+        importlib.reload(mod)
+        assert mod._MAX_EMBED_CHARS == 2048
+
+
+def test_max_embed_chars_reads_env_var() -> None:
+    """CC_EMBED_MAX_CHARS=512 sets _MAX_EMBED_CHARS to 512."""
+    import importlib
+
+    import code_context.adapters.driven.embeddings_local as mod
+
+    with patch.dict("os.environ", {"CC_EMBED_MAX_CHARS": "512"}, clear=True):
+        importlib.reload(mod)
+        assert mod._MAX_EMBED_CHARS == 512
+
+
+def test_max_embed_chars_invalid_falls_back_to_default() -> None:
+    """Non-integer or non-positive CC_EMBED_MAX_CHARS coerces to default 2048."""
+    import importlib
+
+    import code_context.adapters.driven.embeddings_local as mod
+
+    for bad in ("abc", "0", "-100", ""):
+        with patch.dict("os.environ", {"CC_EMBED_MAX_CHARS": bad}, clear=True):
+            importlib.reload(mod)
+            assert mod._MAX_EMBED_CHARS == 2048, f"expected 2048 for CC_EMBED_MAX_CHARS={bad!r}"
+
+    # Restore default state for downstream tests by importing fresh.
+    importlib.reload(mod)
