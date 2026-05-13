@@ -1,5 +1,69 @@
 # Changelog
 
+## v1.9.3 — 2026-05-13
+
+Sprint 15.1 continued. Adds `CC_EMBED_BATCH_SIZE` env knob and rules out
+Hypothesis A (batch size) as root cause of the nomic hybrid-mode stall.
+
+### Added
+
+- **`CC_EMBED_BATCH_SIZE`** env var. Positive int caps the
+  sentence-transformers `encode()` batch size used by `LocalST.embed()`.
+  Default unset = sentence-transformers' built-in default (32).
+  Non-positive values (0, negative) coerce to unset. Lower values trade
+  encode throughput for memory pressure — useful for large-context
+  models on memory-constrained hosts.
+- **`LocalST(batch_size=...)`** constructor parameter wires the env var
+  through to the adapter. `build_embeddings()` in `_composition` passes
+  `cfg.embed_batch_size`.
+- 5 new unit tests: 3 in `tests/unit/test_config.py` covering env-var
+  parsing (default unset, valid positive, non-positive coerce), 2 in
+  `tests/unit/adapters/test_embeddings_local.py` covering the `encode()`
+  kwarg plumbing (present when set, absent when None).
+
+### Investigation update
+
+Sprint 15.1 Hypothesis A — "batch size 32 over long sequences hits a
+pathological NomicBert code path" — was directly tested by running the
+C# hybrid-mode reindex with `CC_EMBED_BATCH_SIZE=4`. **Result: same
+hang fingerprint.** After 33 minutes wall clock the worker held
+151 MB/s memory-mapped reads against ~0 index disk writes, RSS at
+1.5 GB (lower than the previous 4.3 GB without the cap, confirming the
+knob does take effect on memory pressure), but zero progress on the
+index. The hang is not batch-size-driven.
+
+Combined with v1.9.2's threading-ruled-out finding, two of four
+Sprint 15.1 plan hypotheses are now disproven:
+
+| Hypothesis | Knob tested | Outcome |
+|---|---|---|
+| A — batch size | `CC_EMBED_BATCH_SIZE=4` | Hang reproduces |
+| B — sequence length | not yet (would require code change to lower `_MAX_EMBED_CHARS`) | untested |
+| C — tokenizer fast/slow | not yet (would require code change) | untested |
+| D — intra-op threading | `OMP_NUM_THREADS=4 MKL_NUM_THREADS=4` (v1.9.2) | Hang reproduces |
+
+The persistent 151 MB/s read pattern regardless of these knobs strongly
+suggests the root cause lives inside NomicBert's custom forward path
+(memory-mapped re-reads of model weights in a tight loop), not in
+`code-context`'s indexer pipeline. Further isolation requires a `py-spy`
+attach and is deferred to a follow-up sprint with GPU runner access.
+
+### Changed
+
+- **`docs/configuration.md`** — added `CC_EMBED_BATCH_SIZE` row to the
+  env vars table. Updated the nomic row's known-issue note to include
+  Hypothesis A as ruled out.
+
+### What this release does NOT do
+
+- Does not fix the nomic hybrid-mode stall on large repos. The env knob
+  is general-purpose memory control, not a workaround for this bug.
+- Does not file the upstream issue with `nomic-ai`. Still owed.
+- Does not test Hypothesis B (sequence length cap) or C (tokenizer
+  fast/slow). Both require code modifications and are deferred.
+
+---
+
 ## v1.9.2 — 2026-05-13
 
 Sprint 15.1 — documentation patch. Investigation outcome on the
