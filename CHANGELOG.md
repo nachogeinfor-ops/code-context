@@ -1,5 +1,68 @@
 # Changelog
 
+## v1.9.0 — 2026-05-13
+
+Sprint 15 — additional code-tuned embedding models registered, default
+unchanged. Originally scoped to swap the default from `all-MiniLM-L6-v2`
+to `BAAI/bge-code-v1.5`; the eval pass disqualified that path and
+landed two opt-in alternatives instead.
+
+### Added
+
+- **`nomic-ai/CodeRankEmbed`** in `MODEL_REGISTRY` (dim 768, kind `code`).
+  Set `CC_EMBEDDINGS_MODEL=nomic-ai/CodeRankEmbed` to opt in. Requires
+  `CC_TRUST_REMOTE_CODE=on` and `pip install einops` because the model
+  ships a custom NomicBert architecture. The Sprint 15 eval (vector-only
+  retrieval, 129 hand-curated queries across Python / TypeScript / C#)
+  measured **+0.245 NDCG@10 and +19 hit@1 on the C# WinServiceScheduler
+  fixture** vs the MiniLM baseline — the biggest single-cell gain we've
+  observed for a drop-in model swap. Overall (3-language weighted mean)
+  came out at +0.06 NDCG@10. Caveat: the hybrid and hybrid_rerank cells
+  were not measurable on the eval machine because the NomicBert custom
+  code stalled mid-reindex on the 305-file C# fixture (CPU-only, Windows;
+  see "Known limitations" below). Not promoted to default until the full
+  9-cell matrix clears.
+- **`BAAI/bge-base-en-v1.5`** in `MODEL_REGISTRY` (dim 768, kind `general`).
+  Apache-2.0, drop-in (no `trust_remote_code` needed). Sprint 15 eval
+  showed it does *not* uniformly beat MiniLM: small gain on C# vector_only
+  (+0.04 NDCG), regressions on Python and on the C# hybrid_rerank cell.
+  Mean across the 9-cell matrix: -0.016. Registered for completeness;
+  expect mixed results.
+
+### Changed
+
+- **`docs/configuration.md` "Choosing a model" table** now documents the
+  two new candidates, their Sprint 15 eval deltas, and the operational
+  caveats (NomicBert needs einops; bge-base did not pass the gate).
+- **JinaBert footnote**: as of `transformers` 4.49, the JinaBert custom
+  `modeling_bert.py` calls `find_pruneable_heads_and_indices` which was
+  removed from `transformers.pytorch_utils`. `jinaai/jina-embeddings-v2-base-code`
+  no longer loads on a fresh install; pin `transformers<4.49` or pick
+  one of the new v1.9.0 alternatives. Documented in the model table.
+
+### Internal
+
+- Sprint 15 T1 re-confirmed that `BAAI/bge-code-v1.5` (the original v0.3.x
+  planning-error default) still returns 404 on the HF Hub. The `hf-guard`
+  contract test (added v0.6.0) keeps this class of bug from recurring
+  silently — it now also covers the two newly registered models.
+- Eval runs from Sprint 15 are gitignored per the existing benchmarks
+  convention (CSVs are reproducible, not committed). The methodology is
+  documented in this entry and replayable via
+  `benchmarks/eval/configs/multi.yaml` with the appropriate
+  `CC_EMBEDDINGS_MODEL` + `CC_KEYWORD_INDEX` + `CC_RERANK` env combos.
+
+### Known limitations
+
+- The `nomic-ai/CodeRankEmbed` hybrid stall is reproducible on the CPU-only
+  Windows eval machine. Root cause not isolated: zero disk writes for 2+
+  hours of CPU work, with 151 MB/s of memory-mapped reads — strong signal
+  of an internal loop in the NomicBert custom code paths. A follow-up
+  sprint will retry on a GPU runner before considering nomic as a default
+  candidate.
+
+---
+
 ## v1.8.0 — 2026-05-11
 
 Sprint 16 — first-run UX. Eliminates the silent ~60s cold-start that

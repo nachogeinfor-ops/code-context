@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "code-context-mcp"
-version = "1.8.0"
+version = "1.9.0"
 description = "MCP server with local RAG for Claude Code repo context"
 readme = "README.md"
 license = { text = "MIT" }
