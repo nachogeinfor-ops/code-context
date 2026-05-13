@@ -1,5 +1,53 @@
 # Changelog
 
+## v1.9.1 — 2026-05-13
+
+Sprint 15.2 — Partial compatibility shim for `jinaai/*` embedding models on
+modern `transformers` releases. Restores load for `transformers >=4.49 and <5`.
+
+### Fixed
+
+- **`jinaai/jina-embeddings-v2-base-code` import error.** A new
+  `_install_jina_compat_shim()` in `code_context.adapters.driven.embeddings_local`
+  backports `find_pruneable_heads_and_indices` to `transformers.pytorch_utils`
+  (removed in `transformers >=4.49`) when a `jinaai/*` model is requested. The
+  shim is idempotent, non-destructive (no-op when the helper still exists), and
+  scoped — it runs only when the model identifier matches `jinaai/*`.
+- **Init-time `AttributeError` cascade on `transformers >=5.0`.** The shim
+  also installs class-level defaults on `transformers.PretrainedConfig` for
+  four attributes that v5 removed but `jinaai/modeling_bert.py` reads
+  unconditionally during init: `is_decoder`, `add_cross_attention`,
+  `tie_word_embeddings`, `pruned_heads`. Subclass instances that explicitly
+  set any of these still override correctly via instance assignment, so the
+  patch is safe for non-jina models loaded in the same process.
+
+### Known limitation
+
+- **Jina still fails at forward-time on `transformers >=5`.** With the shim
+  applied, jina's model constructs and loads weights successfully, but the
+  first `embed()` call raises `AttributeError: 'JinaBertModel' object has no
+  attribute 'get_head_mask'`. `PreTrainedModel.get_head_mask` was removed in
+  transformers v5, and jina's custom code calls it from `forward()`. We do
+  not patch this because (a) it's a method on a model base class, not a
+  config default, and would need vendoring more substantial v4 machinery;
+  (b) each successive patch only surfaces the next missing v4 API; (c) the
+  shim approach was scoped to "make jina loadable on a fresh install" — at
+  some point the right answer is for users to pin `transformers<5` or
+  switch to one of the Sprint 15 alternatives. The `docs/configuration.md`
+  table row for jina now reflects this. The contract test
+  `tests/contract/test_jina_load.py` is marked `skipif transformers>=5`
+  with a documented reason; it runs (and passes the shim end-to-end) on
+  any `transformers <5` install.
+
+### Internal
+
+- 8 new parametrized unit tests in `tests/unit/adapters/test_embeddings_local.py`
+  cover the shim: install-when-missing × 4 attrs + no-op-when-present × 4 attrs,
+  plus dedicated tests for `find_pruneable_heads_and_indices` shape correctness
+  and the `_is_jina_model` matcher (case-insensitive, prefix-anchored).
+
+---
+
 ## v1.9.0 — 2026-05-13
 
 Sprint 15 — additional code-tuned embedding models registered, default
