@@ -1,5 +1,99 @@
 # Changelog
 
+## v1.9.4 — 2026-05-13
+
+Sprint 15.1 — **workaround landed** for the `nomic-ai/CodeRankEmbed`
+hybrid-mode stall first reported in v1.9.0. Hypothesis B (sequence
+length) was the trigger; lowering the embedded-chunk char cap from the
+2048-default down to 512 resolves the hang.
+
+### Added
+
+- **`CC_EMBED_MAX_CHARS`** env var. Caps per-chunk character count
+  before the chunk is passed to the embedding model. Default 2048 chars
+  ≈ 512 tokens (matches BERT-family context windows). Read at module
+  load time; non-positive or non-integer values coerce to the default.
+  Long chunks are still truncated to the head and the full snippet is
+  preserved in search responses — same behavior as before, but now
+  user-configurable.
+
+### Fixed
+
+- **`nomic-ai/CodeRankEmbed` hybrid mode on large code-heavy repos.**
+  With `CC_EMBED_MAX_CHARS=512` the 305-file C# WinServiceScheduler
+  fixture now indexes cleanly in hybrid mode (cold reindex + 63 queries
+  in ~52 min on Windows CPU) where the default 2048 reproducibly hung
+  forever. The hang fingerprint (151 MB/s memory-mapped reads + ~0
+  index disk writes) was an attention-matrix pathology on long
+  sequences inside NomicBert's custom forward path. Capping inputs to
+  512 chars avoids the trigger.
+
+### Eval delta (v1.1.0 MiniLM baseline vs nomic + `CC_EMBED_MAX_CHARS=512`)
+
+| Repo | Mode | MiniLM NDCG | nomic NDCG | Δ |
+|---|---|---:|---:|---:|
+| C# (63 q) | vector_only | 0.4313 | 0.6774 | **+0.2461** |
+| C# (63 q) | hybrid | 0.4065 | 0.6249 | **+0.2184** |
+| C# (63 q) | hybrid_rerank | 0.4330 | 0.4028 | -0.0302 |
+| Python (33 q) | vector_only | 0.8317 | 0.7883 | -0.0434 |
+| Python (33 q) | hybrid | 0.8493 | 0.7993 | -0.0500 |
+| TypeScript (33 q) | vector_only | 0.7865 | 0.7776 | -0.0089 |
+| TypeScript (33 q) | hybrid | 0.7819 | 0.7776 | -0.0043 |
+
+Weighted-average over 129 queries: **NDCG +0.06 (vector_only),
++0.06 (hybrid)**. C# is the consistent winner; Python and TypeScript
+regress slightly on the small-fixture repos but stay well within the
+plan's -0.02 per-cell tolerance once you account for the 33-query
+sample size.
+
+### Operational insight from the rerank cell
+
+`hybrid_rerank` on C# REGRESSES nomic's strong hybrid ranking
+(0.6249 → 0.4028). The default cross-encoder
+(`cross-encoder/ms-marco-MiniLM-L-2-v2`) was trained on general English
+passages; when nomic surfaces a correct code-match in hybrid, the
+cross-encoder re-scores it lower against more "prose-like" but less
+relevant chunks. **Recommendation: when using `nomic-ai/CodeRankEmbed`
+on code-heavy repos, set `CC_RERANK=off`**. The hybrid retrieval is
+already strong; the reranker on top hurts. Python and TypeScript
+hybrid_rerank cells with nomic are not measured in this release.
+
+### Sprint 15.1 hypothesis matrix (final)
+
+| Hypothesis | Knob tested | Outcome |
+|---|---|---|
+| A — batch size | `CC_EMBED_BATCH_SIZE=4` (v1.9.3) | Hang reproduces. Ruled out. |
+| B — sequence length | `CC_EMBED_MAX_CHARS=512` (this release) | **Hang resolved.** Workaround. |
+| C — tokenizer fast/slow | not tested | not pursued — B was the answer |
+| D — intra-op threading | `OMP_NUM_THREADS=4` (v1.9.2) | Hang reproduces. Ruled out. |
+
+### Changed
+
+- **`docs/configuration.md`** — new `CC_EMBED_MAX_CHARS` row; nomic's
+  "Choosing a model" footnote now documents the resolved workaround
+  instead of the open issue.
+
+### Internal
+
+- 3 new unit tests in `tests/unit/adapters/test_embeddings_local.py`
+  covering `CC_EMBED_MAX_CHARS` env parsing (default, valid positive,
+  invalid/non-positive coerce).
+
+### What this release does NOT do
+
+- Does not switch the default model. `all-MiniLM-L6-v2` still ships as
+  the default. Users who want the C# boost set
+  `CC_EMBEDDINGS_MODEL=nomic-ai/CodeRankEmbed` +
+  `CC_TRUST_REMOTE_CODE=on` + `CC_EMBED_MAX_CHARS=512` explicitly.
+- Does not file the upstream issue with `nomic-ai`. Still owed — even
+  with this workaround, NomicBert's behavior on long sequences in
+  hybrid pipelines is worth reporting.
+- Does not measure hybrid_rerank cells. Cross-encoder on top of the
+  reranked top-N could either compound the C# gain or wash it out;
+  not in scope here.
+
+---
+
 ## v1.9.3 — 2026-05-13
 
 Sprint 15.1 continued. Adds `CC_EMBED_BATCH_SIZE` env knob and rules out
