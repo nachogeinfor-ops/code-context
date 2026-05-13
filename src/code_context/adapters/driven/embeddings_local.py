@@ -68,10 +68,78 @@ def _detect_device() -> str:
     return "cpu"
 
 
+def _is_jina_model(name: str) -> bool:
+    """Return True for `jinaai/*` models that need the compat shim."""
+    return name.lower().startswith("jinaai/")
+
+
+def _install_jina_compat_shim() -> None:
+    """Backport transformers v4-era APIs required by jinaai/* custom code.
+
+    Two categories of patches, both idempotent and non-destructive:
+
+    1. `find_pruneable_heads_and_indices` (removed in transformers >=4.49):
+       inline the v4.48 implementation onto `transformers.pytorch_utils`.
+    2. Class-level defaults on `transformers.PretrainedConfig` (dropped in
+       transformers >=5.0): `is_decoder`, `add_cross_attention`,
+       `tie_word_embeddings`, `pruned_heads`. Jina's custom modeling_bert.py
+       reads each unconditionally during init; without class fallbacks the
+       load raises AttributeError. Subclass `__init__`s that set these on
+       the instance still take precedence.
+
+    Both vendored from Apache-2.0 transformers v4.48.3.
+    """
+    import transformers.pytorch_utils as pu  # noqa: PLC0415 — lazy: only when loading jina
+
+    if hasattr(pu, "find_pruneable_heads_and_indices"):
+        return
+
+    import torch  # noqa: PLC0415 — lazy: only when patching
+
+    def find_pruneable_heads_and_indices(
+        heads: list[int] | set[int],
+        n_heads: int,
+        head_size: int,
+        already_pruned_heads: set[int],
+    ) -> tuple[set[int], torch.LongTensor]:
+        """Vendored from transformers v4.48.3 (Apache-2.0)."""
+        mask = torch.ones(n_heads, head_size)
+        heads = set(heads) - already_pruned_heads
+        for head in heads:
+            head = head - sum(1 if h < head else 0 for h in already_pruned_heads)
+            mask[head] = 0
+        mask = mask.view(-1).contiguous().eq(1)
+        index: torch.LongTensor = torch.arange(len(mask))[mask].long()
+        return heads, index
+
+    pu.find_pruneable_heads_and_indices = find_pruneable_heads_and_indices
+
+    # Sprint 15.2: transformers >=5.0 dropped several class-level defaults from
+    # PretrainedConfig. Jina's custom modeling_bert.py reads these attrs
+    # unconditionally during init. Install class-level defaults so subclasses
+    # that don't explicitly set them resolve correctly via class fallback.
+    # Subclasses that DO set the attr in __init__ (e.g. decoder model configs
+    # setting is_decoder=True) still override via instance assignment.
+    import transformers  # noqa: PLC0415 — lazy: only when patching
+
+    _config_v4_defaults: dict[str, object] = {
+        "is_decoder": False,
+        "add_cross_attention": False,
+        "tie_word_embeddings": False,
+        "pruned_heads": {},
+    }
+    for _attr, _default in _config_v4_defaults.items():
+        if not hasattr(transformers.PretrainedConfig, _attr):
+            setattr(transformers.PretrainedConfig, _attr, _default)
+
+
 def _load_model(
     model_name: str, *, trust_remote_code: bool = False, device: str
 ) -> Any:  # pragma: no cover - integration-tested
     """Lazy import + load. Patched in unit tests."""
+    # Sprint 15.2: backport `find_pruneable_heads_and_indices` so jina loads on transformers>=4.49.
+    if _is_jina_model(model_name):
+        _install_jina_compat_shim()
     from sentence_transformers import SentenceTransformer
 
     log.info(

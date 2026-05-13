@@ -6,6 +6,7 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
 from code_context.adapters.driven.embeddings_local import LocalST
 
@@ -210,3 +211,125 @@ def test_fallback_to_cpu_on_oserror(caplog) -> None:
     warnings = [rec for rec in caplog.records if rec.levelno == logging.WARNING]
     assert any("fall" in r.message.lower() or "cpu" in r.message.lower() for r in warnings)
     assert len(warnings) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Sprint 15.2 — jina compat shim
+# ---------------------------------------------------------------------------
+
+
+def test_is_jina_model_matches_jinaai_prefix() -> None:
+    from code_context.adapters.driven.embeddings_local import _is_jina_model
+
+    assert _is_jina_model("jinaai/jina-embeddings-v2-base-code")
+    assert _is_jina_model("jinaai/jina-bert-v2-qk-post-norm")
+    assert _is_jina_model("JINAAI/jina-embeddings-v2-base-code")  # case-insensitive
+    assert not _is_jina_model("BAAI/bge-base-en-v1.5")
+    assert not _is_jina_model("sentence-transformers/all-MiniLM-L6-v2")
+    assert not _is_jina_model("nomic-ai/CodeRankEmbed")
+    assert not _is_jina_model("")
+
+
+def test_shim_no_op_when_helper_already_present(monkeypatch) -> None:
+    """If transformers still exposes find_pruneable_heads_and_indices, shim doesn't overwrite it."""
+    import transformers.pytorch_utils as pu
+
+    sentinel = object()
+    monkeypatch.setattr(pu, "find_pruneable_heads_and_indices", sentinel, raising=False)
+    from code_context.adapters.driven.embeddings_local import _install_jina_compat_shim
+
+    _install_jina_compat_shim()
+    assert pu.find_pruneable_heads_and_indices is sentinel
+
+
+def test_shim_installs_helper_when_missing(monkeypatch) -> None:
+    """When the helper is missing, the shim installs a working backport."""
+    import transformers.pytorch_utils as pu
+
+    monkeypatch.delattr(pu, "find_pruneable_heads_and_indices", raising=False)
+    from code_context.adapters.driven.embeddings_local import _install_jina_compat_shim
+
+    _install_jina_compat_shim()
+    assert hasattr(pu, "find_pruneable_heads_and_indices")
+
+    # Smoke the shape: 4 heads x 64 dim, prune heads {1, 3} -> 2 heads remain,
+    # so index length should be (4-2) * 64 = 128.
+    import torch
+
+    heads, idx = pu.find_pruneable_heads_and_indices({1, 3}, 4, 64, set())
+    assert isinstance(idx, torch.Tensor)
+    assert idx.dtype == torch.long
+    assert idx.shape == (128,)
+    assert sorted(heads) == [1, 3]
+
+
+def test_shim_handles_already_pruned_heads(monkeypatch) -> None:
+    """`already_pruned_heads` shifts the index calc; matches transformers v4.48 semantics."""
+    import transformers.pytorch_utils as pu
+
+    monkeypatch.delattr(pu, "find_pruneable_heads_and_indices", raising=False)
+    from code_context.adapters.driven.embeddings_local import _install_jina_compat_shim
+
+    _install_jina_compat_shim()
+    import torch
+
+    # Vendored v4.48 semantics: the mask is sized `n_heads x head_size` and we
+    # only zero rows for NEWLY pruned heads (already-pruned ones are presumed
+    # absent from the caller's layer). With 8 heads, head 5 already pruned, and
+    # head 6 newly pruned, one mask row gets zeroed -> 7 * 64 = 448 indices.
+    # Also verify the offset logic: head 6 maps to mask row 5 (6 - 1 prior
+    # pruned at index < 6).
+    heads, idx = pu.find_pruneable_heads_and_indices({6}, 8, 64, {5})
+    assert isinstance(idx, torch.Tensor)
+    assert idx.dtype == torch.long
+    assert idx.shape == (448,)
+    assert 6 in heads
+    # The offset puts the zeroed block at rows 5*64..6*64; those indices must
+    # NOT appear in the returned index tensor.
+    excluded = set(range(5 * 64, 6 * 64))
+    returned = set(idx.tolist())
+    assert excluded.isdisjoint(returned)
+
+
+@pytest.mark.parametrize(
+    "attr,expected_default",
+    [
+        ("is_decoder", False),
+        ("add_cross_attention", False),
+        ("tie_word_embeddings", False),
+        ("pruned_heads", {}),
+    ],
+)
+def test_shim_installs_pretrained_config_defaults_when_missing(
+    monkeypatch, attr: str, expected_default: object
+) -> None:
+    """When a removed-in-v5 default is missing, the shim installs it as a class-level fallback."""
+    import transformers
+    import transformers.pytorch_utils as pu
+
+    # Ensure the helper is gone so the full shim runs
+    monkeypatch.delattr(pu, "find_pruneable_heads_and_indices", raising=False)
+    monkeypatch.delattr(transformers.PretrainedConfig, attr, raising=False)
+
+    from code_context.adapters.driven.embeddings_local import _install_jina_compat_shim
+
+    _install_jina_compat_shim()
+    assert hasattr(transformers.PretrainedConfig, attr)
+    assert getattr(transformers.PretrainedConfig, attr) == expected_default
+
+
+@pytest.mark.parametrize(
+    "attr",
+    ["is_decoder", "add_cross_attention", "tie_word_embeddings", "pruned_heads"],
+)
+def test_shim_pretrained_config_no_op_when_attr_already_present(monkeypatch, attr: str) -> None:
+    """If a default is already present (transformers <5), the shim doesn't overwrite it."""
+    import transformers
+
+    sentinel = object()
+    monkeypatch.setattr(transformers.PretrainedConfig, attr, sentinel, raising=False)
+
+    from code_context.adapters.driven.embeddings_local import _install_jina_compat_shim
+
+    _install_jina_compat_shim()
+    assert getattr(transformers.PretrainedConfig, attr) is sentinel
