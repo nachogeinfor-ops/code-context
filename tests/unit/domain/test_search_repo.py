@@ -440,3 +440,274 @@ def test_embed_cache_cleared_on_reload() -> None:
 
     # reload fired again, cleared cache, so embed was called once more.
     assert embeddings.call_count == after_first + 1
+
+
+# ----- Sprint 19: persistent query-embedding cache (L2) -----
+
+
+def test_persistent_cache_hit_on_cold_session(tmp_path) -> None:
+    """The whole point of Sprint 19: session 2's first query of a string
+    that session 1 already embedded must NOT call embed() — it must read
+    from the persistent SQLite cache instead.
+
+    Setup: warm session creates a use case wired to a persistent cache,
+    runs a query, tears down. Cold session creates a NEW use case with
+    the same cache file and the same model_id, runs the same query.
+    Assert that the cold session's `embed()` was not called."""
+    from code_context.adapters.driven.embed_cache_sqlite import SqliteEmbedCache
+
+    db_path = tmp_path / "embed_cache.sqlite"
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+
+    # Warm session.
+    warm_cache = SqliteEmbedCache(db_path)
+    warm_embeddings = CountingEmbeddings()
+    warm_uc = SearchRepoUseCase(
+        embeddings=warm_embeddings,
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        embed_cache_max=256,
+        persistent_cache=warm_cache,
+        model_id="fake-model-v0",
+    )
+    warm_uc.run("memorable query", top_k=1)
+    assert warm_embeddings.call_count == 1, "warm session must have called embed() once"
+    warm_cache.close()
+
+    # Cold session — brand-new use case, brand-new embedder, same cache.
+    cold_cache = SqliteEmbedCache(db_path)
+    cold_embeddings = CountingEmbeddings()
+    cold_uc = SearchRepoUseCase(
+        embeddings=cold_embeddings,
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        embed_cache_max=256,
+        persistent_cache=cold_cache,
+        model_id="fake-model-v0",
+    )
+    out = cold_uc.run("memorable query", top_k=1)
+    # The L1 dict was empty (new process), so the cache had to come
+    # from L2. If embed() was called we'd be at call_count == 1 too;
+    # the explicit assertion catches it.
+    assert cold_embeddings.call_count == 0, (
+        "cold session must hit the persistent cache, not call embed(); "
+        f"got call_count={cold_embeddings.call_count}"
+    )
+    assert out and out[0].path == "a.py"
+    cold_cache.close()
+
+
+def test_model_id_change_invalidates_persistent_cache(tmp_path) -> None:
+    """If session 2 runs under a DIFFERENT model_id than session 1
+    populated, the cache row is namespaced under the old model_id and
+    must miss — otherwise we'd silently serve embeddings from a
+    different model and corrupt search quality.
+
+    The invalidation itself happens lazily here (no bus tick): the
+    SqliteEmbedCache's primary key includes model_id, so a get()
+    under model B returns None even if model A wrote the row. The
+    bus-tick invalidate_model() is the proactive cleanup; this test
+    proves the reactive correctness."""
+    from code_context.adapters.driven.embed_cache_sqlite import SqliteEmbedCache
+
+    db_path = tmp_path / "embed_cache.sqlite"
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+
+    # Warm session under model A.
+    warm_cache = SqliteEmbedCache(db_path)
+    warm_uc = SearchRepoUseCase(
+        embeddings=CountingEmbeddings(),
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        embed_cache_max=256,
+        persistent_cache=warm_cache,
+        model_id="model-A",
+    )
+    warm_uc.run("q", top_k=1)
+    warm_cache.close()
+
+    # Cold session under DIFFERENT model B — same persistent file.
+    cold_cache = SqliteEmbedCache(db_path)
+    cold_embeddings = CountingEmbeddings()
+    cold_uc = SearchRepoUseCase(
+        embeddings=cold_embeddings,
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        embed_cache_max=256,
+        persistent_cache=cold_cache,
+        model_id="model-B",  # different from warm session
+    )
+    cold_uc.run("q", top_k=1)
+    # Cache entry is under model-A; cold session is model-B → miss → embed called.
+    assert cold_embeddings.call_count == 1, (
+        "model_id mismatch must miss the persistent cache and force a fresh embed()"
+    )
+    cold_cache.close()
+
+
+def test_persistent_cache_off_falls_back_to_dict_only() -> None:
+    """When persistent_cache is None (CC_EMBED_CACHE_PERSISTENT=off in
+    config), behavior is identical to Sprint 12: in-process dict only."""
+    embeddings = CountingEmbeddings()
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    uc = SearchRepoUseCase(
+        embeddings=embeddings,
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        embed_cache_max=256,
+        persistent_cache=None,  # explicit; this is the back-compat path
+        model_id="",
+    )
+    # First call → embed once, cached in L1.
+    uc.run("foo", top_k=1)
+    assert embeddings.call_count == 1
+    # Second call same query → L1 hit, no extra embed.
+    uc.run("foo", top_k=1)
+    assert embeddings.call_count == 1
+    # Different query → embed again.
+    uc.run("bar", top_k=1)
+    assert embeddings.call_count == 2
+    # And the L1 dict reflects the same state as Sprint 12 tests.
+    assert set(uc._embed_cache.keys()) == {"foo", "bar"}
+
+
+def test_persistent_cache_bus_tick_invalidates_other_model_ids(tmp_path) -> None:
+    """On bus tick (_reload_if_swapped), if there are rows in the
+    persistent cache under a stale model_id, invalidate_model() must
+    purge them — leaving only the current model_id's rows."""
+    from code_context.adapters.driven.embed_cache_sqlite import SqliteEmbedCache
+    from code_context.domain.index_bus import IndexUpdateBus
+
+    db_path = tmp_path / "embed_cache.sqlite"
+    cache = SqliteEmbedCache(db_path)
+
+    # Pre-populate the persistent cache with rows under a stale model_id.
+    # Use the public put() API — equivalent to a previous session
+    # having populated it.
+    cache.put("stale-model", "old query", np.zeros(4, dtype=np.float32))
+    cache.put("stale-model", "old query 2", np.zeros(4, dtype=np.float32))
+
+    bus = IndexUpdateBus()
+
+    def reload_cb() -> None:
+        pass
+
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    uc = SearchRepoUseCase(
+        embeddings=CountingEmbeddings(),
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        bus=bus,
+        reload_callback=reload_cb,
+        embed_cache_max=256,
+        persistent_cache=cache,
+        model_id="fresh-model",
+    )
+    # First run fires the initial reload (gen 0 != -1), which triggers
+    # the invalidate. Stale rows should be gone.
+    uc.run("any", top_k=1)
+    assert cache.get("stale-model", "old query") is None
+    assert cache.get("stale-model", "old query 2") is None
+    # And the current-model row written during this run survives.
+    assert cache.get("fresh-model", "any") is not None
+    cache.close()
+
+
+def test_persistent_cache_writes_back_to_l1_on_l2_hit(tmp_path) -> None:
+    """An L2 hit (new session, persistent cache warm) must back-fill
+    the L1 dict so the *next* query of the same string takes the fast
+    path without paying SQLite's ~ms-scale read cost."""
+    from code_context.adapters.driven.embed_cache_sqlite import SqliteEmbedCache
+
+    db_path = tmp_path / "embed_cache.sqlite"
+    # Pre-seed L2 directly with a known vector.
+    seed_cache = SqliteEmbedCache(db_path)
+    seed_vec = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+    seed_cache.put("m", "preseeded", seed_vec)
+    seed_cache.close()
+
+    cache = SqliteEmbedCache(db_path)
+    embeddings = CountingEmbeddings()
+    uc = SearchRepoUseCase(
+        embeddings=embeddings,
+        vector_store=FakeVectorStore([(_make_entry("a.py", 1, 5, "x"), 0.9)]),
+        keyword_index=FakeKeywordIndex(),
+        embed_cache_max=256,
+        persistent_cache=cache,
+        model_id="m",
+    )
+    # First call: L1 miss, L2 hit.
+    uc.run("preseeded", top_k=1)
+    assert embeddings.call_count == 0, "L2 hit should not call embed()"
+    # And L1 was back-filled.
+    assert "preseeded" in uc._embed_cache
+    # The vector in L1 equals what we seeded into L2.
+    assert np.array_equal(uc._embed_cache["preseeded"], seed_vec)
+    cache.close()
+
+
+def test_persistent_cache_l2_failure_falls_back_to_embed(tmp_path) -> None:
+    """If the L2 cache raises on get() (e.g. disk full, locked file),
+    SearchRepoUseCase must NOT crash — it falls back to a live embed.
+    The user gets a slow query, not an error."""
+
+    class BrokenCache:
+        """Mimics SqliteEmbedCache interface but every method raises."""
+
+        def get(self, model_id, query):
+            raise OSError("simulated I/O failure")
+
+        def put(self, model_id, query, vec):
+            raise OSError("simulated I/O failure")
+
+        def evict_lru(self, max_rows):
+            raise OSError("simulated I/O failure")
+
+        def invalidate_model(self, current_model_id):
+            raise OSError("simulated I/O failure")
+
+    embeddings = CountingEmbeddings()
+    entries = [(_make_entry("a.py", 1, 5, "x"), 0.9)]
+    uc = SearchRepoUseCase(
+        embeddings=embeddings,
+        vector_store=FakeVectorStore(entries),
+        keyword_index=FakeKeywordIndex(),
+        embed_cache_max=256,
+        persistent_cache=BrokenCache(),  # type: ignore[arg-type]
+        model_id="m",
+    )
+    # Must not raise.
+    out = uc.run("anything", top_k=1)
+    assert out and out[0].path == "a.py"
+    # And we DID embed, since L2 raised on get().
+    assert embeddings.call_count == 1
+
+
+def test_persistent_cache_with_embed_cache_max_zero_still_uses_l2(tmp_path) -> None:
+    """User can disable JUST the L1 dict (CC_EMBED_CACHE_SIZE=0) and
+    still benefit from L2 — useful for tight-memory environments where
+    you don't want a 256-entry dict in RAM but still want disk-backed
+    cache wins."""
+    from code_context.adapters.driven.embed_cache_sqlite import SqliteEmbedCache
+
+    db_path = tmp_path / "embed_cache.sqlite"
+
+    # Session 1: L1 off, L2 on. Populate L2.
+    cache = SqliteEmbedCache(db_path)
+    e1 = CountingEmbeddings()
+    uc1 = SearchRepoUseCase(
+        embeddings=e1,
+        vector_store=FakeVectorStore([(_make_entry("a.py", 1, 5, "x"), 0.9)]),
+        keyword_index=FakeKeywordIndex(),
+        embed_cache_max=0,  # L1 disabled
+        persistent_cache=cache,
+        model_id="m",
+    )
+    uc1.run("q", top_k=1)
+    assert e1.call_count == 1
+    # Same query again: L1 is OFF so no L1 hit, but L2 was populated.
+    uc1.run("q", top_k=1)
+    assert e1.call_count == 1, "L2 should serve the second call even with L1 disabled"
+    # L1 dict is empty because embed_cache_max=0 disables _populate_l1.
+    assert len(uc1._embed_cache) == 0
+    cache.close()

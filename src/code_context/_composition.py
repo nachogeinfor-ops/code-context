@@ -15,6 +15,7 @@ from code_context.adapters.driven.chunker_dispatcher import ChunkerDispatcher
 from code_context.adapters.driven.chunker_line import LineChunker
 from code_context.adapters.driven.chunker_treesitter import TreeSitterChunker
 from code_context.adapters.driven.code_source_fs import FilesystemSource
+from code_context.adapters.driven.embed_cache_sqlite import SqliteEmbedCache
 from code_context.adapters.driven.embeddings_local import LocalST
 from code_context.adapters.driven.git_source_cli import GitCliSource
 from code_context.adapters.driven.introspector_fs import FilesystemIntrospector
@@ -293,6 +294,31 @@ def build_use_cases(
     code_source = FilesystemSource()
     chunker = build_chunker(cfg)
     reranker = build_reranker(cfg)
+    # Sprint 19 — persistent query-embedding cache. Per-repo (lives in
+    # the same cache subdir as keyword.sqlite / vectors.npy etc.) so
+    # query patterns from project A don't pollute project B's cache.
+    # Failure to open (rare: corrupt SQLite file, disk full, perms)
+    # falls back to dict-only — never crashes composition. The L2
+    # adapter is read by SearchRepoUseCase via write-through, so a
+    # None here is exactly the Sprint 12 baseline.
+    persistent_cache: SqliteEmbedCache | None = None
+    embed_model_id = ""
+    if cfg.embed_cache_persistent:
+        try:
+            cfg.repo_cache_subdir().mkdir(parents=True, exist_ok=True)
+            persistent_cache = SqliteEmbedCache(
+                cfg.repo_cache_subdir() / "embed_cache.sqlite"
+            )
+            # model_id mirrors what metadata.json would write — see
+            # _embeddings_model_id rationale; no model weights loaded.
+            embed_model_id = _embeddings_model_id(cfg)
+        except Exception as exc:  # noqa: BLE001 — cache must never break composition
+            log.warning(
+                "failed to open persistent embed-cache (%s); falling back to "
+                "in-process dict only",
+                exc,
+            )
+            persistent_cache = None
     return (
         SearchRepoUseCase(
             embeddings=embeddings,
@@ -302,6 +328,8 @@ def build_use_cases(
             bus=bus,
             reload_callback=reload_callback,
             embed_cache_max=cfg.embed_cache_size,
+            persistent_cache=persistent_cache,
+            model_id=embed_model_id,
         ),
         RecentChangesUseCase(git_source=git_source, repo_root=cfg.repo_root),
         GetSummaryUseCase(introspector=introspector, repo_root=cfg.repo_root),

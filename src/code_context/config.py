@@ -114,6 +114,14 @@ class Config:
     # Sprint 12 T5 — query embed-result cache capacity (default 256).
     # Set CC_EMBED_CACHE_SIZE=0 to disable caching entirely.
     embed_cache_size: int = 256
+    # Sprint 19 — persist the query embed-result cache to disk so the
+    # first query of every session hits cache (~40% of queries within
+    # a session are repeats from the previous session for typical
+    # Claude Code use). Default ON. Set CC_EMBED_CACHE_PERSISTENT=off
+    # to disable (revert to Sprint 12 dict-only behavior — useful on
+    # shared machines where the cache file shouldn't live in the user
+    # cache dir, even though only the sha256 of the query is stored).
+    embed_cache_persistent: bool = True
     # Sprint 12 T6 — cross-encoder per-call batch size (default None = all-in-one).
     # When set to a positive int, passes batch_size=N to CrossEncoder.predict().
     # Non-positive values (0, negative) are treated as None (use sentence-transformers'
@@ -204,6 +212,24 @@ def load_config(default_repo_root: Path | None = None) -> Config:
     else:
         telemetry = _read_persisted_telemetry_opt_in(cache_dir, repo_root)
 
+    # Sprint 19: CC_EMBED_CACHE_PERSISTENT. Defaults to True so the
+    # cold-session-first-query latency win lands without user opt-in.
+    # We're permissive on shape (on/off/true/false/1/0) but defensive
+    # on garbage: anything we don't recognise falls back to the default
+    # rather than silently flipping the user's intent (e.g.
+    # CC_EMBED_CACHE_PERSISTENT="please" → True, not crash).
+    _cc_persist_raw = os.environ.get("CC_EMBED_CACHE_PERSISTENT")
+    if _cc_persist_raw is None:
+        embed_cache_persistent = True
+    else:
+        _val = _cc_persist_raw.strip().lower()
+        if _val in ("on", "true", "1"):
+            embed_cache_persistent = True
+        elif _val in ("off", "false", "0"):
+            embed_cache_persistent = False
+        else:
+            embed_cache_persistent = True
+
     return Config(
         repo_root=repo_root.resolve(),
         embeddings_provider=embeddings,
@@ -235,6 +261,7 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         # accidental CC_EMBED_CACHE_SIZE=-1 which would make FIFO evict
         # immediately on every insert.
         embed_cache_size=max(0, int(os.environ.get("CC_EMBED_CACHE_SIZE", "256"))),
+        embed_cache_persistent=embed_cache_persistent,
         rerank_batch_size=rerank_batch_size,
         log_file=os.environ.get("CC_LOG_FILE") or None,
         hf_hub_verbose=os.environ.get("CC_HF_HUB_VERBOSE", "off").lower() in ("on", "true", "1"),
