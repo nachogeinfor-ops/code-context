@@ -127,12 +127,15 @@ Without this hint, Claude will work fine — it just won't reach for the MCP too
 `code-context-server` is the MCP binary; you don't run it directly. The companion `code-context` CLI helps administer the index:
 
 ```bash
-code-context status              # print index health + dirty/deleted counts
-code-context doctor              # run env + index health checks (no side effects)
-code-context reindex             # incremental by default (only changed files)
-code-context reindex --force     # full reindex (post-model-upgrade or cache reset)
-code-context query "where do we validate user emails"   # debug, no MCP
-code-context clear --yes         # delete the cache for this repo
+code-context status                                       # print index health + dirty/deleted counts
+code-context doctor                                       # run env + index health checks (no side effects)
+code-context reindex                                      # incremental by default (only changed files)
+code-context reindex --force                              # full reindex (post-model-upgrade or cache reset)
+code-context query "where do we validate user emails"     # debug, no MCP
+code-context clear --yes                                  # delete the cache for this repo
+code-context refresh                                      # trigger a reindex + wait for swap (since v1.10.0)
+code-context cache export --output cache.tar.gz           # bundle the active index (since v1.10.0)
+code-context cache import cache.tar.gz                    # restore a bundle (rejects version mismatches; --force overrides)
 ```
 
 `doctor` is the first stop when something looks wrong — it surfaces missing

@@ -1,5 +1,101 @@
 # Changelog
 
+## v1.10.0 — 2026-05-13
+
+Sprint 17 — **cache portability**. Indexes can be exported as tarballs,
+imported on another machine with compat validation, and refreshed
+in-place without restarting the MCP server.
+
+### Added
+
+- **`code-context cache export --output <path>`**: package the active
+  index (the per-repo cache subdir's `index-<sha>-<ts>/` plus
+  `current.json`) into a gzip tarball with a top-level `manifest.json`
+  describing the bundle's runtime versions (`embeddings_model`,
+  `chunker_version`, `keyword_version`, `symbol_version`, etc.). Run
+  `code-context reindex` first if there's no active index.
+- **`code-context cache import <path> [--force]`**: extract a bundle into
+  the per-repo cache subdir and restore `current.json` so the next
+  query hits the imported index. By default the importer refuses to
+  load a bundle whose runtime versions don't match this machine's
+  (vector spaces would mismatch → garbage search results); pass
+  `--force` to override. Path-traversal safe: the importer rejects
+  members with `..`, absolute paths, Windows drive prefixes, or
+  backslash separators BEFORE extracting anything, and uses Python
+  3.12+'s `tarfile.extractall(filter="data")` as a second defense.
+- **`code-context refresh [--timeout <sec>]`**: trigger a background
+  reindex and block until the swap completes (60s default timeout).
+  Useful right after `cache import` or a large external file change
+  (git checkout, restored files) when you want the next query to see
+  the new state without restarting the server.
+- **MCP `refresh` tool**: the same trigger-and-wait flow exposed as a
+  JSON-RPC tool callable from Claude Code or any MCP client. Returns
+  `{"refreshed": true}` on success or
+  `{"refreshed": false, "error": "..."}` on timeout / when
+  `CC_BG_REINDEX=off`. No restart needed.
+- **`IndexUpdateBus.subscribe_once(callback)`** and
+  **`BackgroundIndexer.trigger_and_wait(timeout)`**: the building
+  blocks behind `refresh`. Subscribe a callback that fires exactly
+  once on the next swap, or block on it. Documented but kept private
+  to the package — direct use is not part of the public API.
+- **`_live_runtime_versions(cfg)`** in `_cache_io`, backed by four
+  private helpers in `_composition` (`_embeddings_model_id`,
+  `_chunker_version`, `_keyword_index_version`,
+  `_symbol_index_version`) that compute the same version strings the
+  indexer writes to `metadata.json` WITHOUT triggering model load.
+  This is what powers the import-time compat check.
+
+### Internal
+
+- 19 new unit tests across 5 files: `test_cache_io.py` (13: export +
+  import roundtrip + 4 compat-rejection paths + 2 path-traversal),
+  `test_cli_cache.py` (8: export/import/refresh CLI handlers),
+  `test_index_bus.py` (2 new for `subscribe_once`),
+  `test_background_indexer.py` (2 new for `trigger_and_wait`),
+  `test_mcp_handle_refresh.py` (3 for the MCP tool with bg=None,
+  success, timeout).
+- No regressions in the full unit suite (581 passing).
+
+### Security
+
+- The import path-traversal guard is the most security-critical change
+  in this release. Bundles authored by untrusted parties can attempt
+  to write outside the cache dir (e.g. `../../../etc/passwd`). The
+  importer rejects unsafe member names BEFORE any extraction call so
+  a malicious bundle never writes a single byte. The check covers:
+  parent-dir segments (`..`), absolute paths (`/etc/passwd`), Windows
+  drive prefixes (`C:\`), backslash separators, empty segments. On
+  Python 3.12+ `tarfile.extractall(filter="data")` provides a second
+  layer; on 3.11 we silently fall back to our own guard (still safe,
+  just no symlink-target validation — Python 3.11's tarfile is older).
+
+### What this release does NOT do
+
+- No bundle signing or provenance. A bundle is just a tarball; teams
+  distribute via S3, scp, internal artifact registries. Trust is the
+  user's responsibility.
+- No remote cache server / auto-sync. Users pull/push bundles
+  manually or in CI.
+- No `zstd` compression extra. The `tar:gz` default is portable and
+  good enough for the typical 5-100 MB cache.
+- The `current.json` swap during import is not strictly atomic —
+  `tarfile.extractall` overwrites in-place. On the rare case of a
+  crash mid-extract the cache dir may be in an inconsistent state;
+  recovery is `rm -rf` the cache subdir + `code-context reindex`.
+  Will tighten to write-then-rename in a follow-up if it comes up.
+
+### Migration notes
+
+- This release does NOT change cache format on disk. Existing v1.9.x
+  caches keep working without any action.
+- Bundles produced by v1.10.0 are forward-compatible with later v1.x
+  as long as the `embeddings_model` / `chunker_version` /
+  `keyword_version` / `symbol_version` strings still match. Major
+  version changes that bump any of those four versions will reject
+  v1.10.0 bundles cleanly.
+
+---
+
 ## v1.9.4 — 2026-05-13
 
 Sprint 15.1 — **workaround landed** for the `nomic-ai/CodeRankEmbed`
