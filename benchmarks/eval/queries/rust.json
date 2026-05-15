@@ -1,0 +1,252 @@
+[
+  {
+    "query": "create user endpoint POST handler axum",
+    "expected_top1_path": "handlers/users.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get user by id axum path extractor handler",
+    "expected_top1_path": "handlers/users.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users endpoint page page_size pagination axum",
+    "expected_top1_path": "handlers/users.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete user endpoint axum returns 204 no content",
+    "expected_top1_path": "handlers/users.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "patch update user axum handler partial fields",
+    "expected_top1_path": "handlers/users.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create item endpoint owned by authenticated user axum",
+    "expected_top1_path": "handlers/items.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list items endpoint page query handler axum",
+    "expected_top1_path": "handlers/items.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update item patch endpoint axum ownership check",
+    "expected_top1_path": "handlers/items.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete item endpoint handler axum",
+    "expected_top1_path": "handlers/items.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get single item by id endpoint axum",
+    "expected_top1_path": "handlers/items.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "login route handler email password credentials axum",
+    "expected_top1_path": "handlers/auth.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refresh token route exchange handler axum",
+    "expected_top1_path": "handlers/auth.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "auth handler login returns token pair JSON axum",
+    "expected_top1_path": "handlers/auth.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "axum Router::new route mount auth users items entry point",
+    "expected_top1_path": "src/main.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "graceful shutdown tokio signal ctrl_c sigterm",
+    "expected_top1_path": "src/main.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "LoginRequest DTO serde Deserialize email password",
+    "expected_top1_path": "auth_dto.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TokenPair response struct access refresh expires_in serialize",
+    "expected_top1_path": "auth_dto.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Claims JWT struct sub iat exp typ discriminator",
+    "expected_top1_path": "auth_dto.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateUserRequest serde struct email username password validate",
+    "expected_top1_path": "user_dto.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserResponse public shape Serialize fields no password hash",
+    "expected_top1_path": "user_dto.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UpdateUserRequest Option fields patch optional",
+    "expected_top1_path": "user_dto.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateItemRequest body struct title description serde",
+    "expected_top1_path": "item_dto.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemResponse Serialize fields owner_id title created_at",
+    "expected_top1_path": "item_dto.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "User model struct sqlx FromRow password_hash created_at",
+    "expected_top1_path": "models/user.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Item model struct owner_id title FromRow is_owned_by",
+    "expected_top1_path": "models/item.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "argon2 hash password generate salt PHC string",
+    "expected_top1_path": "auth_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "verify password argon2 PasswordHash check stored",
+    "expected_top1_path": "auth_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "issue JWT access token sign HS256 encode jsonwebtoken",
+    "expected_top1_path": "auth_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "validate JWT token decode claims subject jsonwebtoken",
+    "expected_top1_path": "auth_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "issue token pair access and refresh together TokenPair",
+    "expected_top1_path": "auth_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create user account business logic hash password service",
+    "expected_top1_path": "user_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users service pagination clamp page size",
+    "expected_top1_path": "user_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update user service apply patch fields optional",
+    "expected_top1_path": "user_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item service create new item business logic",
+    "expected_top1_path": "item_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item service list by owner pagination forbidden check",
+    "expected_top1_path": "item_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "save user to database insert sqlx query macro postgres",
+    "expected_top1_path": "user_repository.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "find user by email select query sqlx",
+    "expected_top1_path": "user_repository.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users select limit offset pagination query sqlx",
+    "expected_top1_path": "user_repository.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "find item by id select query repository sqlx",
+    "expected_top1_path": "item_repository.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list items by owner select query repository sqlx",
+    "expected_top1_path": "item_repository.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JWT bearer token auth middleware Authorization header axum",
+    "expected_top1_path": "middleware/auth.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "extract bearer token from Authorization header strip prefix",
+    "expected_top1_path": "middleware/auth.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "AuthUserId request extension extractor user id",
+    "expected_top1_path": "middleware/auth.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "request log middleware TraceLayer tower http",
+    "expected_top1_path": "middleware/logging.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "sqlx PgPool connection open ping migrations setup",
+    "expected_top1_path": "src/database.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "envy dotenv config loader defaults validate JWT secret",
+    "expected_top1_path": "src/config.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ValidateToken",
+    "expected_top1_path": "auth_service.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserRepository",
+    "expected_top1_path": "user_repository.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ApiError",
+    "expected_top1_path": "src/error.rs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "AppState shared application state Arc",
+    "expected_top1_path": "src/main.rs",
+    "kind": "search_repo"
+  }
+]

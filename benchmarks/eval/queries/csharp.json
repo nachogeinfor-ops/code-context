@@ -313,5 +313,205 @@
     "query": "WebPanelServiceCollectionExtensions",
     "expected_top1_path": "WebPanelServiceCollectionExtensions.cs",
     "kind": "search_repo"
+  },
+  {
+    "query": "rename FileSystemBatFileStorage to FileSystemBatBackend across infrastructure adapters",
+    "expected_top1_path": "Adapters",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename IExecutionHistoryRepository interface IRunHistoryRepository domain port",
+    "expected_top1_path": "ExecutionHistory",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename NotificationSenderAdapter to NotificationDispatcher",
+    "expected_top1_path": "Adapters",
+    "kind": "search_repo"
+  },
+  {
+    "query": "move HistoryMaintenance hosted service into Persistence layer",
+    "expected_top1_path": "Persistence",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename SystemClock adapter to ClockAdapter",
+    "expected_top1_path": "Adapters",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename BushidoLog entities to AuditLog in use cases",
+    "expected_top1_path": "BushidoLogs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename ScheduledTask entity class JobDefinition Domain Entities",
+    "expected_top1_path": "Entities",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename CronTaskScheduler to TimerScheduler in scheduling",
+    "expected_top1_path": "Scheduling",
+    "kind": "search_repo"
+  },
+  {
+    "query": "extract retry and overlap policy resolvers into Domain services",
+    "expected_top1_path": "Services",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename EmailTemplateBuilder to MessageTemplate in notifications",
+    "expected_top1_path": "Notifications",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who calls SchedulerWorker UseWindowsService AddHostedService registration",
+    "expected_top1_path": "SchedulerWorker",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of HistoryMaintenanceHostedService dependency injection registration",
+    "expected_top1_path": "HistoryMaintenance",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who instantiates TaskExecutor inside the SchedulingOrchestrator dispatch",
+    "expected_top1_path": "SchedulingOrchestrator",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of BackoffCalculator NextDelay inside TaskExecutor Execute retry attempt",
+    "expected_top1_path": "BackoffCalculator",
+    "kind": "search_repo"
+  },
+  {
+    "query": "uses of OverlapPolicyResolver Resolve in scheduling task execution",
+    "expected_top1_path": "OverlapPolicyResolver",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who uses RetryPolicyResolver Resolve effective retry policy",
+    "expected_top1_path": "RetryPolicyResolver",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ScheduleDescriber Describe cron expression usage caller",
+    "expected_top1_path": "ScheduleDescriber",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who calls AtomicFileConfigurationWriter when saving configuration",
+    "expected_top1_path": "AtomicFileConfigurationWriter",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of CronNormalizer NormalizeToSixFields legacy five field cron",
+    "expected_top1_path": "CronNormalizer",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who registers NotificationService SMTP dependency injection",
+    "expected_top1_path": "NotificationService",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CronNormalizer",
+    "expected_top1_path": "CronNormalizer.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "BackoffCalculator",
+    "expected_top1_path": "BackoffCalculator.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "OverlapPolicyResolver",
+    "expected_top1_path": "OverlapPolicyResolver.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "RetryPolicyResolver",
+    "expected_top1_path": "RetryPolicyResolver.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ByteFormatter human readable size",
+    "expected_top1_path": "ByteFormatter.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "DurationFormatter milliseconds to human text",
+    "expected_top1_path": "DurationFormatter.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "RelativeTimeFormatter",
+    "expected_top1_path": "RelativeTimeFormatter.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ScheduleDescriber",
+    "expected_top1_path": "ScheduleDescriber",
+    "kind": "search_repo"
+  },
+  {
+    "query": "InMemoryPatternMatcher silence regex",
+    "expected_top1_path": "InMemoryPatternMatcher.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "SubjectTagBuilder",
+    "expected_top1_path": "SubjectTagBuilder.cs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Tasks razor table list dashboard rows tarea actions",
+    "expected_top1_path": "Tasks",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Bats razor scripts page list and create new bat files",
+    "expected_top1_path": "Bats",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Settings razor page tabs SMTP notifications bushido panels",
+    "expected_top1_path": "Settings",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Logs razor page tail file viewer scheduler bushido tabs",
+    "expected_top1_path": "Logs",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Home razor dashboard scheduler pause resume buttons OnPause OnResume",
+    "expected_top1_path": "Pages/Home",
+    "kind": "search_repo"
+  },
+  {
+    "query": "History razor page filter form OnSearch date range status",
+    "expected_top1_path": "History",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ConfirmDialog razor modal reusable component shared",
+    "expected_top1_path": "ConfirmDialog",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ScheduleBuilder razor cron radio buttons daily weekly monthly interval",
+    "expected_top1_path": "ScheduleBuilder",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TaskEdit razor page basico horarios ejecucion fallo tabs form",
+    "expected_top1_path": "TaskEdit",
+    "kind": "search_repo"
+  },
+  {
+    "query": "BatEdit razor new bat script editor file name validation",
+    "expected_top1_path": "BatEdit",
+    "kind": "search_repo"
   }
 ]

@@ -7,14 +7,32 @@
 
 ## Method
 
-- **Repo**: `WinServiceScheduler` (305 source files, mostly C# /
-  Razor). Same fixture used in the per-sprint benchmarks for
-  cross-comparability.
-- **Query set**: 60 hand-curated queries in
-  [`queries/csharp.json`](queries/csharp.json). Most are `search_repo` style
-  ("scheduler worker main loop", "task execution history
-  maintenance"); a few target specific symbol files ("global
-  usings for the GeinforScheduler project").
+- **Today (Sprint 23):** the suite spans **7 languages and 449
+  hand-curated queries** across 7 fixture repos. Four fresh
+  fixtures landed in Sprint 23 (`go_repo`, `rust_repo`,
+  `java_repo`, `cpp_repo`) and the three pre-existing language
+  query files (`csharp.json`, `python.json`, `typescript.json`)
+  were augmented with 40 queries each. Per-language counts:
+  csharp 103, python 73, typescript 73, go 50, rust 50, java 50,
+  cpp 50.
+- **Repos**:
+  - C#: `WinServiceScheduler` (305 source files, mostly C# /
+    Razor). Same fixture used in the per-sprint benchmarks for
+    cross-comparability.
+  - Python / TypeScript: `tests/fixtures/python_repo` (16 files)
+    and `tests/fixtures/ts_repo` (20 files) — small purpose-built
+    mini APIs.
+  - Sprint 23 additions: `tests/fixtures/go_repo` (24 files),
+    `tests/fixtures/rust_repo` (32 files),
+    `tests/fixtures/java_repo` (33 files),
+    `tests/fixtures/cpp_repo` (34 files including `.hpp`/`.cpp`
+    pairs).
+- **Query set**: 103 hand-curated queries in
+  [`queries/csharp.json`](queries/csharp.json) plus 50–73 per
+  other language under [`queries/`](queries/). Most are
+  `search_repo` style ("scheduler worker main loop", "task
+  execution history maintenance"); a few target specific symbol
+  files ("global usings for the GeinforScheduler project").
 - **Scoring**: a hit is any returned `SearchResult` whose `.path`
   contains the query's `expected_top1_path` substring (case-
   insensitive). NDCG@10, MRR, hit@1, hit@10 reported per-config;
@@ -35,7 +53,11 @@
 
 Switch with env vars; the runner reads them at composition time.
 
-## Results — v1.1.0 baseline
+## Results — v1.1.0 baseline (3 langs, 129 queries) — historical
+
+> v1.1.0 baseline retained for historical reference. The fresh
+> v1.10.1 baseline covering 7 languages / 449 queries will be
+> added in the next sprint step (eval matrix run in progress).
 
 Run on **2026-05-06** (Sprint 9), all-MiniLM-L6-v2 (384-dim) on CPU,
 129 hand-curated queries across 3 repos.
@@ -161,8 +183,10 @@ That's the regression net working as designed.
 
 ## Reproduce
 
-The standard way to reproduce the v1.1.0 numbers is via the multi-repo
-runner and the bundled config:
+The standard way to reproduce any of the baseline numbers is via the
+multi-repo runner and the bundled config. The bundled config covers
+all 7 languages; restrict with `--only <name>` if you want a single
+run:
 
 ```powershell
 cd "C:\Users\Practicas\Desktop\Proyecto CONTEXT\code-context"
@@ -176,7 +200,7 @@ $env:CC_RERANK = "off"             # or "on"
 
 & .\.venv\Scripts\python.exe -m benchmarks.eval.runner `
     --config benchmarks\eval\configs\multi.yaml `
-    --output-dir benchmarks\eval\results\v1.1.0\hybrid_rerank\
+    --output-dir benchmarks\eval\results\<version>\hybrid_rerank\
 ```
 
 The runner respects `CC_*` env vars at composition time. Use a
@@ -197,7 +221,8 @@ multi-repo YAML:
 
 The eval runner accepts a multi-repo config via `--config <path>` mode. The
 canonical config lives at [`configs/multi.yaml`](configs/multi.yaml) and
-points at the three v1.1.0 reference repos.
+points at all 7 reference repos (csharp, python, typescript, go, rust,
+java, cpp).
 
 ```yaml
 runs:
@@ -232,9 +257,12 @@ Two ways to trigger:
   re-trigger the eval automatically.
 
 The baseline numbers it compares against live in
-[`results/baseline.json`](results/baseline.json) under the `v1.1.0` key.
-When v1.2.0 ships, a new top-level key is added; the workflow defaults to
-the latest version key.
+[`results/baseline.json`](results/baseline.json). The workflow reads the
+**latest version key** automatically (via `_latest_version_data_simple`
+in [`ci_baseline.py`](ci_baseline.py)), so when a new version block is
+appended (e.g. `v1.10.1`, `v1.10.2`, …) CI starts comparing against it
+without any workflow edit. To compare against a specific older version,
+pass `--baseline-version vX.Y.Z` to `ci_baseline.py`.
 
 The workflow uses [`benchmarks/eval/ci_baseline.py`](ci_baseline.py) to
 render the comment body. You can run the same delta-view locally:
@@ -260,7 +288,7 @@ Sample comment:
 ...
 ```
 
-## How to add a query
+## Eval-query authoring guide
 
 The query files are committed under [`queries/`](queries/) — one JSON file
 per language. Each entry:
@@ -273,17 +301,115 @@ per language. Each entry:
 }
 ```
 
-Recipe for adding a query:
+### Choosing a fixture
 
-1. Pick a target repo and a real file in it. The substring you put in
-   `expected_top1_path` is matched case-insensitively against `SearchResult.path`,
-   so `"FooHandler.cs"` matches `"src/Adapters/FooHandler.cs"` but
-   `"src/Adapters"` matches every file in that directory and is too generic.
-2. Phrase the question how a Claude Code user would actually phrase it.
-   "Where is X handled" beats "function declaration of foo()".
-3. Append the entry to the relevant language's JSON file. **Don't reorder
-   existing queries** — published baseline CSVs depend on the row order.
-4. Verify locally:
+Prefer fresh purpose-built mini APIs (like `python_repo`, `ts_repo`,
+`go_repo`, `rust_repo`, `java_repo`, `cpp_repo`) over vendored
+subsets of upstream OSS:
+
+- No IP / licensing surface to think about.
+- No upstream drift — the fixture is pinned to its commit, period.
+- Shape is tunable for queryability: you can pick file names that
+  exercise the chunker and BM25 the way you want.
+
+If a real-world repo is genuinely needed (the C#
+`WinServiceScheduler` fixture is the existing example), **pin it
+to a specific commit SHA** in the runner config so the eval is
+reproducible across machines and across time.
+
+### Sizing the fixture
+
+Aim for **14–25 source files** (Sprint 23 fixtures land in 24–34
+file range and still cold-reindex under 30 s). Big enough that
+queries can plausibly disambiguate across files; small enough
+that the first-time `all-MiniLM-L6-v2` reindex stays under
+~30 s on CPU. Anything over ~50 files makes the dev loop
+painful without buying meaningful query diversity.
+
+### Pin granularity rules
+
+The `expected_top1_path` substring is the single most important
+field. The goal — based on Sprint 23 findings — is that each
+query has **multiple reasonable correct answers** so the metric
+doesn't tank when the model trades places between two equally
+good top candidates.
+
+Three pin shapes, in order of how often you'll reach for each:
+
+- **File-level pin** — `"users_handler.go"`. Use for sharp
+  queries where exactly one file is the right answer (e.g.
+  "where is the JWT signing secret loaded"). Best signal, but
+  brittle: any plausibly-correct sibling file gets scored as a
+  miss.
+- **Base-name pin without extension** — `"users_handler"`. Use
+  when a concept legitimately spans two related files:
+  - C++ pairs (`.hpp` declaration + `.cpp` implementation).
+  - Python `.py` + corresponding `.pyi` stub.
+  - A class plus its co-located test file when the test name
+    mirrors the class.
+  Both files now count as hits, which matches the user's mental
+  model of "the right place".
+- **Directory-level pin** — `"src/services"`, `"handlers"`. Use
+  for queries where many files in a layer are equally good
+  answers: refactor scenarios, broad concept queries
+  ("middleware that touches the request", "any of the
+  repositories"), and fuzzy-intent questions where the user
+  themselves wouldn't pick one file. The signal is weaker
+  per-query, but you don't get spurious misses from the model
+  picking a sibling file in the same layer.
+
+A query with **multiple reasonable correct answers** (via
+base-name or directory pin) is preferable to a sharp pin that
+forces the eval to penalise the model for picking a near-equivalent
+file. Use file-level pins only when you're confident a sibling
+file would actually be a wrong answer.
+
+### Query categories — keep the set balanced
+
+Each language file should sample roughly across:
+
+- **Endpoint / API surface discovery** — "where is the
+  `/users` route", "POST handler for orders"
+- **Schema / DTO / type queries** — "the User type", "request
+  body for X"
+- **Service / business logic** — "where do we compute the
+  invoice total"
+- **Repository / DB queries** — "DAO for products", "query
+  that joins orders and customers"
+- **Test-suite queries** — "test for the auth middleware"
+  (where the fixture has tests; not all do)
+- **Middleware / cross-cutting** — "request logging",
+  "exception handler middleware"
+- **1–2 token identifier queries** — short, symbol-shaped
+  ("UserDto", "JwtBearer"). These exercise BM25; without
+  them the hybrid leg gets under-evaluated.
+- **Refactor queries** — broad-pinned: "rename `Foo` to `Bar`
+  everywhere", "extract `validateOrder` into a helper". These
+  legitimately want directory-level pins.
+- **Call-site queries** — "who calls `Send`", "callers of
+  `OrderService.Place`". Often pins to the calling layer
+  (controllers / handlers), not the definition.
+- **Markdown / docs queries** — only include if the fixture
+  has substantial docs. Otherwise the file makes everything in
+  the fixture look like prose and pollutes the signal.
+
+### Authoring recipe
+
+1. **Pick a target repo and a real file** in it. The substring
+   in `expected_top1_path` is matched case-insensitively against
+   `SearchResult.path` — `"FooHandler.cs"` matches
+   `"src/Adapters/FooHandler.cs"`, while `"src/Adapters"`
+   matches every file in that directory.
+2. **Decide the pin shape** using the rules above. If you'd
+   accept two files as equally correct, drop the extension or
+   pin to the directory.
+3. **Phrase the question how a Claude Code user would actually
+   phrase it.** "Where is X handled" beats "function
+   declaration of foo()".
+4. **Append the entry to the relevant language's JSON file.**
+   Don't reorder existing queries — published baseline CSVs
+   depend on the row order.
+5. **Smoke-test locally:**
    ```powershell
    $env:CC_CACHE_DIR = "$env:TEMP\code-context-bench-cache"
    $env:CC_KEYWORD_INDEX = "sqlite"
@@ -293,43 +419,89 @@ Recipe for adding a query:
        --queries benchmarks\eval\queries\<lang>.json `
        --output benchmarks\eval\results\smoke.csv
    ```
-   The new query should appear in the CSV with its hit / NDCG. If it
-   scores zero across all three retrieval configs, double-check the
-   pin: the substring may not actually appear in any file's path.
-5. Re-record baselines: when adding >= 5 queries to a language, re-run all
-   three configs against that repo and update the relevant entries in
-   `results/baseline.json`. Bump the top-level version key to the next
-   patch (e.g. `v1.1.1`) and add the new block; CI will start comparing
-   PRs against it. Or wait for the next sprint's regression run.
-6. Commit the JSON change. Don't commit smoke CSV outputs — the
-   `.gitignore` will skip them.
+   Sanity floor: across the full file, **hit@10 ≥ 60%** in
+   hybrid mode. Lower than that almost always means broken pins,
+   not a model regression.
+6. **Re-record baselines** when adding ≥ 5 queries to a language:
+   re-run all three configs against that repo and update the
+   relevant entries in `results/baseline.json`. Bump the
+   top-level version key to the next patch (e.g. `v1.10.2`) and
+   add the new block; CI will start comparing PRs against it.
+   Or wait for the next sprint's regression run.
+7. **Commit the JSON change.** Don't commit smoke CSV outputs —
+   the `.gitignore` skips them, but `git status` housekeeping
+   is still good practice.
 
-Theme balance — try to keep the query set spread across:
-- Endpoint discovery / API surface
-- Schema / model / type queries
-- Service / business-logic queries
-- Repository / DB queries
-- Test-suite queries
-- A few short identifier-style queries (1-2 tokens) so BM25 has matches.
+### Diagnosing low NDCG / hit@10
+
+Three causes account for almost every "this query scores zero"
+case:
+
+1. **The pin substring doesn't actually appear in any indexed
+   file path.** Typo, file got renamed, fixture changed. Fix:
+   re-run the indexer against the fixture and grep the path
+   listing, or broaden the pin to a containing directory.
+2. **The pin is too narrow for a concept-level query.** Classic
+   examples: pinning to only the `.hpp` when both `.hpp` and
+   `.cpp` are equally good answers, or pinning to the production
+   file when the test file would also count as a correct hit.
+   Fix: drop the extension, or pin to the directory.
+3. **The query phrasing doesn't match the indexed identifiers.**
+   Common with abbreviations or domain-specific names — the
+   model has no way to map "auth middleware" to a fixture that
+   calls it `JwtBearer`. Fix: rephrase the query, include a
+   distinctive token from the actual code, or accept it as an
+   honest failure (see Threats to validity).
+
+### Common authoring mistakes
+
+- **Don't reorder existing queries** — published baseline CSVs
+  depend on the row order.
+- **Don't change the fixture to make a query hit.** Fix the pin
+  or rephrase the query instead. The fixture is the contract.
+- **Don't pin to paths that contain `plans/`, `docs/`, or
+  `README`** unless the query is explicitly about docs. Markdown
+  files often outrank source files for descriptive queries and
+  pollute the retrieval signal.
+- **Don't pin overly broadly** (e.g. just `"src"`). Every file
+  matches and the per-query score becomes meaningless.
+- **Don't commit smoke CSV outputs.** `.gitignore` covers them,
+  but verify with `git status` before staging.
 
 ## Threats to validity
 
-- **Sample size is 35**, not the 50 the original sprint plan
-  called for — single-digit MRR moves can come from one
-  miscategorised query. PRs adding queries are welcome.
+- **Sample size is 449 queries across 7 languages.** Big enough
+  that single-query mislabels don't move aggregate metrics
+  noticeably, but each per-language file (50–103 queries) is
+  still small enough that re-labelling one or two pins can shift
+  that language's NDCG by a couple of points. PRs adding queries
+  are welcome.
 - **Hand-labelled top-1 expectations can be wrong.** Every query
-  pins a single substring; if the chunker emits two equally-
-  relevant chunks (one in the source file, one in a test file
-  that mentions the same symbol), the eval scores only the
-  former as a hit. Conservative; the absolute numbers are
-  likely lower bounds.
+  pins a substring; if the chunker emits two equally-relevant
+  chunks (one in the source file, one in a test file that
+  mentions the same symbol), a file-level pin scores only one as
+  a hit. Sprint 23 mitigates this with directory- and base-name
+  pins where the concept legitimately spans multiple files, but
+  some sharp pins remain. Conservative on average; absolute
+  numbers are likely lower bounds.
 - **Cold-cache reindex skews the first run** if `CC_KEYWORD_INDEX`
   changes between configs (the keyword_version drift forces a
   full reindex). The bench script doesn't measure that wall
   time; only the per-query latency post-load. See
   `benchmarks/sprint-6-incremental-reindex.md` for reindex
   timings on this repo.
-- **One repo only.** WinServiceScheduler is C#-heavy; numbers
-  would differ on a Python repo with the default chunker hitting
-  AST chunks more often. Future expansion: add a small Python
-  repo + a small TypeScript repo to the eval set.
+- **Seven fixtures, but each is small.** The four Sprint 23
+  fixtures (`go_repo`, `rust_repo`, `java_repo`, `cpp_repo`) are
+  purpose-built mini APIs at 24–34 source files apiece. They
+  exercise the chunker, BM25, and the embedding model on each
+  language's syntax, but real-world repos with hundreds of files
+  per language will surface retrieval issues that don't appear
+  here. The C# `WinServiceScheduler` fixture is the only real-
+  world-shaped corpus in the set.
+- **Some queries fail consistently across all three retrieval
+  modes.** These are kept as honest failures rather than being
+  fixed by pin-gaming — they represent real retrieval-quality
+  gaps (abbreviation mismatches, semantic-vs-lexical disconnects)
+  that future model upgrades, code-trained embeddings, or
+  rerank improvements should chip away at. Reading the per-query
+  CSV is more informative than the aggregate when triaging.

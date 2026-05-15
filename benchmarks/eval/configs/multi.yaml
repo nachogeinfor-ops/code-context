@@ -12,3 +12,15 @@ runs:
   - name: typescript
     repo: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/tests/fixtures/ts_repo
     queries: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/benchmarks/eval/queries/typescript.json
+  - name: go
+    repo: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/tests/fixtures/go_repo
+    queries: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/benchmarks/eval/queries/go.json
+  - name: rust
+    repo: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/tests/fixtures/rust_repo
+    queries: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/benchmarks/eval/queries/rust.json
+  - name: java
+    repo: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/tests/fixtures/java_repo
+    queries: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/benchmarks/eval/queries/java.json
+  - name: cpp
+    repo: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/tests/fixtures/cpp_repo
+    queries: C:/Users/Practicas/Desktop/Proyecto CONTEXT/code-context/benchmarks/eval/queries/cpp.json

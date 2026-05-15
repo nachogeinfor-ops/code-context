@@ -1,0 +1,36 @@
+[package]
+name = "rustapi"
+version = "0.1.0"
+edition = "2021"
+authors = ["example <hello@example.com>"]
+description = "Small idiomatic axum HTTP API used as a code-context eval fixture."
+license = "MIT"
+
+[dependencies]
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "macros"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+jsonwebtoken = "9"
+argon2 = "0.5"
+rand = "0.8"
+thiserror = "1"
+anyhow = "1"
+envy = "0.4"
+dotenvy = "0.15"
+validator = { version = "0.16", features = ["derive"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+reqwest = { version = "0.11", features = ["json"] }
+
+[[bin]]
+name = "rustapi"
+path = "src/main.rs"

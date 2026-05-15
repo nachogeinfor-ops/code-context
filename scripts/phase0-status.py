@@ -200,6 +200,44 @@ def check_languages() -> Criterion:
         return Criterion("Tree-sitter languages", "≥ 9", "?", f"error: {exc}", mandatory=True)
 
 
+def check_eval_query_count(_queries_dir: Path | None = None) -> Criterion:
+    """Total eval queries across benchmarks/eval/queries/*.json ≥ 250.
+
+    Sprint 23 — gate that the eval corpus stays large enough to keep NDCG /
+    p50 numbers statistically meaningful. Sums the array length of every
+    JSON file in the queries directory. A single malformed file is reported
+    via the `current` field (e.g. "449 (skipped 1 malformed)") but does not
+    abort the count — we still report whatever the readable files contain.
+    """
+    queries_dir = _queries_dir or (REPO_ROOT / "benchmarks" / "eval" / "queries")
+    try:
+        if not queries_dir.exists() or not queries_dir.is_dir():
+            return Criterion("Eval queries", "≥ 250", "?", "no files", mandatory=True)
+
+        json_files = sorted(p for p in queries_dir.glob("*.json") if p.is_file())
+        if not json_files:
+            return Criterion("Eval queries", "≥ 250", "?", "no files", mandatory=True)
+
+        total = 0
+        skipped = 0
+        for path in json_files:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                skipped += 1
+                continue
+            if not isinstance(data, list):
+                skipped += 1
+                continue
+            total += len(data)
+
+        current = f"{total} (skipped {skipped} malformed)" if skipped > 0 else str(total)
+        status = "✓" if total >= 250 else "✗"
+        return Criterion("Eval queries", "≥ 250", status, current, mandatory=True)
+    except Exception as exc:
+        return Criterion("Eval queries", "≥ 250", "?", f"error: {exc}", mandatory=True)
+
+
 def check_tests_passing() -> Criterion:
     """Tests collected (proxy for passing) ≥ 300."""
     try:
@@ -497,6 +535,7 @@ def _sections(current_version: str) -> list[tuple[str, list[str]]]:
                 "NDCG@10 hybrid_rerank",
                 "p50 latency hybrid_rerank",
                 "Tree-sitter languages",
+                "Eval queries",
                 "Tests passing",
                 "P0 issues open",
                 "P1 issues open",
@@ -566,6 +605,7 @@ def main() -> int:
         check_ndcg(),
         check_p50_latency(),
         check_languages(),
+        check_eval_query_count(),
         check_tests_passing(),
         check_p0_issues(),
         check_p1_issues(),

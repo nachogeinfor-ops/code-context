@@ -1,0 +1,252 @@
+[
+  {
+    "query": "create user endpoint POST handler",
+    "expected_top1_path": "users_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get user by id route handler chi URLParam",
+    "expected_top1_path": "users_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users endpoint page page_size pagination",
+    "expected_top1_path": "users_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete user endpoint by id handler",
+    "expected_top1_path": "users_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "patch update user handler partial fields",
+    "expected_top1_path": "users_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create item endpoint owned by authenticated user",
+    "expected_top1_path": "items_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list items endpoint page query handler",
+    "expected_top1_path": "items_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update item patch endpoint",
+    "expected_top1_path": "items_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete item endpoint handler chi",
+    "expected_top1_path": "items_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get single item by id endpoint",
+    "expected_top1_path": "items_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "login route handler email password credentials",
+    "expected_top1_path": "auth_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refresh token route exchange handler",
+    "expected_top1_path": "auth_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "auth handler login returns token pair JSON",
+    "expected_top1_path": "auth_handler.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "chi NewRouter mount auth users items routes entry point",
+    "expected_top1_path": "cmd/server",
+    "kind": "search_repo"
+  },
+  {
+    "query": "server Shutdown context timeout graceful exit",
+    "expected_top1_path": "cmd/server",
+    "kind": "search_repo"
+  },
+  {
+    "query": "LoginRequest DTO json email password fields",
+    "expected_top1_path": "auth_dto.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TokenPair response struct access refresh expires_in",
+    "expected_top1_path": "auth_dto.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Claims JWT type access refresh discriminator",
+    "expected_top1_path": "auth_dto.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateUserRequest struct email username password validate tags",
+    "expected_top1_path": "user_dto.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserResponse public shape json fields no password",
+    "expected_top1_path": "user_dto.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UpdateUserRequest optional pointer fields patch",
+    "expected_top1_path": "user_dto.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateItemRequest body struct title description",
+    "expected_top1_path": "item_dto.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemResponse json shape owner_id title",
+    "expected_top1_path": "item_dto.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "User struct password_hash created_at NewUser constructor",
+    "expected_top1_path": "models/user.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Item struct owner_id title description NewItem IsOwnedBy",
+    "expected_top1_path": "models/item.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "bcrypt hash password generate from password",
+    "expected_top1_path": "auth_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "compare password bcrypt check hash",
+    "expected_top1_path": "auth_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "issue JWT access token sign HS256",
+    "expected_top1_path": "auth_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "sign refresh token long lived JWT",
+    "expected_top1_path": "auth_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "validate JWT token parse claims subject",
+    "expected_top1_path": "auth_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "issue token pair access and refresh together",
+    "expected_top1_path": "auth_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create user account business logic hash password",
+    "expected_top1_path": "user_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users service pagination wrapper",
+    "expected_top1_path": "user_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update user service apply patch fields",
+    "expected_top1_path": "user_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item service create new item business logic",
+    "expected_top1_path": "item_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item service list by owner pagination forbidden check",
+    "expected_top1_path": "item_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "save user to database insert sqlx named exec",
+    "expected_top1_path": "user_repository.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "find user by email select query sqlx",
+    "expected_top1_path": "user_repository.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users select limit offset pagination query",
+    "expected_top1_path": "user_repository.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "find item by id select query repository",
+    "expected_top1_path": "item_repository.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list items by owner select query repository",
+    "expected_top1_path": "item_repository.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JWT bearer token auth middleware Authorization header",
+    "expected_top1_path": "auth_middleware.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "extract bearer token from Authorization header",
+    "expected_top1_path": "auth_middleware.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "user id from context value retrieve",
+    "expected_top1_path": "auth_middleware.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "request log middleware method path status duration",
+    "expected_top1_path": "logging_middleware.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "sqlx connection open ping migrations setup",
+    "expected_top1_path": "internal/database/database.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "env config loader envconfig load defaults validate",
+    "expected_top1_path": "internal/config/config.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ValidateToken",
+    "expected_top1_path": "auth_service.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserRepository",
+    "expected_top1_path": "user_repository.go",
+    "kind": "search_repo"
+  },
+  {
+    "query": "HashPassword",
+    "expected_top1_path": "auth_service.go",
+    "kind": "search_repo"
+  }
+]

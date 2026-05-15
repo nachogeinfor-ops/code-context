@@ -1,0 +1,252 @@
+[
+  {
+    "query": "create user POST endpoint handler json body validation",
+    "expected_top1_path": "users_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get user by id GET endpoint path regex match",
+    "expected_top1_path": "users_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users endpoint page page_size query params",
+    "expected_top1_path": "users_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete user DELETE endpoint returns 204 no content",
+    "expected_top1_path": "users_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "patch update user PATCH endpoint partial update",
+    "expected_top1_path": "users_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UsersHandler declaration header methods create get list",
+    "expected_top1_path": "users_handler.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create item POST endpoint authenticated owner",
+    "expected_top1_path": "items_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list items endpoint owner scoped pagination",
+    "expected_top1_path": "items_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get single item GET path id handler",
+    "expected_top1_path": "items_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update item PATCH ownership enforced handler",
+    "expected_top1_path": "items_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete item DELETE endpoint forbidden if not owner",
+    "expected_top1_path": "items_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "login route POST credentials JWT email password",
+    "expected_top1_path": "auth_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refresh token route POST exchange new access token",
+    "expected_top1_path": "auth_handler",
+    "kind": "search_repo"
+  },
+  {
+    "query": "AuthHandler declaration login refresh methods",
+    "expected_top1_path": "auth_handler.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "main entry point register routes start httplib server",
+    "expected_top1_path": "main.cpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "LoginRequest struct email password from_json",
+    "expected_top1_path": "auth_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TokenResponse access_token refresh_token expires_in to_json Bearer",
+    "expected_top1_path": "auth_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "RefreshRequest body refresh_token field",
+    "expected_top1_path": "auth_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateUserRequest struct fields email username password json",
+    "expected_top1_path": "user_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UpdateUserRequest optional fields patch dto",
+    "expected_top1_path": "user_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserResponse public wire shape no password_hash",
+    "expected_top1_path": "user_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateItemRequest title description body struct",
+    "expected_top1_path": "item_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemResponse to_json from_entity owner_id title description",
+    "expected_top1_path": "item_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UpdateItemRequest optional title description partial patch",
+    "expected_top1_path": "item_dto.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "encode password bcrypt hash work factor",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "verify password bcrypt compare plaintext hash",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "login authenticate email password verify return tokens",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refresh token exchange validate issue new tokens rotation",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "issue JWT access token sign HS256 subject claim typ",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "issue refresh JWT long lived signing key",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "validate token decode JWT verify signature expiry typ",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "AuthService class declaration encode_password verify_password issue_access_token",
+    "expected_top1_path": "auth_service.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserService create user hash password persist conflict email",
+    "expected_top1_path": "user_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserService list_users clamp page_size pagination MAX_PAGE_SIZE",
+    "expected_top1_path": "user_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserService update non null fields apply patch rehash password",
+    "expected_top1_path": "user_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemService create item owner_id title description persist",
+    "expected_top1_path": "item_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemService list items for owner page_size clamp forbidden",
+    "expected_top1_path": "item_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "save user repository sqlite insert prepared statement bind",
+    "expected_top1_path": "user_repository",
+    "kind": "search_repo"
+  },
+  {
+    "query": "find user by email select prepared bind text",
+    "expected_top1_path": "user_repository",
+    "kind": "search_repo"
+  },
+  {
+    "query": "exists_by_email check duplicate user sqlite",
+    "expected_top1_path": "user_repository",
+    "kind": "search_repo"
+  },
+  {
+    "query": "save item sqlite insert prepared owner_id title",
+    "expected_top1_path": "item_repository",
+    "kind": "search_repo"
+  },
+  {
+    "query": "find item by id select prepared statement bind",
+    "expected_top1_path": "item_repository",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JWT bearer auth middleware extract Authorization header validate",
+    "expected_top1_path": "auth_middleware",
+    "kind": "search_repo"
+  },
+  {
+    "query": "extract bearer token strip prefix Authorization helper",
+    "expected_top1_path": "auth_middleware",
+    "kind": "search_repo"
+  },
+  {
+    "query": "request logging middleware json line method path status duration_ms",
+    "expected_top1_path": "logging_middleware",
+    "kind": "search_repo"
+  },
+  {
+    "query": "AuthMiddleware require_auth wrap handler 401 unauthorized",
+    "expected_top1_path": "auth_middleware.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "LoggingMiddleware before_request after_request steady_clock duration",
+    "expected_top1_path": "logging_middleware.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ApiError exception class status code message bad_request not_found",
+    "expected_top1_path": "api_error.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "User struct domain model id email username password_hash created_at",
+    "expected_top1_path": "models/user.hpp",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Item entity struct owner_id title description is_owned_by",
+    "expected_top1_path": "models/item.hpp",
+    "kind": "search_repo"
+  }
+]

@@ -1,0 +1,18 @@
+# Binaries
+/bin/
+/server
+/server.exe
+
+# Test artefacts
+*.test
+*.out
+coverage.html
+
+# Local sqlite databases
+*.db
+*.sqlite
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store

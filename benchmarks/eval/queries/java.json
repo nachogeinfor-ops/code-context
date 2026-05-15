@@ -1,0 +1,252 @@
+[
+  {
+    "query": "create user endpoint POST mapping RequestBody validation",
+    "expected_top1_path": "UsersController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get user by id PathVariable GetMapping",
+    "expected_top1_path": "UsersController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users endpoint page pageSize RequestParam pagination",
+    "expected_top1_path": "UsersController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete user endpoint DeleteMapping returns 204 no content",
+    "expected_top1_path": "UsersController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "patch update user endpoint PatchMapping partial fields",
+    "expected_top1_path": "UsersController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create item endpoint owned by authenticated user POST",
+    "expected_top1_path": "ItemsController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list items endpoint owner scoped page RequestParam",
+    "expected_top1_path": "ItemsController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update item PatchMapping ownership check authenticated",
+    "expected_top1_path": "ItemsController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "delete item endpoint DeleteMapping authenticated owner",
+    "expected_top1_path": "ItemsController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get single item by id GetMapping PathVariable",
+    "expected_top1_path": "ItemsController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "login route POST credentials email password JWT",
+    "expected_top1_path": "AuthController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refresh token route exchange POST RequestHeader",
+    "expected_top1_path": "AuthController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "auth controller login returns TokenResponse JSON",
+    "expected_top1_path": "AuthController.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "SpringBootApplication main entry point application context",
+    "expected_top1_path": "Application.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "SecurityFilterChain stateless JWT session disabled CSRF",
+    "expected_top1_path": "SecurityConfig.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "LoginRequest DTO email password NotBlank validation",
+    "expected_top1_path": "dto/LoginRequest.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TokenResponse POJO accessToken refreshToken expiresIn Bearer",
+    "expected_top1_path": "dto/TokenResponse.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateUserRequest DTO email username password Valid",
+    "expected_top1_path": "dto/CreateUserRequest.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UserResponse public shape record id email username createdAt no password",
+    "expected_top1_path": "dto/UserResponse.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UpdateUserRequest optional patch fields email username password",
+    "expected_top1_path": "dto/UpdateUserRequest.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateItemRequest body title description NotBlank",
+    "expected_top1_path": "dto/CreateItemRequest.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ItemResponse record id ownerId title description createdAt",
+    "expected_top1_path": "dto/ItemResponse.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UpdateItemRequest optional patch title description",
+    "expected_top1_path": "dto/UpdateItemRequest.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "User entity JPA Entity Table columns passwordHash createdAt",
+    "expected_top1_path": "models/User.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "Item JPA Entity owner_id title description isOwnedBy",
+    "expected_top1_path": "models/Item.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "encode password BCryptPasswordEncoder hash plaintext",
+    "expected_top1_path": "AuthService.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "login authenticate credentials check bcrypt matches",
+    "expected_top1_path": "AuthService.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refresh token exchange validate issue new access token",
+    "expected_top1_path": "AuthService.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "issue JWT access token sign HS256 claims subject",
+    "expected_top1_path": "JwtTokenProvider.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "issue refresh JWT long lived signing key claim typ",
+    "expected_top1_path": "JwtTokenProvider.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "validate JWT parse claims signing key check token type",
+    "expected_top1_path": "JwtTokenProvider.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create user account business logic hash password save entity",
+    "expected_top1_path": "UserService.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "list users service pagination clamp page size",
+    "expected_top1_path": "UserService.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "update user service apply patch non null fields rehash password",
+    "expected_top1_path": "UserService.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item service create new item owned by user save",
+    "expected_top1_path": "ItemService.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "item service list by owner page pageable forbidden ownership",
+    "expected_top1_path": "ItemService.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "find user by email JpaRepository Optional",
+    "expected_top1_path": "UserRepository.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "existsByEmail check duplicate user repository",
+    "expected_top1_path": "UserRepository.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "findAllPaged Pageable JPQL order by createdAt desc",
+    "expected_top1_path": "UserRepository.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "findByOwnerId items Page Pageable JpaRepository",
+    "expected_top1_path": "ItemRepository.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "deleteByIdAndOwnerId Modifying Query delete item ownership",
+    "expected_top1_path": "ItemRepository.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JWT auth filter OncePerRequestFilter Authorization Bearer header",
+    "expected_top1_path": "JwtAuthFilter.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "extract bearer token from Authorization header strip prefix",
+    "expected_top1_path": "JwtAuthFilter.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "request logging filter method path status duration_ms OncePerRequestFilter",
+    "expected_top1_path": "RequestLoggingFilter.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "AuthenticatedUser annotation AuthenticationPrincipal resolver",
+    "expected_top1_path": "AuthenticatedUser.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ControllerAdvice global exception handler validation 400 error envelope",
+    "expected_top1_path": "GlobalExceptionHandler.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ApiException runtime exception HttpStatus message",
+    "expected_top1_path": "ApiException.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "BCryptPasswordEncoder bean Configuration strength",
+    "expected_top1_path": "AppConfig.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "JwtTokenProvider",
+    "expected_top1_path": "JwtTokenProvider.java",
+    "kind": "search_repo"
+  },
+  {
+    "query": "GlobalExceptionHandler",
+    "expected_top1_path": "GlobalExceptionHandler.java",
+    "kind": "search_repo"
+  }
+]

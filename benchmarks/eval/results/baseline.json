@@ -274,5 +274,217 @@
       "p95_ms": 7483,
       "captured_on": "2026-05-06"
     }
+  },
+  "v1.10.1": {
+    "hybrid_csharp": {
+      "ndcg10": 0.4364,
+      "hit_at_1": 24,
+      "hit_at_10": 72,
+      "n_queries": 103,
+      "mrr": 0.3592,
+      "p50_ms": 28,
+      "p95_ms": 45,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_python": {
+      "ndcg10": 0.7646,
+      "hit_at_1": 48,
+      "hit_at_10": 73,
+      "n_queries": 73,
+      "mrr": 0.7585,
+      "p50_ms": 25,
+      "p95_ms": 37,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_typescript": {
+      "ndcg10": 0.7822,
+      "hit_at_1": 48,
+      "hit_at_10": 73,
+      "n_queries": 73,
+      "mrr": 0.7638,
+      "p50_ms": 24,
+      "p95_ms": 33,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_go": {
+      "ndcg10": 0.7858,
+      "hit_at_1": 35,
+      "hit_at_10": 50,
+      "n_queries": 50,
+      "mrr": 0.8207,
+      "p50_ms": 19,
+      "p95_ms": 28,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_rust": {
+      "ndcg10": 0.7551,
+      "hit_at_1": 33,
+      "hit_at_10": 48,
+      "n_queries": 50,
+      "mrr": 0.7445,
+      "p50_ms": 21,
+      "p95_ms": 32,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_java": {
+      "ndcg10": 0.8316,
+      "hit_at_1": 38,
+      "hit_at_10": 49,
+      "n_queries": 50,
+      "mrr": 0.8583,
+      "p50_ms": 23,
+      "p95_ms": 26,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_cpp": {
+      "ndcg10": 0.8759,
+      "hit_at_1": 40,
+      "hit_at_10": 50,
+      "n_queries": 50,
+      "mrr": 0.879,
+      "p50_ms": 29,
+      "p95_ms": 42,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_rerank_csharp": {
+      "ndcg10": 0.3581,
+      "hit_at_1": 19,
+      "hit_at_10": 58,
+      "n_queries": 103,
+      "mrr": 0.2923,
+      "p50_ms": 1740,
+      "p95_ms": 1884,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_rerank_python": {
+      "ndcg10": 0.7636,
+      "hit_at_1": 43,
+      "hit_at_10": 71,
+      "n_queries": 73,
+      "mrr": 0.7366,
+      "p50_ms": 1738,
+      "p95_ms": 1884,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_rerank_typescript": {
+      "ndcg10": 0.8078,
+      "hit_at_1": 52,
+      "hit_at_10": 72,
+      "n_queries": 73,
+      "mrr": 0.7962,
+      "p50_ms": 1743,
+      "p95_ms": 1885,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_rerank_go": {
+      "ndcg10": 0.7721,
+      "hit_at_1": 35,
+      "hit_at_10": 50,
+      "n_queries": 50,
+      "mrr": 0.7942,
+      "p50_ms": 1264,
+      "p95_ms": 1883,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_rerank_rust": {
+      "ndcg10": 0.7075,
+      "hit_at_1": 27,
+      "hit_at_10": 48,
+      "n_queries": 50,
+      "mrr": 0.6746,
+      "p50_ms": 1789,
+      "p95_ms": 1935,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_rerank_java": {
+      "ndcg10": 0.8629,
+      "hit_at_1": 43,
+      "hit_at_10": 49,
+      "n_queries": 50,
+      "mrr": 0.9133,
+      "p50_ms": 1788,
+      "p95_ms": 1938,
+      "captured_on": "2026-05-15"
+    },
+    "hybrid_rerank_cpp": {
+      "ndcg10": 0.8535,
+      "hit_at_1": 35,
+      "hit_at_10": 50,
+      "n_queries": 50,
+      "mrr": 0.8215,
+      "p50_ms": 1798,
+      "p95_ms": 1985,
+      "captured_on": "2026-05-15"
+    },
+    "vector_only_csharp": {
+      "ndcg10": 0.4623,
+      "hit_at_1": 28,
+      "hit_at_10": 73,
+      "n_queries": 103,
+      "mrr": 0.3956,
+      "p50_ms": 31,
+      "p95_ms": 36,
+      "captured_on": "2026-05-15"
+    },
+    "vector_only_python": {
+      "ndcg10": 0.731,
+      "hit_at_1": 42,
+      "hit_at_10": 73,
+      "n_queries": 73,
+      "mrr": 0.7076,
+      "p50_ms": 21,
+      "p95_ms": 26,
+      "captured_on": "2026-05-15"
+    },
+    "vector_only_typescript": {
+      "ndcg10": 0.7869,
+      "hit_at_1": 48,
+      "hit_at_10": 73,
+      "n_queries": 73,
+      "mrr": 0.7638,
+      "p50_ms": 23,
+      "p95_ms": 27,
+      "captured_on": "2026-05-15"
+    },
+    "vector_only_go": {
+      "ndcg10": 0.7897,
+      "hit_at_1": 35,
+      "hit_at_10": 50,
+      "n_queries": 50,
+      "mrr": 0.8207,
+      "p50_ms": 24,
+      "p95_ms": 30,
+      "captured_on": "2026-05-15"
+    },
+    "vector_only_rust": {
+      "ndcg10": 0.7546,
+      "hit_at_1": 33,
+      "hit_at_10": 48,
+      "n_queries": 50,
+      "mrr": 0.7445,
+      "p50_ms": 24,
+      "p95_ms": 28,
+      "captured_on": "2026-05-15"
+    },
+    "vector_only_java": {
+      "ndcg10": 0.8348,
+      "hit_at_1": 39,
+      "hit_at_10": 49,
+      "n_queries": 50,
+      "mrr": 0.8683,
+      "p50_ms": 23,
+      "p95_ms": 30,
+      "captured_on": "2026-05-15"
+    },
+    "vector_only_cpp": {
+      "ndcg10": 0.8608,
+      "hit_at_1": 39,
+      "hit_at_10": 50,
+      "n_queries": 50,
+      "mrr": 0.869,
+      "p50_ms": 27,
+      "p95_ms": 33,
+      "captured_on": "2026-05-15"
+    }
   }
 }

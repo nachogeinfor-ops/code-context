@@ -163,5 +163,205 @@
     "query": "hash_password",
     "expected_top1_path": "services/auth_service.py",
     "kind": "search_repo"
+  },
+  {
+    "query": "rename UserRepository to UserDAO",
+    "expected_top1_path": "repositories",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename ItemRepository to ItemDAO across repository layer",
+    "expected_top1_path": "repositories",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename Item to Product across pydantic schemas",
+    "expected_top1_path": "schemas",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename UserService to UserManager across services",
+    "expected_top1_path": "services",
+    "kind": "search_repo"
+  },
+  {
+    "query": "extract password hashing into helper module",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "introduce dependency injection for db session factory",
+    "expected_top1_path": "database.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "split auth_service into token and password modules",
+    "expected_top1_path": "auth_service",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename hashed_password to password_hash across user model",
+    "expected_top1_path": "user.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename owner_id field across item layer",
+    "expected_top1_path": "models/item.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "consolidate router APIRouter instances into single registry",
+    "expected_top1_path": "routers",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename Token to Credential in auth schemas",
+    "expected_top1_path": "schemas/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "replace bcrypt with argon2 password hashing",
+    "expected_top1_path": "auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename _svc helper to get_service in routers",
+    "expected_top1_path": "routers",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who calls hash_password",
+    "expected_top1_path": "services",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of get_db dependency injection",
+    "expected_top1_path": "routers",
+    "kind": "search_repo"
+  },
+  {
+    "query": "uses of UserCreate schema in route handlers",
+    "expected_top1_path": "routers/users.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of create_access_token in auth routes",
+    "expected_top1_path": "routers/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of verify_password function",
+    "expected_top1_path": "routers/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of verify_token decoder",
+    "expected_top1_path": "routers/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "uses of ItemCreate schema in routes",
+    "expected_top1_path": "routers/items.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of UserService class in route handlers",
+    "expected_top1_path": "routers",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of ItemRepository class",
+    "expected_top1_path": "services/item_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "uses of TokenResponse model in auth router",
+    "expected_top1_path": "routers/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of UserRepository methods in service layer",
+    "expected_top1_path": "services/user_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of ItemService.create_item",
+    "expected_top1_path": "routers/items.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "where is create_app invoked",
+    "expected_top1_path": "main.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "verify_password",
+    "expected_top1_path": "auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create_access_token",
+    "expected_top1_path": "auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create_refresh_token",
+    "expected_top1_path": "auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "verify_token",
+    "expected_top1_path": "auth_service.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "get_db",
+    "expected_top1_path": "database.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "SessionLocal",
+    "expected_top1_path": "database.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create_app",
+    "expected_top1_path": "main.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "LoginRequest",
+    "expected_top1_path": "schemas/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "RefreshRequest",
+    "expected_top1_path": "schemas/auth.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "create_tables",
+    "expected_top1_path": "database.py",
+    "kind": "search_repo"
+  },
+  {
+    "query": "what is the python_repo fixture for",
+    "expected_top1_path": "README.md",
+    "kind": "search_repo"
+  },
+  {
+    "query": "fixture not a working FastAPI application explanation",
+    "expected_top1_path": "README.md",
+    "kind": "search_repo"
+  },
+  {
+    "query": "tree-sitter indexing fixture for retrieval eval",
+    "expected_top1_path": "README.md",
+    "kind": "search_repo"
+  },
+  {
+    "query": "do not import from this fixture in main test suite",
+    "expected_top1_path": "README.md",
+    "kind": "search_repo"
   }
 ]

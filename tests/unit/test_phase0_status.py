@@ -193,6 +193,7 @@ def test_main_exit_code_0_when_all_met(script, tmp_path, monkeypatch, capsys):
         _make_pass("NDCG@10 hybrid_rerank", True),
         _make_pass("p50 latency hybrid_rerank", True),
         _make_pass("Tree-sitter languages", True),
+        _make_pass("Eval queries", True),
         _make_pass("Tests passing", True),
         _make_pass("P0 issues open", True),
         _make_pass("P1 issues open", False),
@@ -215,16 +216,17 @@ def test_main_exit_code_0_when_all_met(script, tmp_path, monkeypatch, capsys):
         patch.object(script, "check_ndcg", return_value=all_passing[0]),
         patch.object(script, "check_p50_latency", return_value=all_passing[1]),
         patch.object(script, "check_languages", return_value=all_passing[2]),
-        patch.object(script, "check_tests_passing", return_value=all_passing[3]),
-        patch.object(script, "check_p0_issues", return_value=all_passing[4]),
-        patch.object(script, "check_p1_issues", return_value=all_passing[5]),
-        patch.object(script, "check_github_stars", return_value=all_passing[6]),
-        patch.object(script, "check_pypi_downloads", return_value=all_passing[7]),
-        patch.object(script, "check_telemetry_installs", return_value=all_passing[8]),
-        patch.object(script, "check_external_contributors", return_value=all_passing[9]),
+        patch.object(script, "check_eval_query_count", return_value=all_passing[3]),
+        patch.object(script, "check_tests_passing", return_value=all_passing[4]),
+        patch.object(script, "check_p0_issues", return_value=all_passing[5]),
+        patch.object(script, "check_p1_issues", return_value=all_passing[6]),
+        patch.object(script, "check_github_stars", return_value=all_passing[7]),
+        patch.object(script, "check_pypi_downloads", return_value=all_passing[8]),
+        patch.object(script, "check_telemetry_installs", return_value=all_passing[9]),
+        patch.object(script, "check_external_contributors", return_value=all_passing[10]),
         patch.object(script, "check_multi_ide", side_effect=_pass_ide),
-        patch.object(script, "check_release_published", return_value=all_passing[14]),
-        patch.object(script, "check_changelog_clean", return_value=all_passing[15]),
+        patch.object(script, "check_release_published", return_value=all_passing[15]),
+        patch.object(script, "check_changelog_clean", return_value=all_passing[16]),
     ):
         code = script.main()
 
@@ -261,6 +263,11 @@ def test_main_exit_code_1_when_mandatory_missed(script, tmp_path, monkeypatch, c
             script,
             "check_languages",
             return_value=passing("Tree-sitter languages", True),
+        ),
+        patch.object(
+            script,
+            "check_eval_query_count",
+            return_value=passing("Eval queries", True),
         ),
         patch.object(
             script,
@@ -448,3 +455,110 @@ def test_sections_includes_current_version_published(script):
     releases = next(rows for (name, rows) in sections if name == "Releases")
     assert "v9.9.9 published" in releases
     assert "CHANGELOG clean of P0" in releases
+
+
+# ---------------------------------------------------------------------------
+# Sprint 23 — check_eval_query_count
+# ---------------------------------------------------------------------------
+
+
+def test_check_eval_query_count_passes_when_total_at_least_250(script, tmp_path):
+    """Sum of query-array lengths ≥ 250 → ✓."""
+    queries_dir = tmp_path / "queries"
+    queries_dir.mkdir()
+    (queries_dir / "python.json").write_text(
+        json.dumps([{"id": i} for i in range(100)]), encoding="utf-8"
+    )
+    (queries_dir / "go.json").write_text(
+        json.dumps([{"id": i} for i in range(200)]), encoding="utf-8"
+    )
+
+    c = script.check_eval_query_count(_queries_dir=queries_dir)
+    assert c.status == "✓"
+    assert c.current == "300"
+    assert c.mandatory is True
+    assert c.label == "Eval queries"
+    assert c.target == "≥ 250"
+
+
+def test_check_eval_query_count_fails_when_total_below_250(script, tmp_path):
+    """Sum of query-array lengths < 250 → ✗."""
+    queries_dir = tmp_path / "queries"
+    queries_dir.mkdir()
+    (queries_dir / "python.json").write_text(
+        json.dumps([{"id": i} for i in range(50)]), encoding="utf-8"
+    )
+    (queries_dir / "go.json").write_text(
+        json.dumps([{"id": i} for i in range(100)]), encoding="utf-8"
+    )
+
+    c = script.check_eval_query_count(_queries_dir=queries_dir)
+    assert c.status == "✗"
+    assert c.current == "150"
+
+
+def test_check_eval_query_count_empty_dir(script, tmp_path):
+    """Empty queries dir → ? with 'no files' current."""
+    queries_dir = tmp_path / "queries"
+    queries_dir.mkdir()
+
+    c = script.check_eval_query_count(_queries_dir=queries_dir)
+    assert c.status == "?"
+    assert "no files" in c.current
+
+
+def test_check_eval_query_count_missing_dir(script, tmp_path):
+    """Non-existent queries dir → ? with 'no files' current."""
+    queries_dir = tmp_path / "does-not-exist"
+
+    c = script.check_eval_query_count(_queries_dir=queries_dir)
+    assert c.status == "?"
+    assert "no files" in c.current
+
+
+def test_check_eval_query_count_skips_malformed_json(script, tmp_path):
+    """One malformed JSON is skipped but others still count."""
+    queries_dir = tmp_path / "queries"
+    queries_dir.mkdir()
+    (queries_dir / "python.json").write_text(
+        json.dumps([{"id": i} for i in range(200)]), encoding="utf-8"
+    )
+    (queries_dir / "go.json").write_text(
+        json.dumps([{"id": i} for i in range(100)]), encoding="utf-8"
+    )
+    # Malformed — not valid JSON
+    (queries_dir / "broken.json").write_text("{not valid json", encoding="utf-8")
+
+    c = script.check_eval_query_count(_queries_dir=queries_dir)
+    # 200 + 100 = 300 ≥ 250 → ✓ even with the malformed file skipped
+    assert c.status == "✓"
+    assert c.current.startswith("300")
+    assert "skipped 1 malformed" in c.current
+
+
+def test_check_eval_query_count_skips_non_list_json(script, tmp_path):
+    """JSON files that are not arrays are skipped (treated as malformed)."""
+    queries_dir = tmp_path / "queries"
+    queries_dir.mkdir()
+    (queries_dir / "valid.json").write_text(
+        json.dumps([{"id": i} for i in range(260)]), encoding="utf-8"
+    )
+    # Valid JSON but object, not list → should be skipped
+    (queries_dir / "object.json").write_text(json.dumps({"foo": "bar"}), encoding="utf-8")
+
+    c = script.check_eval_query_count(_queries_dir=queries_dir)
+    assert c.status == "✓"
+    assert c.current.startswith("260")
+    assert "skipped 1 malformed" in c.current
+
+
+def test_sections_includes_eval_queries_under_technical_quality(script):
+    """Sprint 23: 'Eval queries' must appear in the Technical quality section."""
+    sections = script._sections("v9.9.9")
+    tech_rows = next(rows for (name, rows) in sections if name == "Technical quality")
+    assert "Eval queries" in tech_rows
+    # Ordered between 'Tree-sitter languages' and 'Tests passing'
+    idx_langs = tech_rows.index("Tree-sitter languages")
+    idx_eval = tech_rows.index("Eval queries")
+    idx_tests = tech_rows.index("Tests passing")
+    assert idx_langs < idx_eval < idx_tests

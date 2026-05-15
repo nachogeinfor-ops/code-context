@@ -163,5 +163,205 @@
     "query": "zod env config validated environment variables",
     "expected_top1_path": "src/config.ts",
     "kind": "search_repo"
+  },
+  {
+    "query": "rename hashPassword to encryptPassword across auth service",
+    "expected_top1_path": "src/services",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename verifyToken to validateToken throughout the codebase",
+    "expected_top1_path": "src/services",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename requireAuth middleware to authGuard everywhere",
+    "expected_top1_path": "src/middleware",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename CreateUserSchema to NewUserSchema in zod validators",
+    "expected_top1_path": "src/validators",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename PublicUser interface to UserProfile in types",
+    "expected_top1_path": "src/types",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename JwtPayload to TokenClaims everywhere in types and services",
+    "expected_top1_path": "src/types",
+    "kind": "search_repo"
+  },
+  {
+    "query": "refactor errorHandler to be a class-based ErrorMiddleware",
+    "expected_top1_path": "src/middleware",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename listItemsByOwner to getItemsForUser in item service",
+    "expected_top1_path": "src/services",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename authRouter to authRoutes in route exports",
+    "expected_top1_path": "src/routes",
+    "kind": "search_repo"
+  },
+  {
+    "query": "extract token signing logic from authService into its own module",
+    "expected_top1_path": "src/services",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename ownerId field to userId in Item interface",
+    "expected_top1_path": "src/types",
+    "kind": "search_repo"
+  },
+  {
+    "query": "rename createApp factory function to buildApp in app module",
+    "expected_top1_path": "src/app.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of verifyToken JWT verification function",
+    "expected_top1_path": "src/middleware",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who calls hashPassword for new user password hashing",
+    "expected_top1_path": "src/services/userService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who calls comparePassword on login attempt",
+    "expected_top1_path": "src/controllers/authController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "auth controller calls createTokenPair after verifying credentials",
+    "expected_top1_path": "src/controllers/authController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who uses requireAuth middleware to protect routes",
+    "expected_top1_path": "src/routes",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of getUserByEmail during login lookup",
+    "expected_top1_path": "src/controllers/authController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who calls userService createUser to register a new account",
+    "expected_top1_path": "src/controllers/usersController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of itemService createItem from controllers",
+    "expected_top1_path": "src/controllers/itemsController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who uses signAccessToken in test suites",
+    "expected_top1_path": "tests",
+    "kind": "search_repo"
+  },
+  {
+    "query": "getConfig usage in service layer auth service",
+    "expected_top1_path": "src/services/authService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "who calls CreateUserSchema parse on incoming request body",
+    "expected_top1_path": "src/controllers/usersController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "callers of UpdateItemSchema parse in item controller",
+    "expected_top1_path": "src/controllers/itemsController.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "where errorHandler is wired into the express app",
+    "expected_top1_path": "src/app.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "comparePassword",
+    "expected_top1_path": "src/services/authService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "signAccessToken",
+    "expected_top1_path": "src/services/authService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "signRefreshToken",
+    "expected_top1_path": "src/services/authService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "createTokenPair",
+    "expected_top1_path": "src/services/authService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "requireAuth",
+    "expected_top1_path": "src/middleware/authMiddleware.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "requestLogger",
+    "expected_top1_path": "src/middleware/requestLogger.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "listItemsByOwner",
+    "expected_top1_path": "src/services/itemService.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "CreateUserSchema",
+    "expected_top1_path": "src/validators/userValidators.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "UpdateItemSchema",
+    "expected_top1_path": "src/validators/itemValidators.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "TokenPair",
+    "expected_top1_path": "src/types/jwt.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "PublicUser",
+    "expected_top1_path": "src/types/user.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "EnvSchema",
+    "expected_top1_path": "src/config.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "createApp",
+    "expected_top1_path": "src/app.ts",
+    "kind": "search_repo"
+  },
+  {
+    "query": "ts-repo fixture Express Zod backend overview",
+    "expected_top1_path": "README.md",
+    "kind": "search_repo"
+  },
+  {
+    "query": "eval fixture description for code-context semantic search",
+    "expected_top1_path": "README.md",
+    "kind": "search_repo"
   }
 ]
