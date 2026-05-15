@@ -1,5 +1,136 @@
 # Changelog
 
+## v1.11.0 — 2026-05-15
+
+Sprint 19 — **persistent query-embedding cache**. The Sprint 12
+in-process query embedding cache now has an L2 layer backed by SQLite.
+The dict (L1) is the hot path; the SQLite store (L2) survives process
+exit so the **first query of every session hits cache** instead of
+paying the ~50-200 ms local-model embed cost.
+
+### Added
+
+- **`SqliteEmbedCache`** at
+  `src/code_context/adapters/driven/embed_cache_sqlite.py`. Schema:
+  `(model_id TEXT, query_hash TEXT, vector BLOB, accessed_at REAL)`
+  with `PRIMARY KEY (model_id, query_hash)` and an index on
+  `accessed_at DESC`. Lives at
+  `<repo_cache_subdir>/embed_cache.sqlite`. Methods: `get()`, `put()`,
+  `evict_lru(max_rows)`, `invalidate_model(current_model_id)`,
+  `close()`. WAL mode enabled at every open so a long-running MCP
+  server and a `code-context query` CLI invocation can both write
+  without blocking. `np.float32` blobs (~3 KB for a 768-dim vector).
+- **Two-tier write-through** in `SearchRepoUseCase._embed_query()`:
+  L1 dict → L2 SQLite → live `embeddings.embed()`. A L2 hit
+  back-fills L1 so subsequent same-query calls take the
+  microsecond fast path. A live embed populates BOTH caches.
+- **Privacy by construction**: the L2 store NEVER persists raw query
+  text. The key column is `query_hash = sha256(query.encode("utf-8"))
+  .hexdigest()`. Cache files in user cache dirs are safe to include
+  in backups, support bundles, or shared-machine handoffs. A
+  dedicated unit test (`test_query_hash_used_not_raw_query`) reads
+  the on-disk rows back and asserts none contain the raw query
+  string.
+- **Model-swap invalidation**: in `_reload_if_swapped()` (the bus-tick
+  callback), after clearing the L1 dict we now call
+  `persistent_cache.invalidate_model(model_id)`. The `model_id` is
+  passed at construction (`build_use_cases()` reads it via the same
+  `_embeddings_model_id(cfg)` private helper that Sprint 17's cache
+  export uses). Stale rows under any other `model_id` are deleted.
+  Order matters: L1 cleared FIRST so a failed L2 invalidate still
+  leaves us in "must re-embed" mode.
+- **`CC_EMBED_CACHE_PERSISTENT`** env var (default **on**). Set to
+  "off" / "false" / "0" to disable the L2 layer and fall back to
+  Sprint 12's dict-only behaviour. Default-on because the privacy
+  posture is sha256-only and the disk footprint is bounded by
+  `CC_EMBED_CACHE_SIZE` (default 256 rows = ~800 KB on a 768-dim
+  model). `Config.embed_cache_persistent: bool = True`.
+
+### Internal
+
+- **28 new unit tests** + 1 integration test:
+  - 21 in `tests/unit/adapters/test_embed_cache_sqlite.py` covering
+    happy path, get-miss, model-id namespacing, UPSERT overwrite,
+    LRU eviction (including the multi-row clock-collision edge),
+    no-op under cap, model invalidation, WAL concurrent
+    read-during-write, corrupt-blob safety, sha256 privacy assertion,
+    parametrised vector dims, WAL pragma persisted in DB header,
+    idempotent close, parent-dir auto-creation, and a full
+    write-close-reopen-read round trip.
+  - 7 in `tests/unit/domain/test_search_repo.py` covering cold-session
+    L2 hit, model-id-change invalidation, dict-only fallback when
+    `persistent_cache=None`, bus-tick invalidation, L1 write-back on
+    L2 hit, graceful fallback when L2 raises, and the L1-off + L2-on
+    combo (`CC_EMBED_CACHE_SIZE=0` + persistent on).
+  - 1 in `tests/integration/test_embed_cache_persistent.py` — full
+    cold-session simulation: build a use case, embed query, tear
+    down, build a SECOND use case with the same cache path, query
+    again, assert `embeddings.embed()` was NOT called on session 2.
+- **Failure isolation**: every `persistent_cache.{get,put,evict_lru,
+  invalidate_model}` call site in `SearchRepoUseCase` is wrapped in
+  try/except. A corrupt DB file, locked DB, disk full, etc., logs a
+  warning and falls back to a live embed. Cache failures never break
+  search. Composition's `SqliteEmbedCache(...)` open is also wrapped
+  — a corrupt file silently degrades to dict-only.
+- **Corrupt blob handling**: if a `vector` BLOB can't be decoded by
+  `np.frombuffer(..., dtype=np.float32)` (partial write, bit rot,
+  poisoned cache), `.get()` returns None instead of raising. The
+  caller embeds fresh and the row is overwritten — self-healing.
+- **LRU eviction tie-break**: `ORDER BY accessed_at ASC, rowid ASC`.
+  The `rowid` secondary key handles Windows's ~16 ms clock resolution
+  that produces many rows with identical `accessed_at` on rapid bulk
+  inserts. Eviction is called opportunistically on every `put()`;
+  bounded by the existing `CC_EMBED_CACHE_SIZE` knob (default 256).
+- No new dependencies — stdlib `sqlite3` + `hashlib` + existing
+  `numpy`.
+
+### Performance
+
+Measured on this CPU machine (Windows 11, Python 3.13, no GPU):
+
+- **L2 hit latency** (bare `SqliteEmbedCache.get()`): median ~3 ms,
+  p100 4.79 ms across n=20.
+- **First `SearchRepoUseCase.run()` of a cold session hitting L2**:
+  ~9 ms (includes one-time WAL handshake + SQLite cold page-in).
+  Compared to ~50-200 ms for a fresh embed on local models, that's
+  the 5-20x improvement Sprint 12 originally targeted with the
+  in-process dict — now extended across process boundaries.
+- **Subsequent `run()` calls hitting L1**: ~22 μs (unchanged from
+  Sprint 12).
+
+### Migration notes
+
+- Existing v1.10.x caches keep working unchanged — `embed_cache.sqlite`
+  is a NEW file, created on first use. No migration step.
+- Bundle export/import (Sprint 17) does NOT include the embed cache.
+  A bundle imported on another machine will rebuild its embed cache
+  on first use. This is intentional: query patterns are per-user.
+- `code-context clear` (Sprint 8) wipes the entire repo cache subdir,
+  including `embed_cache.sqlite`. The next session re-builds from
+  scratch.
+
+### Privacy notice
+
+The L2 cache stores `sha256(query)` not raw query text. Even so,
+sha256 of a known query is reversible by anyone who can guess your
+query strings, and the cache file path leaks the *count* of distinct
+queries. Users on shared machines with sensitive query patterns
+(e.g. searching for an unannounced product codename) can disable
+the L2 layer with `CC_EMBED_CACHE_PERSISTENT=off` — the dict (L1)
+remains and gives the same Sprint 12 hit pattern within a session.
+
+### What this release does NOT do
+
+- No doctor (Sprint 14) integration. Reporting embed-cache hit rate
+  needs runtime stats plumbing that's out of scope here; deferred.
+- No persistent cache for `find_definition` / `find_references`
+  results. Those are FTS5 BM25 queries served from a SQLite index
+  already — there's nothing to cache.
+- No remote / shared cache server. Each repo's `embed_cache.sqlite`
+  is local to the user's cache dir, by design.
+
+---
+
 ## v1.10.1 — 2026-05-15
 
 Sprint 23 — **eval suite expansion**. The retrieval eval grew from
