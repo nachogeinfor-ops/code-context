@@ -1,5 +1,119 @@
 # Changelog
 
+## v1.10.1 — 2026-05-15
+
+Sprint 23 — **eval suite expansion**. The retrieval eval grew from
+129 queries across 3 languages to **449 across 7** (Python, C#,
+TypeScript, Go, Rust, Java, C++). Four new fixture repos and a fresh
+21-cell v1.10.1 baseline in `benchmarks/eval/results/baseline.json`.
+
+Pure content release — no behavior changes, no new env vars, no
+dependency changes.
+
+### Added
+
+- **4 new fixture repos** under `tests/fixtures/`, mirroring the
+  existing `python_repo` / `ts_repo` pattern: small idiomatic CRUD
+  APIs in **Go** (`go_repo`, ~24 source files, chi + sqlx), **Rust**
+  (`rust_repo`, ~32 files, axum + sqlx + tokio), **Java** (`java_repo`,
+  ~30 files, Spring Boot 3.x), and **C++** (`cpp_repo`, ~34 files
+  including `.hpp`/`.cpp` pairs, cpp-httplib + nlohmann/json). None
+  of the fixtures need to compile; they exercise the tree-sitter
+  chunker against plausible production code.
+- **4 new query files** under `benchmarks/eval/queries/`: `go.json`,
+  `rust.json`, `java.json`, `cpp.json`. 50 hand-curated queries each
+  covering endpoint/handler discovery, DTO/type queries, service /
+  business logic, repository queries, middleware, identifier-search
+  (BM25 leg), and a handful of refactor / call-site flavours.
+- **40 new queries each** appended to the existing query files:
+  `python.json` 33 → **73**, `csharp.json` 63 → **103**,
+  `typescript.json` 33 → **73**. The new queries split into refactor
+  scenarios (directory-level pins like `"src/services"`), call-site
+  queries ("who calls X" / "callers of Y"), 1-2 token identifier
+  queries, and a small Markdown/docs subset (4-10 per fixture,
+  capped by how much README content exists). Existing query order
+  preserved — published baseline CSVs depend on row order, so
+  appending is the rule.
+- **`benchmarks/eval/configs/multi.yaml`** now drives 7 languages
+  (csharp / python / typescript / go / rust / java / cpp).
+- **v1.10.1 baseline** in `benchmarks/eval/results/baseline.json`,
+  21 cells (7 langs × 3 modes: vector_only, hybrid, hybrid_rerank).
+  Per-run CSVs at
+  `benchmarks/eval/results/v1.10.1/{hybrid,hybrid_rerank,vector_only}/`.
+  Highlights of the new baseline:
+  - Total queries: **449**.
+  - Hybrid overall: hit@1 = 266/449, hit@10 = 415/449, NDCG@10 =
+    0.7133, weighted p50 = 25 ms.
+  - Hybrid_rerank overall: hit@1 = 254/449, hit@10 = 398/449,
+    NDCG@10 = 0.6935, weighted p50 = 1704 ms. Rerank still trades
+    latency for top-1 quality on most cells; on CPU it's not yet
+    the default for interactive use.
+  - Vector_only overall: hit@1 = 264/449, hit@10 = 416/449,
+    NDCG@10 = 0.7136, weighted p50 = 25 ms. Roughly matches hybrid
+    on this query distribution — BM25 only meaningfully helps on
+    identifier-shaped queries.
+  - Best per-language NDCG@10 (hybrid): cpp 0.876, java 0.832,
+    csharp 0.436 (the 305-file ceiling persists).
+- **`Eval queries ≥ 250` criterion** in `scripts/phase0-status.py`,
+  filed under "Technical quality". Counts the total queries across
+  all `benchmarks/eval/queries/*.json` files. Currently **449** — well
+  above the floor. Skips malformed JSON files with a partial count
+  rather than crashing.
+- **Expanded eval-query authoring guide** in `benchmarks/eval/README.md`.
+  New sections: pin granularity rules (file-level vs base-name vs
+  directory-level), a 10-category query distribution, smoke-test
+  recipe with the hit@10 ≥ 60% sanity floor, low-NDCG diagnostics
+  (the three root causes — wrong pin, too-narrow pin, query phrasing
+  mismatch — and how to fix each), and a common-mistakes list. Length
+  grew ~170 lines.
+- **`benchmarks/eval/build_v1_10_1_baseline.py`** — small helper that
+  converts the per-run CSVs into the baseline.json schema. Reusable
+  for the next regression cycle; would need a path/version tweak.
+- **`benchmarks/eval/run_v1_10_1_matrix.ps1`** — the PowerShell driver
+  that reproduces the v1.10.1 matrix in one go (hybrid →
+  hybrid_rerank → vector_only, 31 min total wall on this machine).
+  Committed as a reproducibility reference.
+
+### Internal
+
+- 7 new tests in `tests/unit/test_phase0_status.py` for the new
+  `check_eval_query_count` criterion: happy path (≥ 250 → ✓), under
+  threshold (< 250 → ✗), empty queries dir (→ ?), missing dir (→ ?),
+  one malformed JSON file (skipped, others counted), non-list JSON
+  (skipped), and the section placement test ("Eval queries" sits
+  between "Tree-sitter languages" and "Tests passing"). All 588
+  unit tests pass.
+
+### Migration notes
+
+- This release does NOT change any code path. v1.10.0 caches and
+  indexes keep working unchanged.
+- The Sprint 22 plan calls for a `"kind": "find_references"` query
+  type in the JSON files. v1.10.1 does NOT introduce them — every
+  entry stays on `"kind": "search_repo"`. Sprint 22 will add the
+  separate kind when it lands.
+- `phase0-status.py` now reports an additional mandatory criterion
+  (`Eval queries`). Currently 449 / 250 — comfortably passing, but
+  if a teammate runs `phase0-status` on a checkout without the new
+  query files (e.g. a downstream fork that hasn't pulled this
+  release), they will see one new `✗`. Pull this release to clear it.
+
+### What this release does NOT do
+
+- No retrieval-algorithm changes. The new query counts illuminate
+  where the current pipeline shines (java, cpp) and where it doesn't
+  (csharp 305-file ceiling at ~0.44 NDCG hybrid). **Sprint 21**
+  (source-tier search) and **Sprint 22** (rerank find_references)
+  will consume that signal.
+- No fixture for a real Markdown-dominant project (Astro, Docusaurus).
+  Deferred — the current 7 fixtures already strain the C# repo's
+  reindex budget.
+- No CI matrix change. The opt-in eval workflow still runs hybrid
+  only on `python_repo`; the full v1.10.1 matrix is reproducible
+  locally via `benchmarks/eval/run_v1_10_1_matrix.ps1`.
+
+---
+
 ## v1.10.0 — 2026-05-13
 
 Sprint 17 — **cache portability**. Indexes can be exported as tarballs,
