@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from code_context.domain._tier import _classify_path
 from code_context.domain.index_bus import IndexUpdateBus
 from code_context.domain.models import IndexEntry, SearchResult
 from code_context.domain.ports import EmbeddingsProvider, KeywordIndex, Reranker, VectorStore
@@ -68,6 +69,20 @@ class SearchRepoUseCase:
     # persistent layer even if `persistent_cache` is wired — defensive
     # default for callers that forget to pass it.
     model_id: str = ""
+    # Sprint 21 — optional source-tier post-sort on the fused candidate
+    # pool. When `sort_by_tier=True`, after RRF fusion we stable-sort by
+    # (tier_asc, original_rank_asc) so src/ outranks tests/docs/other for
+    # the same fused score. Default False until eval validates a clean win.
+    # Composition flips it to True when cfg.search_rank == "source-first".
+    sort_by_tier: bool = False
+    # The source-tier directory names (e.g. ["src", "lib"]) used by
+    # `_classify_path` to identify tier-0 paths. Empty list means no
+    # path will classify as source (everything falls to tests/docs/other
+    # depending on suffix/extension), so the sort effectively partitions
+    # by tests/docs/other only. Composition reads this from metadata.json
+    # to keep search and find_references in agreement on what counts as
+    # source.
+    source_tiers: list[str] = field(default_factory=list)
     # Initialized to -1 so the very first call (bus.generation == 0)
     # also triggers a reload — covers the cold-start case where the
     # bg indexer hasn't yet published a swap but the active index dir
@@ -168,6 +183,14 @@ class SearchRepoUseCase:
         fused = _rrf_fuse(v_hits, k_hits, k_constant=_RRF_K)
         if scope:
             fused = [(entry, score) for entry, score in fused if entry.chunk.path.startswith(scope)]
+        # Sprint 21 — tier post-sort. Stable sort means within-tier order is
+        # preserved (the prior RRF ranking is the secondary key). Skip when
+        # disabled OR when source_tiers is empty (nothing to rank against —
+        # every file falls to tier 3 "other" and the sort is a no-op).
+        # Applied BEFORE rerank/truncation so the reranker re-scores the
+        # tier-sorted pool and `fused[:top_k]` returns the tier-sorted top.
+        if self.sort_by_tier and self.source_tiers:
+            fused.sort(key=lambda pair: _classify_path(pair[0].chunk.path, self.source_tiers))
         # 4. optional rerank on the top of the fused pool
         if self.reranker is not None and fused:
             rerank_pool = fused[:pool]  # re-score the whole over-fetched pool

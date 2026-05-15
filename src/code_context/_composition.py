@@ -319,6 +319,21 @@ def build_use_cases(
                 exc,
             )
             persistent_cache = None
+
+    # Sprint 21 — read source_tiers ONCE from the active index's metadata.json
+    # so the search use case can apply the tier post-sort. Mirrors the symbol
+    # index path (set_source_tiers fed from _load_source_tiers in the reload
+    # callback). We read at construction time; if a subsequent reindex shifts
+    # the heuristic-derived tiers, the running search instance keeps the old
+    # snapshot until process restart — acceptable for an opt-in feature whose
+    # default is OFF. The list rarely changes between reindexes (it's a
+    # function of top-level repo structure, which is stable).
+    sort_by_tier = cfg.search_rank == "source-first"
+    search_source_tiers: list[str] = []
+    if sort_by_tier:
+        active = indexer.current_index_dir()
+        if active is not None and active.exists():
+            search_source_tiers = _load_source_tiers(active)
     return (
         SearchRepoUseCase(
             embeddings=embeddings,
@@ -330,6 +345,8 @@ def build_use_cases(
             embed_cache_max=cfg.embed_cache_size,
             persistent_cache=persistent_cache,
             model_id=embed_model_id,
+            sort_by_tier=sort_by_tier,
+            source_tiers=search_source_tiers,
         ),
         RecentChangesUseCase(git_source=git_source, repo_root=cfg.repo_root),
         GetSummaryUseCase(introspector=introspector, repo_root=cfg.repo_root),

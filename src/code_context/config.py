@@ -111,6 +111,13 @@ class Config:
     # "natural": skip the post-sort and return raw BM25 order (pre-T8 behavior).
     # Any other value is treated as "source-first" (defensive default).
     symbol_rank: str = "source-first"
+    # Sprint 21 — search_repo source-tier post-sort.
+    # "natural" (default): no tier sort, returns RRF order (pre-Sprint-21).
+    # "source-first": stable-sort by (tier_asc, rrf_rank_asc) — src/ ranks
+    #   above tests/docs/other for the same fused score.
+    # Default is "natural" (opt-in) until eval validates a clean win.
+    # Mirrors `symbol_rank` (Sprint 10 T9) but with the inverse default.
+    search_rank: str = "natural"
     # Sprint 12 T5 — query embed-result cache capacity (default 256).
     # Set CC_EMBED_CACHE_SIZE=0 to disable caching entirely.
     embed_cache_size: int = 256
@@ -230,6 +237,16 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         else:
             embed_cache_persistent = True
 
+    # Sprint 21: CC_SEARCH_RANK. Default "natural" (opt-in to source-first
+    # until eval validates a clean win). Anything other than the two
+    # recognised values falls back to "natural" defensively, mirroring
+    # symbol_rank's defensive shape but with the inverted default.
+    _cc_search_rank_raw = os.environ.get("CC_SEARCH_RANK", "natural").lower()
+    if _cc_search_rank_raw in ("natural", "source-first"):
+        search_rank = _cc_search_rank_raw
+    else:
+        search_rank = "natural"
+
     return Config(
         repo_root=repo_root.resolve(),
         embeddings_provider=embeddings,
@@ -255,6 +272,7 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         watch_debounce_ms=int(os.environ.get("CC_WATCH_DEBOUNCE_MS", "1000")),
         bm25_stop_words=os.environ.get("CC_BM25_STOP_WORDS", "off").lower(),
         symbol_rank=os.environ.get("CC_SYMBOL_RANK", "source-first").lower(),
+        search_rank=search_rank,
         telemetry=telemetry,
         telemetry_endpoint=os.environ.get("CC_TELEMETRY_ENDPOINT"),
         # Negative values are coerced to 0 (disable) — guards against

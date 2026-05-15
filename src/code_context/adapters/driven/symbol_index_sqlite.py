@@ -16,10 +16,18 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from code_context.domain._tier import _classify_path
 from code_context.domain.models import SymbolDef, SymbolRef
 
 if TYPE_CHECKING:
     from code_context.config import Config
+
+# Sprint 21 -- the path-tier classifier moved to `code_context.domain._tier`
+# so both find_references (here) and search_repo can call it. We re-export
+# `_classify_path` from this module to keep its existing test suite compiling
+# without churn (tests/unit/adapters/test_symbol_index_sqlite.py imports it
+# directly). Keep the name reachable; the docstring lives in _tier.py.
+__all__ = ["SymbolIndexSqlite", "_classify_path"]
 
 log = logging.getLogger(__name__)
 
@@ -28,95 +36,12 @@ _DEFS_TABLE = "symbol_defs"
 _REFS_TABLE = "symbol_refs_fts"
 
 # ---------------------------------------------------------------------------
-# Path classification for find_references post-sort (T8)
+# Path classification for find_references post-sort (T8) -- Sprint 21 extracted
+# the classifier into `code_context.domain._tier` so search_repo can use the
+# same helper. `_classify_path` is re-exported from this module (see __all__
+# above) for backward compatibility with the existing tests; the actual
+# definition + constants now live in domain/_tier.py.
 # ---------------------------------------------------------------------------
-
-# Filename suffix patterns that mark a file as a test regardless of directory.
-# Order: check BEFORE source_tiers so a chunk-dense tests/ dir (which T7 might
-# include in source_tiers) still correctly classifies as tests, not source.
-_TEST_FIRST_SEGMENTS: frozenset[str] = frozenset({"tests", "test", "__tests__"})
-
-_TEST_SUFFIXES: tuple[str, ...] = (
-    "_test.py",
-    "_tests.py",
-    ".test.ts",
-    ".test.tsx",
-    ".spec.ts",
-    ".spec.tsx",
-    "_test.go",
-    "_test.rs",
-)
-
-# C# test filename patterns (case-sensitive by convention).
-# Matches:
-#   Suffix forms  — FooTests.cs, FooTest.cs, FooSpec.cs, Foo.Test.cs, Foo.Tests.cs
-#   Prefix form   — TestFoo.cs, TestsHelper.cs, TestBarService.cs (spec T8 gap fix)
-#
-# The prefix alternative (^|/)Tests?[A-Z][^/]*\.cs$ requires a capital letter
-# after "Test/Tests" so that:
-#   - TestFoo.cs       matches  (capital F)
-#   - TestsHelper.cs   matches  (capital H)
-#   - Testimony.cs     does NOT match (lowercase 'i' after 'Test'; not a test pattern)
-#   - Test.cs          does NOT match via this branch (no follow-up char) but the
-#                      first alternative catches it via (Tests?|Spec)(\.cs)$
-_CSHARP_TEST_RE = re.compile(
-    r"(Tests?|Spec)(\.cs)$"
-    r"|"
-    r"\.(Tests?|Spec)\.cs$"
-    r"|"
-    r"(^|/)Tests?[A-Z][^/]*\.cs$"
-)
-
-_DOCS_FIRST_SEGMENTS: frozenset[str] = frozenset({"docs", "doc"})
-_DOCS_EXTENSIONS: frozenset[str] = frozenset({".md", ".rst"})
-
-
-def _classify_path(path: str, source_tiers: list[str]) -> int:
-    """Classify a repo-relative POSIX path into a tier rank.
-
-    Returns:
-        0  — source  (first path segment in source_tiers; not a test/doc)
-        1  — tests   (matches test directory or test filename pattern)
-        2  — docs    (matches docs directory or .md/.rst extension)
-        3  — other   (everything else)
-
-    Tests and docs are checked BEFORE source so a chunk-dense ``tests/``
-    directory (which T7 might include in source_tiers) still classifies
-    as tests rather than source.
-
-    Limitations (heuristic, not exhaustive):
-    - Only the FIRST path segment is checked for directory-level tier
-      classification. Deeply nested test dirs like ``src/internal/tests/``
-      will not be caught by the directory check (though suffix patterns may
-      still catch them for Python/Go/Rust/TS files).
-    - C# class-level test detection is filename-only; it does not inspect
-      ``[TestClass]`` / ``[Fact]`` attributes.
-    """
-    parts = path.split("/")
-    filename = parts[-1]
-    first_segment = parts[0].lower() if parts else ""
-    ext = "." + filename.rsplit(".", 1)[-1] if "." in filename else ""
-
-    # --- Tests (rank 1) — checked first ---
-    if first_segment in _TEST_FIRST_SEGMENTS:
-        return 1
-    if any(filename.endswith(suf) for suf in _TEST_SUFFIXES):
-        return 1
-    if ext == ".cs" and _CSHARP_TEST_RE.search(filename):
-        return 1
-
-    # --- Docs (rank 2) ---
-    if first_segment in _DOCS_FIRST_SEGMENTS:
-        return 2
-    if ext in _DOCS_EXTENSIONS:
-        return 2
-
-    # --- Source (rank 0) ---
-    if parts[0] in source_tiers:
-        return 0
-
-    # --- Other (rank 3) ---
-    return 3
 
 
 # T8 review fix — find_references over-fetches a wide pool to ensure source-tier
