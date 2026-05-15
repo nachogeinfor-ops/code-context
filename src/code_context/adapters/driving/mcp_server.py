@@ -33,8 +33,16 @@ def register(
     find_references: FindReferencesUseCase,
     get_file_tree: GetFileTreeUseCase,
     explain_diff: ExplainDiffUseCase,
+    bg: Any = None,
 ) -> None:
-    """Register the 7 contract tools on the given mcp Server instance."""
+    """Register the 7 contract tools on the given mcp Server instance.
+
+    ``bg`` is the optional BackgroundIndexer instance — present when
+    CC_BG_REINDEX=on (the default). When it's None the `refresh` tool
+    returns a structured "not enabled" error rather than raising, so a
+    client that calls ``refresh`` against a CC_BG_REINDEX=off server
+    gets a meaningful diagnostic instead of an MCP protocol error.
+    """
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
@@ -223,6 +231,19 @@ def register(
                     "required": ["ref"],
                 },
             ),
+            Tool(
+                name="refresh",
+                description=(
+                    "Trigger a background reindex without restarting the server. "
+                    "Blocks until the new index is active (60s timeout). Use after "
+                    "large external changes (git checkout, cache import, file restore)."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -247,6 +268,8 @@ def register(
             return await asyncio.to_thread(_handle_find_references, find_references, arguments)
         if name == "get_file_tree":
             return await asyncio.to_thread(_handle_file_tree, get_file_tree, arguments)
+        if name == "refresh":
+            return await _handle_refresh(bg)
         raise ValueError(f"unknown tool: {name}")
 
 
@@ -364,6 +387,25 @@ def _serialize_tree_node(node) -> dict[str, Any]:
         "children": [_serialize_tree_node(c) for c in node.children],
     }
     return out
+
+
+async def _handle_refresh(bg: Any) -> list[TextContent]:
+    """Sprint 17: trigger a foreground-blocking reindex via the bg thread.
+
+    Off-loads ``bg.trigger_and_wait`` to a worker thread (the call blocks on
+    a threading.Event for up to 60 s) so the asyncio loop stays responsive
+    for other tool calls. When ``bg`` is None — CC_BG_REINDEX=off — returns
+    a structured error instead of raising, so clients see a meaningful
+    diagnostic rather than an MCP protocol error.
+    """
+    if bg is None:
+        payload = {
+            "refreshed": False,
+            "error": "background indexer not enabled (CC_BG_REINDEX=off)",
+        }
+        return [TextContent(type="text", text=_to_json(payload))]
+    ok = await asyncio.to_thread(bg.trigger_and_wait, 60.0)
+    return [TextContent(type="text", text=_to_json({"refreshed": ok}))]
 
 
 async def _handle_explain_diff(uc: ExplainDiffUseCase, args: dict[str, Any]) -> list[TextContent]:

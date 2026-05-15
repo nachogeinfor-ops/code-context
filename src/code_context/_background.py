@@ -57,6 +57,21 @@ class BackgroundIndexer(threading.Thread):
         """
         self._wake.set()
 
+    def trigger_and_wait(self, timeout: float = 60.0) -> bool:
+        """Fire a reindex and block until the bus emits the next swap event.
+
+        Subscribes a one-shot listener on the bus BEFORE calling trigger, so
+        the listener is guaranteed to be in place by the time the worker
+        publishes. Returns True if a swap fired within `timeout`, False on
+        timeout. Does not raise: the caller decides how to handle the
+        timeout (e.g., the CLI prints a warning and returns rc=1, while the
+        MCP tool returns ``{"refreshed": false}``).
+        """
+        swap_event = threading.Event()
+        self._bus.subscribe_once(lambda _new_dir: swap_event.set())
+        self.trigger()
+        return swap_event.wait(timeout)
+
     def stop(self, timeout: float = 5.0) -> None:
         """Signal the worker to exit and join up to `timeout` seconds."""
         self._stop_event.set()

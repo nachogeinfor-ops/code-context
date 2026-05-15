@@ -279,6 +279,64 @@ def test_trigger_without_start_is_noop_until_started(tmp_path: Path) -> None:
         bg.stop(timeout=1.0)
 
 
+def test_trigger_and_wait_returns_true_on_swap(tmp_path: Path) -> None:
+    """trigger_and_wait blocks until bus.publish_swap fires, then returns True.
+
+    Uses a real IndexUpdateBus + a fake indexer that succeeds quickly so a
+    real swap event fires through the worker loop.
+    """
+    bus = IndexUpdateBus()
+    new_dir = tmp_path / "new"
+    new_dir.mkdir()
+    fake = _FakeIndexer(
+        dirty=StaleSet(full_reindex_required=True, reason="initial"),
+        new_dir=new_dir,
+    )
+    bg = BackgroundIndexer(
+        indexer=fake,
+        swap=lambda _d: None,
+        bus=bus,
+        idle_seconds=0.01,
+    )
+    bg.start()
+    try:
+        ok = bg.trigger_and_wait(timeout=2.0)
+        assert ok is True
+        assert fake.run_calls == 1
+        assert bus.generation == 1
+    finally:
+        bg.stop(timeout=1.0)
+
+
+def test_trigger_and_wait_returns_false_on_timeout(tmp_path: Path) -> None:
+    """If no swap fires within the timeout, return False without raising.
+
+    Use a StaleSet that says "no work" so the worker wakes, sees nothing to
+    do, and publishes nothing — guaranteeing the wait times out.
+    """
+    bus = IndexUpdateBus()
+    fake = _FakeIndexer(
+        dirty=StaleSet(full_reindex_required=False, reason="no work"),
+        new_dir=tmp_path,
+    )
+    bg = BackgroundIndexer(
+        indexer=fake,
+        swap=lambda _d: None,
+        bus=bus,
+        idle_seconds=0.01,
+    )
+    bg.start()
+    try:
+        ok = bg.trigger_and_wait(timeout=0.3)
+        assert ok is False
+        # No reindex ran (StaleSet was empty) and no swap fired.
+        assert fake.run_calls == 0
+        assert fake.run_inc_calls == 0
+        assert bus.generation == 0
+    finally:
+        bg.stop(timeout=1.0)
+
+
 # Defensive: make sure no test leaks a thread.
 def test_threads_dont_leak() -> None:
     threads = [t for t in threading.enumerate() if t.name == "code-context-bg-indexer"]

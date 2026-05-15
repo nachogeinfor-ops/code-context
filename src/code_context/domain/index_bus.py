@@ -17,6 +17,7 @@ well-behaved subscribers) holds.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 from collections.abc import Callable
@@ -38,6 +39,25 @@ class IndexUpdateBus:
     def subscribe(self, fn: Callable[[str], None]) -> None:
         with self._lock:
             self._subs.append(fn)
+
+    def subscribe_once(self, fn: Callable[[str], None]) -> None:
+        """Register a callback that fires exactly once on the next publish.
+
+        The bus removes the callback automatically after the first invocation.
+        Useful for `trigger_and_wait` patterns where we want to block until
+        the next swap event without leaving a permanent subscriber.
+        """
+
+        def _once(new_dir: str) -> None:
+            # Defensive remove: another publisher firing the same event in
+            # parallel could race us. ValueError means another thread already
+            # removed _once first — fine, we still want to invoke `fn` once
+            # for *this* event.
+            with self._lock, contextlib.suppress(ValueError):
+                self._subs.remove(_once)
+            fn(new_dir)
+
+        self.subscribe(_once)
 
     def publish_swap(self, new_index_dir: str) -> None:
         with self._lock:

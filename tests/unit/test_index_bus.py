@@ -62,6 +62,34 @@ def test_subscriber_exception_does_not_break_bus() -> None:
     assert bus.generation == 1
 
 
+def test_subscribe_once_fires_exactly_once() -> None:
+    """A subscribe_once callback fires on the next publish, then auto-removes
+    itself; further publishes do not invoke it again."""
+    bus = IndexUpdateBus()
+    seen: list[str] = []
+    bus.subscribe_once(lambda d: seen.append(d))
+    bus.publish_swap("/tmp/x")
+    assert seen == ["/tmp/x"]
+    bus.publish_swap("/tmp/y")
+    assert seen == ["/tmp/x"]
+    bus.publish_swap("/tmp/z")
+    assert seen == ["/tmp/x"]
+
+
+def test_subscribe_once_does_not_break_regular_subscribers() -> None:
+    """subscribe_once must not interfere with permanent subscribers — both
+    fire on the first publish, only the permanent one fires on the second."""
+    bus = IndexUpdateBus()
+    once_seen: list[str] = []
+    perm_seen: list[str] = []
+    bus.subscribe(lambda d: perm_seen.append(d))
+    bus.subscribe_once(lambda d: once_seen.append(d))
+    bus.publish_swap("/tmp/a")
+    bus.publish_swap("/tmp/b")
+    assert once_seen == ["/tmp/a"]
+    assert perm_seen == ["/tmp/a", "/tmp/b"]
+
+
 def test_concurrent_publishes_are_threadsafe() -> None:
     """Publish from many threads; generation count and subscriber receipts
     must reflect every event without lost updates."""

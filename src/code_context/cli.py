@@ -7,7 +7,13 @@ import json
 import logging
 import shutil
 import sys
+from pathlib import Path
 
+from code_context._cache_io import (
+    IncompatibleCacheError,
+    export_cache,
+    import_cache,
+)
 from code_context._composition import (
     build_indexer_and_store,
     build_use_cases,
@@ -162,7 +168,88 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return doctor_main(cfg)
 
 
-def main() -> int:
+def _cmd_cache_export(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    setup_logging(cfg)
+    try:
+        manifest = export_cache(cfg, args.output)
+    except FileNotFoundError as exc:
+        print(
+            f"error: {exc}\nrun `code-context reindex` first to build an active index.",
+            file=sys.stderr,
+        )
+        return 1
+    size_mb = args.output.stat().st_size / (1024 * 1024)
+    print(
+        f"exported {manifest.n_chunks} chunks across {manifest.n_files} files "
+        f"({size_mb:.1f} MB) -> {args.output}"
+    )
+    return 0
+
+
+def _cmd_cache_import(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    setup_logging(cfg)
+    try:
+        manifest = import_cache(cfg, args.input, force=args.force)
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except IncompatibleCacheError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        # _safe_member_name path-traversal rejection
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(
+        f"imported {manifest.n_chunks} chunks across {manifest.n_files} files "
+        f"from {args.input}"
+    )
+    return 0
+
+
+def _cmd_refresh(args: argparse.Namespace) -> int:
+    """Trigger a reindex and wait for it to complete.
+
+    Standalone CLI flow (no long-running server): spin up a BackgroundIndexer,
+    fire one reindex, wait for the swap, shut down. Useful after running
+    `cache import` to integrate the imported index into a fresh state, or
+    after a large external file change you want the next query to see.
+    """
+    cfg = load_config()
+    setup_logging(cfg)
+
+    from code_context._background import BackgroundIndexer  # lazy
+    from code_context._composition import atomic_swap_current  # lazy
+    from code_context.domain.index_bus import IndexUpdateBus  # lazy
+
+    indexer, _, _, _, _ = build_indexer_and_store(cfg)
+    bus = IndexUpdateBus()
+    bg = BackgroundIndexer(
+        indexer=indexer,
+        swap=lambda new: atomic_swap_current(cfg, new),
+        bus=bus,
+        idle_seconds=0.0,
+    )
+    bg.start()
+    try:
+        ok = bg.trigger_and_wait(timeout=args.timeout)
+    finally:
+        bg.stop(timeout=5.0)
+
+    if ok:
+        print("refreshed.")
+        return 0
+    print(
+        f"refresh did not complete within {args.timeout}s; the reindex may "
+        f"still be running in the background.",
+        file=sys.stderr,
+    )
+    return 1
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="code-context", description="code-context CLI")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -193,7 +280,44 @@ def main() -> int:
     )
     d.set_defaults(func=_cmd_doctor)
 
-    args = parser.parse_args()
+    cache = sub.add_parser(
+        "cache", help="Cache portability — export/import the active index"
+    )
+    cache_sub = cache.add_subparsers(dest="cache_cmd", required=True)
+
+    ce = cache_sub.add_parser("export", help="Export the active index to a tarball")
+    ce.add_argument(
+        "--output",
+        required=True,
+        type=Path,
+        help="Output bundle path (e.g. cache.tar.gz)",
+    )
+    ce.set_defaults(func=_cmd_cache_export)
+
+    ci = cache_sub.add_parser(
+        "import", help="Import a cache bundle into the per-repo cache"
+    )
+    ci.add_argument("input", type=Path, help="Bundle path")
+    ci.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip the version-compatibility check. Use only when you know the runtime matches.",
+    )
+    ci.set_defaults(func=_cmd_cache_import)
+
+    ref = sub.add_parser(
+        "refresh",
+        help="Trigger a reindex and wait until the new index is active",
+    )
+    ref.add_argument(
+        "--timeout",
+        type=float,
+        default=60.0,
+        help="Wait up to N seconds for the reindex to complete (default: 60).",
+    )
+    ref.set_defaults(func=_cmd_refresh)
+
+    args = parser.parse_args(argv)
     return int(args.func(args))
 
 

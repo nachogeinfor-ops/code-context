@@ -230,6 +230,7 @@ async def _run_server(cfg: Config) -> None:
         find_references=find_ref,
         get_file_tree=file_tree,
         explain_diff=explain_diff,
+        bg=bg,  # may be None when CC_BG_REINDEX=off
     )
 
     if first_run:

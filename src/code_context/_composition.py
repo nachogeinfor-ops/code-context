@@ -112,6 +112,62 @@ class _NullSymbolIndex:
         pass
 
 
+# ---------------------------------------------------------------------------
+# Sprint 17 Task 2 — runtime version helpers.
+#
+# These compute the SAME version strings the indexer writes to metadata.json
+# without triggering any model load: every adapter exposes its `version` /
+# `model_id` as a pure property (LocalST.model_id is a derived string from
+# importlib.metadata, ChunkerDispatcher.version composes its sub-versions,
+# the two SQLite adapters embed sqlite3.sqlite_version). The cache importer
+# uses these to refuse cross-runtime bundles unless --force is passed.
+#
+# Critically: do NOT call `build_embeddings` for the openai branch from here,
+# because that function `sys.exit(1)`s when OPENAI_API_KEY is unset. The
+# version string for the OpenAI provider depends only on the model name and
+# the installed `openai` package version, so we mirror that branch inline.
+# ---------------------------------------------------------------------------
+
+
+def _embeddings_model_id(cfg: Config) -> str:
+    """Return the model_id the LIVE runtime would write to metadata.json.
+
+    Mirrors `LocalST.model_id` / `OpenAIProvider.model_id` formatting without
+    constructing the OpenAI provider (which requires an API key and would
+    sys.exit on missing OPENAI_API_KEY) or loading any model weights.
+    """
+    if cfg.embeddings_provider == "openai":
+        # Mirror OpenAIProvider.model_id formatting without instantiating it.
+        from code_context.adapters.driven.embeddings_openai import (  # noqa: PLC0415 — lazy
+            _lib_version,
+        )
+
+        model = cfg.embeddings_model or "text-embedding-3-small"
+        return f"openai:{model}@v{_lib_version()}"
+    # Local path: LocalST.__init__ is lightweight (no weight load) and its
+    # model_id property is a pure derived string.
+    return LocalST(
+        model_name=cfg.embeddings_model or "all-MiniLM-L6-v2",
+        trust_remote_code=cfg.trust_remote_code,
+        batch_size=cfg.embed_batch_size,
+    ).model_id
+
+
+def _chunker_version(cfg: Config) -> str:
+    """Return the version the LIVE chunker would publish."""
+    return build_chunker(cfg).version
+
+
+def _keyword_index_version(cfg: Config) -> str:
+    """Return the version the LIVE keyword index would publish."""
+    return build_keyword_index(cfg).version
+
+
+def _symbol_index_version(cfg: Config) -> str:
+    """Return the version the LIVE symbol index would publish."""
+    return build_symbol_index(cfg).version
+
+
 def build_embeddings(cfg: Config) -> EmbeddingsProvider:
     if cfg.embeddings_provider == "openai":
         if not cfg.openai_api_key:
