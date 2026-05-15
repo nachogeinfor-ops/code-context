@@ -24,6 +24,7 @@ import asyncio
 import atexit
 import logging
 import sys
+from collections.abc import Callable
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -204,15 +205,27 @@ async def _run_server(cfg: Config) -> None:
 
     watcher = None
     if cfg.watch and bg is not None:
+        # Sprint 20 — when watch_git_ops is on (default), pass an extra
+        # callback that triggers a FULL reindex on `.git/HEAD` change.
+        # The lambda captures bg by name (not by closure-over-frame) so
+        # it stays valid for the watcher's lifetime.
+        bg_for_git = bg  # explicit alias makes the lambda's intent obvious
+        on_git_change: Callable[[], None] | None = (
+            (lambda: bg_for_git.trigger(full_reindex=True))
+            if cfg.watch_git_ops
+            else None
+        )
         watcher = RepoWatcher(
             root=cfg.repo_root,
             on_change=bg.trigger,
             debounce_ms=cfg.watch_debounce_ms,
+            on_git_change=on_git_change,
         )
         watcher.start()
         log.info(
-            "repo watcher armed (CC_WATCH=on, debounce=%dms)",
+            "repo watcher armed (CC_WATCH=on, debounce=%dms, git_ops=%s)",
             cfg.watch_debounce_ms,
+            "on" if cfg.watch_git_ops else "off",
         )
     elif cfg.watch and bg is None:
         log.warning(

@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from code_context.domain.index_bus import IndexUpdateBus
+from code_context.domain.models import StaleSet
 
 log = logging.getLogger(__name__)
 
@@ -48,13 +49,33 @@ class BackgroundIndexer(threading.Thread):
         self._idle = idle_seconds
         self._wake = threading.Event()
         self._stop_event = threading.Event()
+        # Sprint 20 — sticky "next reindex must be full" flag. Set by
+        # `trigger(full_reindex=True)` (the git-aware watcher's path).
+        # Consumed (cleared) by `_reindex_once()` at the start of each
+        # reindex so it doesn't bleed into the next one. Multiple
+        # triggers with the flag coalesce into the same one full
+        # reindex; a flag=True trigger followed by flag=False triggers
+        # while the worker is still idle keeps the True (any True
+        # wins — incremental can never undo a forced full).
+        self._force_full: bool = False
 
-    def trigger(self) -> None:
+    def trigger(self, full_reindex: bool = False) -> None:
         """Ask the worker thread to run a reindex.
 
         Idempotent within an idle window: 5 rapid triggers coalesce
         into one job because the Event is sticky until consumed.
+
+        Sprint 20: when ``full_reindex=True``, the next reindex
+        replaces whatever ``dirty_set()`` reports with a full-reindex
+        verdict. Used by the git-aware watcher — a `git checkout`
+        already invalidated most of the index, so running 300
+        incrementals one-at-a-time is strictly slower than one full
+        reindex. ``full_reindex=True`` is sticky until consumed: if
+        any trigger in a coalesced burst sets it, the resulting
+        reindex is full.
         """
+        if full_reindex:
+            self._force_full = True
         self._wake.set()
 
     def trigger_and_wait(self, timeout: float = 60.0) -> bool:
@@ -93,7 +114,29 @@ class BackgroundIndexer(threading.Thread):
             self._stop_event.wait(self._idle)
 
     def _reindex_once(self) -> None:
+        # Sprint 20 — consume the sticky force-full flag exactly once
+        # per reindex. Read-and-clear BEFORE calling dirty_set() so a
+        # trigger(full_reindex=True) arriving DURING dirty_set() is
+        # honored on the NEXT iteration (not silently swallowed by
+        # the clear). Acceptable: the next iteration runs immediately
+        # after the current swap because the wake event is sticky.
+        force_full = self._force_full
+        self._force_full = False
+
         stale = self._indexer.dirty_set()
+
+        if force_full and not stale.full_reindex_required:
+            # Override the verdict so the branch below picks .run()
+            # over .run_incremental(). We keep the reason informative
+            # so observers (logs, telemetry) can see WHY this was
+            # promoted to a full reindex.
+            stale = StaleSet(
+                full_reindex_required=True,
+                reason="git operation detected (force_full)",
+                dirty_files=(),
+                deleted_files=(),
+            )
+
         no_work = (
             not stale.full_reindex_required and not stale.dirty_files and not stale.deleted_files
         )

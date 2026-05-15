@@ -94,6 +94,15 @@ class Config:
     # the [watch] extra installed).
     watch: bool = False
     watch_debounce_ms: int = 1000
+    # Sprint 20 — when CC_WATCH is on, also react to git operations
+    # (.git/HEAD changes from `git checkout` / `git pull` / `git rebase`
+    # / `git commit`) by triggering a single full reindex instead of
+    # letting the per-file event storm from the working-tree update
+    # spam N incrementals. No-op when CC_WATCH=off. Default ON: this
+    # is a strict improvement when the watcher is already enabled, so
+    # there's no risk to default users; the risk is upside-only
+    # (faster reindex on checkout).
+    watch_git_ops: bool = True
     # Sprint 10 T5 — BM25 stop-word filter configuration.
     # "off" (default): no filtering — query passes through to FTS5 unchanged.
     # "on": use the hard-coded _STOP_WORDS frozenset.
@@ -264,6 +273,19 @@ def load_config(default_repo_root: Path | None = None) -> Config:
     _cc_symbol_rerank_raw = os.environ.get("CC_SYMBOL_RERANK", "off").strip().lower()
     symbol_rerank = _cc_symbol_rerank_raw in ("on", "true", "1")
 
+    # Sprint 20: CC_WATCH_GIT_OPS. Default ON (strict improvement when
+    # the watcher is already active; no-op when CC_WATCH=off). We accept
+    # the canonical truthy/falsy shapes and fall back to True on
+    # anything unrecognised — keeps the default ON for users who typo
+    # the env var (mirrors CC_EMBED_CACHE_PERSISTENT's defensive fallback).
+    _cc_watch_git_ops_raw = os.environ.get("CC_WATCH_GIT_OPS")
+    if _cc_watch_git_ops_raw is None:
+        watch_git_ops = True
+    else:
+        # off/false/0 → False; on/true/1 AND any unrecognised value → True.
+        _val = _cc_watch_git_ops_raw.strip().lower()
+        watch_git_ops = _val not in ("off", "false", "0")
+
     return Config(
         repo_root=repo_root.resolve(),
         embeddings_provider=embeddings,
@@ -287,6 +309,7 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         bg_idle_seconds=float(os.environ.get("CC_BG_IDLE_SECONDS", "1.0")),
         watch=os.environ.get("CC_WATCH", "off").lower() in ("on", "true", "1"),
         watch_debounce_ms=int(os.environ.get("CC_WATCH_DEBOUNCE_MS", "1000")),
+        watch_git_ops=watch_git_ops,
         bm25_stop_words=os.environ.get("CC_BM25_STOP_WORDS", "off").lower(),
         symbol_rank=os.environ.get("CC_SYMBOL_RANK", "source-first").lower(),
         symbol_rerank=symbol_rerank,

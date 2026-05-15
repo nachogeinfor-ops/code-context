@@ -481,6 +481,15 @@ behavior). The default is on.
 - **`CC_WATCH_DEBOUNCE_MS=1000`** — watcher's debounce window for
   rapid save events. Same idea: collapse 5 quick saves into one
   trigger.
+- **`CC_WATCH_GIT_OPS=on`** (default) — when the watcher is active,
+  also react to git operations (`.git/HEAD` changes from `git
+  checkout` / `git pull` / `git rebase` / `git commit`) by triggering
+  a **single full reindex** instead of letting the per-file event
+  storm from the working-tree update spam N incrementals. Suppresses
+  per-file events for 5 s after a HEAD change. No-op when
+  `CC_WATCH=off`. Set to `off` to fall back to the pre-Sprint-20
+  behaviour where every working-tree file event from a checkout
+  flows through the normal debounce path.
 
 ### Live mode (`CC_WATCH=on`)
 

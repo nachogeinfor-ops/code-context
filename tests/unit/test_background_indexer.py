@@ -337,6 +337,157 @@ def test_trigger_and_wait_returns_false_on_timeout(tmp_path: Path) -> None:
         bg.stop(timeout=1.0)
 
 
+# ---------------------------------------------------------------------------
+# Sprint 20 — full_reindex flag on trigger()
+# ---------------------------------------------------------------------------
+
+
+def test_trigger_full_reindex_forces_full_when_dirty_set_says_incremental(
+    tmp_path: Path,
+) -> None:
+    """``trigger(full_reindex=True)`` overrides an incremental verdict
+    from ``dirty_set()`` and routes through ``indexer.run()`` instead.
+
+    Models the Sprint 20 git-aware watcher's path: after a ``git
+    checkout``, ``dirty_set()`` will report ~300 dirty files; the
+    watcher promotes this to a full reindex because 300 incrementals
+    are slower than one full pass.
+    """
+    bus = IndexUpdateBus()
+    new_dir = tmp_path / "new"
+    new_dir.mkdir()
+    fake = _FakeIndexer(
+        dirty=StaleSet(
+            full_reindex_required=False,
+            reason="incremental",
+            dirty_files=(tmp_path / "x.py",),
+        ),
+        new_dir=new_dir,
+    )
+    bg = BackgroundIndexer(
+        indexer=fake,
+        swap=lambda _d: None,
+        bus=bus,
+        idle_seconds=0.01,
+    )
+    bg.start()
+    try:
+        bg.trigger(full_reindex=True)
+        assert _wait_until(lambda: fake.run_calls == 1)
+        # Forced full path → run() was called, run_incremental() was NOT.
+        assert fake.run_inc_calls == 0
+        assert _wait_until(lambda: bus.generation == 1)
+    finally:
+        bg.stop(timeout=1.0)
+
+
+def test_trigger_full_reindex_is_sticky_across_coalesced_triggers(
+    tmp_path: Path,
+) -> None:
+    """A ``trigger(full_reindex=True)`` followed by plain ``trigger()``
+    calls (all within the same idle window, before the worker
+    consumes) results in ONE reindex — and it's the FULL one.
+
+    Mirrors the existing ``test_burst_before_run_starts_coalesces_to_one``
+    but layered with the force-full flag.
+    """
+    bus = IndexUpdateBus()
+    new_dir = tmp_path / "y"
+    new_dir.mkdir()
+    fake = _FakeIndexer(
+        dirty=StaleSet(
+            full_reindex_required=False,
+            reason="incremental",
+            dirty_files=(tmp_path / "f.py",),
+        ),
+        new_dir=new_dir,
+        slow=0.05,  # gives our triggers room to land before the worker wakes
+    )
+    bg = BackgroundIndexer(
+        indexer=fake,
+        swap=lambda _d: None,
+        bus=bus,
+        idle_seconds=0.05,
+    )
+    bg.start()
+    try:
+        bg.trigger(full_reindex=True)
+        bg.trigger()  # plain trigger after the force — still full
+        bg.trigger()
+        assert _wait_until(lambda: fake.run_calls == 1)
+        time.sleep(0.2)  # idle window passes; no extras
+        assert fake.run_calls == 1
+        assert fake.run_inc_calls == 0
+    finally:
+        bg.stop(timeout=2.0)
+
+
+def test_trigger_full_reindex_clears_after_consumed(tmp_path: Path) -> None:
+    """The ``_force_full`` flag is consumed (cleared) by the reindex
+    that honors it. A subsequent plain ``trigger()`` does NOT re-run
+    a full reindex.
+    """
+    bus = IndexUpdateBus()
+    new_dir = tmp_path / "z"
+    new_dir.mkdir()
+    fake = _FakeIndexer(
+        dirty=StaleSet(
+            full_reindex_required=False,
+            reason="incremental",
+            dirty_files=(tmp_path / "f.py",),
+        ),
+        new_dir=new_dir,
+    )
+    bg = BackgroundIndexer(
+        indexer=fake,
+        swap=lambda _d: None,
+        bus=bus,
+        idle_seconds=0.01,
+    )
+    bg.start()
+    try:
+        # First: forced full.
+        bg.trigger(full_reindex=True)
+        assert _wait_until(lambda: fake.run_calls == 1)
+        # Second: plain trigger should run incremental (verdict says so).
+        bg.trigger()
+        assert _wait_until(lambda: fake.run_inc_calls == 1)
+        # Full only ran once.
+        assert fake.run_calls == 1
+    finally:
+        bg.stop(timeout=1.0)
+
+
+def test_trigger_full_reindex_respects_existing_full_verdict(
+    tmp_path: Path,
+) -> None:
+    """If ``dirty_set()`` already says ``full_reindex_required=True``,
+    passing ``full_reindex=True`` is a no-op — the reindex still
+    runs the full path. The reason string from dirty_set() is
+    preserved (we only override the verdict when it disagrees).
+    """
+    bus = IndexUpdateBus()
+    new_dir = tmp_path / "w"
+    new_dir.mkdir()
+    fake = _FakeIndexer(
+        dirty=StaleSet(full_reindex_required=True, reason="no current index"),
+        new_dir=new_dir,
+    )
+    bg = BackgroundIndexer(
+        indexer=fake,
+        swap=lambda _d: None,
+        bus=bus,
+        idle_seconds=0.01,
+    )
+    bg.start()
+    try:
+        bg.trigger(full_reindex=True)
+        assert _wait_until(lambda: fake.run_calls == 1)
+        assert fake.run_inc_calls == 0
+    finally:
+        bg.stop(timeout=1.0)
+
+
 # Defensive: make sure no test leaks a thread.
 def test_threads_dont_leak() -> None:
     threads = [t for t in threading.enumerate() if t.name == "code-context-bg-indexer"]
