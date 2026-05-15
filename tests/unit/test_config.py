@@ -223,6 +223,41 @@ def test_symbol_rank_env_var_is_lowercased(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Sprint 22 — CC_SYMBOL_RERANK env var (find_references cross-encoder rerank)
+# ---------------------------------------------------------------------------
+
+
+def test_symbol_rerank_default_is_off(tmp_path: Path) -> None:
+    """Sprint 22: env unset -> symbol_rerank is False (opt-in)."""
+    with patch.dict(os.environ, {}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.symbol_rerank is False
+
+
+def test_symbol_rerank_on_via_env(tmp_path: Path) -> None:
+    """Sprint 22: on/true/1 all enable symbol_rerank."""
+    for v in ("on", "true", "1", "ON", "True"):
+        with patch.dict(os.environ, {"CC_SYMBOL_RERANK": v}, clear=True):
+            assert load_config(default_repo_root=tmp_path).symbol_rerank is True
+
+
+def test_symbol_rerank_off_via_env(tmp_path: Path) -> None:
+    """Sprint 22: off/false/0/empty all leave symbol_rerank disabled."""
+    for v in ("off", "false", "0", "", "OFF"):
+        with patch.dict(os.environ, {"CC_SYMBOL_RERANK": v}, clear=True):
+            assert load_config(default_repo_root=tmp_path).symbol_rerank is False
+
+
+def test_symbol_rerank_unrecognised_falls_back_to_off(tmp_path: Path) -> None:
+    """Sprint 22: garbage values fall back to off defensively (matches
+    the CC_RERANK shape — unrecognised tokens never accidentally enable
+    a latency-affecting feature)."""
+    with patch.dict(os.environ, {"CC_SYMBOL_RERANK": "banana"}, clear=True):
+        cfg = load_config(default_repo_root=tmp_path)
+    assert cfg.symbol_rerank is False
+
+
+# ---------------------------------------------------------------------------
 # T2 — CC_TELEMETRY + CC_TELEMETRY_ENDPOINT env vars (Sprint 12.5)
 # ---------------------------------------------------------------------------
 

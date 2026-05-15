@@ -164,6 +164,22 @@ class Reranker(Protocol):
     ) -> list[tuple[IndexEntry, float]]:
         """Returns the top-k candidates re-scored by the reranker, descending."""
 
+    def rerank_symbols(
+        self,
+        query: str,
+        candidates: list[SymbolRef],
+        k: int,
+    ) -> list[SymbolRef]:
+        """Like rerank() but for SymbolRef pools; same model, same call shape.
+
+        Sprint 22 — find_references can over-fetch a candidate pool of
+        SymbolRefs and re-order them by (query, snippet) cross-encoder
+        score. Returns the top-k SymbolRefs descending by reranker score.
+        Empty pool short-circuits to []. Existing per-line snippet text
+        from SymbolRef.snippet is fed to the model unchanged (already
+        trimmed to ~200 chars by the symbol index adapter).
+        """
+
 
 class SymbolIndex(Protocol):
     """Index of named symbols (definitions + textual references).

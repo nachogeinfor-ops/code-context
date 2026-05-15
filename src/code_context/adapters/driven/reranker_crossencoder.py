@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from code_context.domain.models import IndexEntry
+from code_context.domain.models import IndexEntry, SymbolRef
 
 log = logging.getLogger(__name__)
 
@@ -102,3 +102,34 @@ class CrossEncoderReranker:
         scored = [(c[0], float(s)) for c, s in zip(candidates, scores, strict=True)]
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:k]
+
+    def rerank_symbols(
+        self,
+        query: str,
+        candidates: list[SymbolRef],
+        k: int,
+    ) -> list[SymbolRef]:
+        """Like rerank() but for SymbolRef pools; same model, same call shape.
+
+        Sprint 22 — find_references calls this with the symbol name as the
+        query and a pool of SymbolRefs (already snippet-trimmed by the symbol
+        index adapter). Builds (query, snippet) pairs, scores them with the
+        cross-encoder, and returns the top-k SymbolRefs sorted by score desc.
+        Empty pool short-circuits without loading the model.
+        """
+        if not candidates:
+            return []
+        if self._model is None:
+            device = _detect_device()
+            self._model, self._device = _load_model_with_fallback(self.model_name, device)
+        # SymbolRef.snippet is already trimmed to ~200 chars in the adapter,
+        # but mirror the rerank() truncation so this stays safe if that ever
+        # changes upstream.
+        pairs = [(query, ref.snippet[:2048]) for ref in candidates]
+        if self.batch_size is not None:
+            scores = self._model.predict(pairs, batch_size=self.batch_size)
+        else:
+            scores = self._model.predict(pairs)
+        scored = list(zip(candidates, scores, strict=True))
+        scored.sort(key=lambda x: float(x[1]), reverse=True)
+        return [ref for ref, _ in scored[:k]]

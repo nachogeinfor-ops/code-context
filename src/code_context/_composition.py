@@ -334,6 +334,31 @@ def build_use_cases(
         active = indexer.current_index_dir()
         if active is not None and active.exists():
             search_source_tiers = _load_source_tiers(active)
+
+    # Sprint 22 — find_references cross-encoder rerank, opt-in via
+    # CC_SYMBOL_RERANK. When enabled, reuse the search_repo reranker if it
+    # exists (cfg.rerank=True); otherwise build a fresh one so the user
+    # can opt into rerank for find_references without also opting in for
+    # search_repo. Failure to build the reranker (rare, e.g. missing
+    # sentence-transformers) logs a warning and falls back to
+    # pass-through find_references — the feature is opt-in, never fatal.
+    symbol_reranker: Reranker | None = None
+    if cfg.symbol_rerank:
+        if reranker is not None:
+            symbol_reranker = reranker
+        else:
+            try:
+                symbol_reranker = CrossEncoderReranker(
+                    model_name=cfg.rerank_model or _DEFAULT_RERANK_MODEL,
+                    batch_size=cfg.rerank_batch_size,
+                )
+            except Exception as exc:  # noqa: BLE001 — opt-in must never break composition
+                log.warning(
+                    "CC_SYMBOL_RERANK=on but reranker build failed (%s); "
+                    "find_references will pass through",
+                    exc,
+                )
+                symbol_reranker = None
     return (
         SearchRepoUseCase(
             embeddings=embeddings,
@@ -351,7 +376,11 @@ def build_use_cases(
         RecentChangesUseCase(git_source=git_source, repo_root=cfg.repo_root),
         GetSummaryUseCase(introspector=introspector, repo_root=cfg.repo_root),
         FindDefinitionUseCase(symbol_index=symbol_index),
-        FindReferencesUseCase(symbol_index=symbol_index),
+        FindReferencesUseCase(
+            symbol_index=symbol_index,
+            reranker=symbol_reranker,
+            enable_rerank=cfg.symbol_rerank and symbol_reranker is not None,
+        ),
         GetFileTreeUseCase(code_source=code_source, repo_root=cfg.repo_root),
         ExplainDiffUseCase(
             chunker=chunker,

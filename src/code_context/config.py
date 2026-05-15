@@ -111,6 +111,15 @@ class Config:
     # "natural": skip the post-sort and return raw BM25 order (pre-T8 behavior).
     # Any other value is treated as "source-first" (defensive default).
     symbol_rank: str = "source-first"
+    # Sprint 22 — find_references cross-encoder rerank, opt-in.
+    # False (default): pass-through to the symbol index (v1.12.x behaviour).
+    # True: over-fetch 3x max_count from the symbol index and re-order by
+    #   cross-encoder relevance, returning top max_count. Adds ~0.5-1s
+    #   latency on CPU; quality win measured per-repo via eval.
+    # Mirrors `symbol_rank` (Sprint 10 T9) — same CC_SYMBOL_* prefix; the
+    # composition layer builds (or reuses) the same reranker used by
+    # search_repo when this flag is True.
+    symbol_rerank: bool = False
     # Sprint 21 — search_repo source-tier post-sort.
     # "natural" (default): no tier sort, returns RRF order (pre-Sprint-21).
     # "source-first": stable-sort by (tier_asc, rrf_rank_asc) — src/ ranks
@@ -247,6 +256,14 @@ def load_config(default_repo_root: Path | None = None) -> Config:
     else:
         search_rank = "natural"
 
+    # Sprint 22: CC_SYMBOL_RERANK. Default off — pass-through to the
+    # symbol index. on/true/1 enable cross-encoder rerank on find_references.
+    # Any unrecognised value falls back to off defensively (mirrors the
+    # CC_TRUST_REMOTE_CODE / CC_RERANK shape; the off-default is the safe
+    # choice for an opt-in latency-affecting feature).
+    _cc_symbol_rerank_raw = os.environ.get("CC_SYMBOL_RERANK", "off").strip().lower()
+    symbol_rerank = _cc_symbol_rerank_raw in ("on", "true", "1")
+
     return Config(
         repo_root=repo_root.resolve(),
         embeddings_provider=embeddings,
@@ -272,6 +289,7 @@ def load_config(default_repo_root: Path | None = None) -> Config:
         watch_debounce_ms=int(os.environ.get("CC_WATCH_DEBOUNCE_MS", "1000")),
         bm25_stop_words=os.environ.get("CC_BM25_STOP_WORDS", "off").lower(),
         symbol_rank=os.environ.get("CC_SYMBOL_RANK", "source-first").lower(),
+        symbol_rerank=symbol_rerank,
         search_rank=search_rank,
         telemetry=telemetry,
         telemetry_endpoint=os.environ.get("CC_TELEMETRY_ENDPOINT"),

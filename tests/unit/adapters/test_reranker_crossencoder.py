@@ -11,7 +11,7 @@ from code_context.adapters.driven.reranker_crossencoder import (
     _DEFAULT_RERANK_MODEL,
     CrossEncoderReranker,
 )
-from code_context.domain.models import Chunk, IndexEntry
+from code_context.domain.models import Chunk, IndexEntry, SymbolRef
 
 
 def _entry(path: str, snippet: str) -> IndexEntry:
@@ -228,3 +228,132 @@ def test_batch_size_omitted_from_predict_when_none() -> None:
         r.rerank("q", [(_entry("a.py", "x"), 0.5)], k=1)
 
     assert "batch_size" not in captured_kwargs
+
+
+# ---------------------------------------------------------------------------
+# Sprint 22 — rerank_symbols() for find_references pool
+# ---------------------------------------------------------------------------
+
+
+def _ref(path: str, line: int, snippet: str) -> SymbolRef:
+    return SymbolRef(path=path, line=line, snippet=snippet)
+
+
+def test_rerank_symbols_reorders_by_cross_encoder_score() -> None:
+    """Sprint 22: rerank_symbols scores (query, snippet) pairs and returns
+    SymbolRefs sorted by descending score."""
+    fake_model = MagicMock()
+
+    def fake_predict(pairs):
+        # Higher score for the snippet containing "important".
+        return np.array([0.9 if "important" in p[1] else 0.1 for p in pairs])
+
+    fake_model.predict.side_effect = fake_predict
+
+    with patch(f"{_RERANKER_MOD}._load_model", return_value=fake_model):
+        r = CrossEncoderReranker()
+        cands = [
+            _ref("a.py", 1, "trivial code"),  # BM25 said #1
+            _ref("b.py", 2, "important code"),  # BM25 said #2
+        ]
+        out = r.rerank_symbols("important", cands, k=2)
+
+    assert out[0].path == "b.py"  # promoted to top by reranker.
+    assert out[1].path == "a.py"
+
+
+def test_rerank_symbols_returns_top_k() -> None:
+    """k < len(candidates) -> output truncated to k highest-scored refs."""
+    fake_model = MagicMock()
+    fake_model.predict.return_value = np.array([0.5, 0.6, 0.7])
+
+    with patch(f"{_RERANKER_MOD}._load_model", return_value=fake_model):
+        r = CrossEncoderReranker()
+        cands = [
+            _ref("a.py", 1, "x"),
+            _ref("b.py", 2, "y"),
+            _ref("c.py", 3, "z"),
+        ]
+        out = r.rerank_symbols("q", cands, k=2)
+
+    assert len(out) == 2
+    # Highest score is 0.7 (c.py), second 0.6 (b.py).
+    assert [s.path for s in out] == ["c.py", "b.py"]
+
+
+def test_rerank_symbols_k_larger_than_pool_returns_full_sorted_pool() -> None:
+    """k > len(candidates) -> all candidates returned, sorted by score."""
+    fake_model = MagicMock()
+    fake_model.predict.return_value = np.array([0.2, 0.9])
+
+    with patch(f"{_RERANKER_MOD}._load_model", return_value=fake_model):
+        r = CrossEncoderReranker()
+        cands = [
+            _ref("a.py", 1, "low"),
+            _ref("b.py", 2, "high"),
+        ]
+        out = r.rerank_symbols("q", cands, k=10)
+
+    assert len(out) == 2
+    assert [s.path for s in out] == ["b.py", "a.py"]
+
+
+def test_rerank_symbols_empty_returns_empty() -> None:
+    """Empty input short-circuits to [] WITHOUT loading the model."""
+    r = CrossEncoderReranker()
+    assert r.rerank_symbols("q", [], k=5) == []
+    assert r._model is None  # never loaded
+
+
+def test_rerank_symbols_k_zero_returns_empty() -> None:
+    """k=0 -> empty output (model is still called because the empty check
+    is on candidates, not k; but the [:k] slice yields [])."""
+    fake_model = MagicMock()
+    fake_model.predict.return_value = np.array([0.5])
+
+    with patch(f"{_RERANKER_MOD}._load_model", return_value=fake_model):
+        r = CrossEncoderReranker()
+        out = r.rerank_symbols("q", [_ref("a.py", 1, "x")], k=0)
+
+    assert out == []
+
+
+def test_rerank_symbols_passes_batch_size_to_predict() -> None:
+    """When batch_size is set, predict() receives batch_size=N (mirrors rerank)."""
+    captured_kwargs: dict = {}
+
+    def fake_load(model_name: str, device: str) -> MagicMock:
+        fake = MagicMock()
+
+        def fake_predict(pairs, **kwargs):
+            captured_kwargs.update(kwargs)
+            return np.array([0.5] * len(pairs))
+
+        fake.predict.side_effect = fake_predict
+        return fake
+
+    with (
+        patch(f"{_RERANKER_MOD}._load_model", side_effect=fake_load),
+        patch(f"{_RERANKER_MOD}._detect_device", return_value="cpu"),
+    ):
+        r = CrossEncoderReranker(batch_size=8)
+        r.rerank_symbols("q", [_ref("a.py", 1, "x")], k=1)
+
+    assert captured_kwargs.get("batch_size") == 8
+
+
+def test_rerank_symbols_preserves_symbol_ref_fields() -> None:
+    """Output SymbolRefs are the SAME objects from the input pool — no
+    re-wrapping, no field synthesis. The reranker only changes order."""
+    fake_model = MagicMock()
+    fake_model.predict.return_value = np.array([0.5, 0.7])
+
+    with patch(f"{_RERANKER_MOD}._load_model", return_value=fake_model):
+        r = CrossEncoderReranker()
+        ref_a = _ref("a.py", 42, "snippet a")
+        ref_b = _ref("b.py", 99, "snippet b")
+        out = r.rerank_symbols("q", [ref_a, ref_b], k=2)
+
+    # SymbolRef is frozen + hashable; identity holds for the original objects.
+    assert out[0] is ref_b
+    assert out[1] is ref_a
