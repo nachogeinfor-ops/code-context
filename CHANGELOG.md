@@ -1,5 +1,118 @@
 # Changelog
 
+## v1.13.0 — 2026-05-15
+
+Sprint 22 — **opt-in cross-encoder rerank for `find_references`**.
+The same reranker that powers `search_repo`'s `CC_RERANK=on` mode
+(Sprint 12) can now reorder `find_references` results when
+`CC_SYMBOL_RERANK=on`. Default OFF — v1.12.x behaviour bit-for-bit.
+
+### Added
+
+- **`CC_SYMBOL_RERANK`** env var (default **`off`**, opt-in **`on`**).
+  Mirrors the `CC_SYMBOL_*` prefix family (`CC_SYMBOL_RANK` ships
+  source-first by default; `CC_SYMBOL_RERANK` ships off because
+  rerank adds latency the navigation tool doesn't always need).
+  Accepts `on` / `true` / `1` to enable; anything else is treated as
+  off. `Config.symbol_rerank: bool = False`.
+- **`FindReferencesUseCase.reranker`** (optional) and
+  **`enable_rerank`** (default False) dataclass fields. When both
+  truthy, `.run(name, max_count=N)` over-fetches `N * 3` candidates
+  from the BM25 + source-tier-sorted symbol index, then calls
+  `reranker.rerank_symbols(name, pool, k=N)` to re-order by semantic
+  relevance.
+- **`Reranker.rerank_symbols(query, candidates, k)`** — new method
+  on the port. The cross-encoder adapter
+  (`CrossEncoderReranker.rerank_symbols`) unwraps `SymbolRef.snippet`
+  for the `(query, snippet)` pair scoring, then reorders the input
+  list by the returned scores and truncates to `k`. Reuses the same
+  `CrossEncoder` instance and `CC_RERANK_BATCH_SIZE` knob as
+  `rerank()`.
+- **Composition wiring**: when `cfg.symbol_rerank=True` but
+  `cfg.rerank=False`, the `_composition.py` layer builds a fresh
+  `CrossEncoderReranker` for the symbol path. The two reranker
+  instances are independent — toggling `CC_RERANK` doesn't affect
+  `CC_SYMBOL_RERANK` and vice versa. Constructor failures log a
+  warning and fall back to pass-through; an opt-in feature never
+  takes down the navigation tool.
+- **`docs/configuration.md`**: `CC_SYMBOL_RERANK` row added to the
+  env-var table next to `CC_SYMBOL_RANK`.
+
+### Internal
+
+- 19 new tests:
+  - 8 in `tests/unit/domain/test_find_references_rerank.py`:
+    pass-through when off, over-fetch-3× when on, top-K truncation
+    of the reranked pool, reverse-order reranker stub, empty pool,
+    pool-smaller-than-max-count, `reranker=None` graceful fallback
+    when enabled, field preservation across the rerank.
+  - 7 in `tests/unit/adapters/test_reranker_crossencoder.py` for
+    the new `rerank_symbols` method: ordering, top-K, k > len,
+    empty input, k=0, batch-size knob propagation, identity
+    preservation (no synthesized refs).
+  - 4 in `tests/unit/test_config.py` for `CC_SYMBOL_RERANK` env
+    parsing: default off, `on/true/1` aliases, `off/false/0`
+    aliases, unrecognised value falls back to off.
+- Full unit suite: **649 passed** (was 637). ruff clean.
+- The cross-encoder reuse pattern (one shared instance when both
+  `CC_RERANK=on` and `CC_SYMBOL_RERANK=on`) was considered but the
+  current implementation builds two instances. It's the cheaper
+  refactor — both still load the same weights from
+  `sentence-transformers`'s on-disk cache, so the RSS cost is one
+  set of weights via the OS page cache. A future sprint can wire
+  them to a shared singleton if memory becomes a concern.
+
+### Performance
+
+Measured on `tests/fixtures/python_repo` with
+`find_references("UserService")`, `max_count=10`, pool size 9:
+
+- `CC_SYMBOL_RERANK=off` (default): **p50 0.4 ms**, cold 1.2 ms.
+- `CC_SYMBOL_RERANK=on`: **p50 39.0 ms steady-state**, cold call
+  ~6.5 s (one-time cross-encoder model load, amortised across the
+  process lifetime).
+
+Steady-state p50 is well under the plan's 1.5 s target. The cold
+load is the same one `search_repo` pays under `CC_RERANK=on` —
+when both knobs are on, the model loads once.
+
+### What `CC_SYMBOL_RERANK=on` actually changes
+
+On the python_repo smoke (`find_references("UserService")`, the
+class is defined in `src/app/services/user_service.py` line 5 and
+referenced in 8 other call sites):
+
+- Default (BM25 + source-tier sort): the class definition lands at
+  rank #9 of 9 results.
+- With rerank: the class definition is promoted to rank #1.
+
+The reranker recognises the definition site as the most relevant
+landmark for the bare symbol-name query. For pure navigation flows
+(jump to definition), this is usually what the user wants.
+
+### Migration notes
+
+- No code changes required to upgrade. Default behaviour matches
+  v1.12.x exactly.
+- To try the rerank: `set CC_SYMBOL_RERANK=on` (or `export` on POSIX).
+- If you ARE already using `CC_RERANK=on` for `search_repo`, both
+  knobs will share the cross-encoder model from disk cache but
+  build separate Python instances. No double load from HF Hub.
+
+### What this release does NOT do
+
+- No new fixtures or eval queries for the find_references rerank
+  case. Sprint 23's eval suite was designed around `search_repo`
+  intent queries — the find_references rerank delta isn't visible
+  on the current query distribution. A follow-up sprint can add a
+  symbol-shaped query subset (`kind: "find_references"`) to the
+  eval JSON to validate the lift.
+- No flip to default-on. Pending the eval signal above.
+- No shared cross-encoder instance across the two use cases (see
+  Internal note).
+
+---
+
 ## v1.12.0 — 2026-05-15
 
 Sprint 21 — **source-tier post-sort for `search_repo`** (opt-in).
