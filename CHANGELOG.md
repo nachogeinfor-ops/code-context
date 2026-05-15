@@ -1,5 +1,119 @@
 # Changelog
 
+## v1.14.0 — 2026-05-15
+
+Sprint 20 — **git-aware file watcher**. When the optional watcher is
+on, a `git checkout` / `git pull` / `git rebase` that touches 300
+files now produces **one full reindex** instead of N incrementals.
+The watcher detects `.git/HEAD` modifications, triggers a single
+full reindex job, and suppresses per-file events for 5 s while the
+working-tree update settles.
+
+### Added
+
+- **`CC_WATCH_GIT_OPS`** env var (default **`on`**). Only meaningful
+  when `CC_WATCH=on` (the file watcher requires the `[watch]` extra).
+  When both are on, `.git/HEAD` modifications and creations trigger
+  a single full reindex via `BackgroundIndexer.trigger(full_reindex=
+  True)`. Set `CC_WATCH_GIT_OPS=off` to disable and fall back to the
+  v1.13.x behaviour where each post-checkout file event is debounced
+  and processed individually. `Config.watch_git_ops: bool = True`.
+- **`RepoWatcher.on_git_change` callback**. Optional constructor
+  parameter; when set, the watcher distinguishes HEAD events from
+  ordinary source events. HEAD modifications and creations fire
+  `on_git_change()` immediately (no debounce — git ops are atomic
+  and we want the reindex to start in parallel with any
+  working-tree noise that follows). Path matching uses
+  `Path.resolve()` on both sides for Windows / Linux portability.
+- **`BackgroundIndexer.trigger(full_reindex=False)` parameter**.
+  When `True`, the next reindex job overrides whatever
+  `IndexerUseCase.dirty_set()` returned and runs a full reindex
+  instead of an incremental. Sticky across coalesced triggers: a
+  burst that includes one `trigger(full_reindex=True)` and ten
+  `trigger()` calls resolves to a single full reindex. The flag is
+  read-and-cleared in `_reindex_once()` BEFORE `dirty_set()` so a
+  trigger arriving mid-reindex is honoured on the next iteration.
+
+### Why this matters
+
+A `git checkout main` on a 300-file branch fires ~300 watchdog
+events. Today's debounce coalesces them into ONE incremental
+reindex that processes each changed file independently:
+
+- Hash 300 files (fast, but I/O-bound).
+- Re-chunk + re-embed every changed chunk (the slow part —
+  embedding cost is per-chunk, not per-file).
+
+A full reindex on the same 300-file repo is:
+
+- Walk + hash the whole tree (same I/O).
+- Re-chunk + re-embed every chunk (same embedding cost).
+
+Roughly equivalent total CPU, but the full path is **simpler,
+predictable, and runs in one job** instead of N debounced
+processings. More importantly, after a `git checkout` the index's
+notion of "what files exist" can be stale — files that exist on
+the old branch but not the new one need to be DELETED, and the
+incremental path doesn't always catch every deletion in a single
+debounce window. Full reindex is correct-by-construction.
+
+### Internal
+
+- 16 new tests:
+  - 12 in `tests/unit/test_watcher_git.py`: HEAD modify fires
+    `on_git_change`; HEAD create also fires (atomic-rename case on
+    some platforms); file events during the 5 s suppress window are
+    ignored; file events AFTER the window fire `on_change` again;
+    no-`on_git_change`-callback falls back to legacy debounce
+    behaviour; non-HEAD events under `.git/refs/heads/` do NOT
+    fire; a watched dir without a `.git/` directory is safe; a
+    second HEAD event during the suppress window re-arms it; `stop()`
+    disarms; directory events are skipped; deleted-event-type
+    HEAD events do NOT fire (only modify + create); callback
+    exceptions are swallowed and logged.
+  - 4 in `tests/unit/test_background_indexer.py` covering the new
+    sticky `_force_full` flag: forces full even when `dirty_set()`
+    says incremental; sticky across coalesced triggers (one full
+    reindex, not two); flag clears after consumption; no-op when
+    the verdict already says full.
+- Full unit suite: **665 passed** (was 649). ruff clean.
+- The HEAD path is computed at watcher construction (`<root>/.git/HEAD`
+  resolved once) and compared per-event by string equality of the
+  resolved event path. If `.git/HEAD` doesn't exist (the watched dir
+  isn't a git repo), the comparison never matches and the git
+  branch is silently dormant.
+- `_GIT_SUPPRESS_SECONDS = 5.0` is a class constant on `RepoWatcher`.
+  Hardcoded after one tuning iteration; the canonical post-checkout
+  file-event noise resolves in well under 5 s on the test repos.
+
+### Migration notes
+
+- Default upgrade: a user with `CC_WATCH=on` will immediately get the
+  new behaviour. The next `git checkout` produces one reindex log
+  line instead of 300. No code change required.
+- Opting out: `set CC_WATCH_GIT_OPS=off` (or `export` on POSIX).
+  Restores v1.13.x behaviour.
+- Users with `CC_WATCH=off` (the default) see no change at all.
+
+### What this release does NOT do
+
+- No detection of other git-control files. `.git/refs/heads/<branch>`,
+  `.git/ORIG_HEAD`, `.git/packed-refs`, `.git/index`,
+  `.git/HEAD.lock` — none of these trigger the full-reindex path,
+  even though some of them ALSO indicate state changes. Plan
+  scopes Sprint 20 to `.git/HEAD` only: it's the canonical
+  "HEAD has moved" signal and adding more sources risks duplicate
+  full reindexes for a single git operation.
+- No support for `git worktree` (multiple HEADs). The watcher
+  watches `<repo_root>/.git/HEAD`; a worktree setup has a different
+  HEAD location. Documented as a limitation; defer.
+- No reset / pull / rebase-specific paths. They all change HEAD,
+  so the same code handles all of them — but if a future op
+  changes the working tree without modifying HEAD (`git stash pop`
+  with no conflicts?), it'll fall through to the per-file path.
+
+---
+
 ## v1.13.0 — 2026-05-15
 
 Sprint 22 — **opt-in cross-encoder rerank for `find_references`**.
