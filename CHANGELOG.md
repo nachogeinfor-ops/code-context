@@ -1,5 +1,114 @@
 # Changelog
 
+## v1.12.0 — 2026-05-15
+
+Sprint 21 — **source-tier post-sort for `search_repo`** (opt-in).
+The 4-tier classification that `find_references` has used since
+Sprint 10 (source > tests > docs > other) is now available for
+`search_repo` too — opt-in via `CC_SEARCH_RANK=source-first`.
+
+### Added
+
+- **Shared tier classifier** at `src/code_context/domain/_tier.py`.
+  The `_classify_path()` helper that returns 0=source / 1=tests /
+  2=docs / 3=other was previously private to
+  `symbol_index_sqlite.py`. Now lives in the domain layer so both
+  `find_references` and `search_repo` can call it without
+  duplicating the rules.
+- **`SearchRepoUseCase.sort_by_tier` field** (default `False`) plus
+  `source_tiers: list[str]`. When `True` AND `source_tiers` is
+  non-empty, after RRF fusion (and after `scope` filtering) the
+  fused list is stable-sorted by tier ascending so source files
+  rank above tests/docs/other for the same fused score. The sort
+  is applied BEFORE the reranker and BEFORE top_k truncation so the
+  reranker sees a tier-priorised candidate pool and the truncation
+  doesn't drop a source file in favour of a docs hit.
+- **`CC_SEARCH_RANK` env var** (default **`natural`**, opt-in
+  `source-first`). Mirrors `CC_SYMBOL_RANK` (Sprint 10 T9) but
+  with the inverse default — `find_references` ships source-first
+  because the use case is navigation-shaped; `search_repo` is
+  intent-search-shaped and the cleanest default is "don't reorder
+  what RRF/rerank produced unless the user asks". `Config.search_rank:
+  str = "natural"`. Any value other than `"source-first"` is
+  defensively treated as `"natural"`.
+- **Composition wiring**: `build_use_cases()` reads `cfg.search_rank`
+  and, when `"source-first"`, calls the same `_load_source_tiers()`
+  helper used for the symbol index so the two ports see identical
+  tier definitions for a given repo.
+
+### Why default-off
+
+The plan called for `"source-first"` to be the new default. We're
+shipping `"natural"` instead because the v1.10.1 eval suite was not
+designed to measure the tier-sort delta — every query pin is a
+substring against a result `path`, so tier reordering within the
+top-K doesn't change hit@1 / hit@10 / NDCG by itself. Without a
+fixture that actively places a source AND a test file at similar
+RRF scores AND pins one specifically, we don't have a regression
+net for promoting it to default. A follow-up sprint can validate
+with a dedicated query set and flip the default if it cleanly wins.
+
+In the meantime: users who want the find_references-style ranking
+in `search_repo` get a one-line env-var opt-in.
+
+### Internal
+
+- 14 new unit tests:
+  - 8 in `tests/unit/domain/test_tier.py` covering source / tests
+    (directory + suffix), docs (directory + .md extension), C#
+    test class names (both `FooTests.cs` and `TestFoo.cs` styles),
+    and the empty-source_tiers fallthrough.
+  - 6 in `tests/unit/domain/test_search_repo_tier.py`: off-mode is
+    a no-op, on-mode promotes source, stability within tier,
+    empty source_tiers is a no-op even when sort is on, the sort
+    runs BEFORE the reranker sees candidates, and the sort runs
+    BEFORE top_k truncation.
+- `_classify_path` moved to `domain/_tier.py`; re-exported from
+  `symbol_index_sqlite.py` via `__all__` so existing tests and any
+  external imports keep working.
+- Full unit suite: 637 passed (was 623).
+- `_load_source_tiers()` reads from the active index dir's
+  `metadata.json` at composition time. The list is snapshotted into
+  the use case at construction — if the source_tiers heuristic
+  shifts on a later reindex within the same process, the running
+  search instance keeps its initial snapshot. Acceptable for an
+  opt-in feature; a future sprint can refactor to track bus ticks
+  if live updates are needed.
+
+### Performance
+
+No measurable impact when off (the conditional is a single bool
+check per query). When on, the sort is a single `list.sort()` over
+the fused pool (typically 15-30 entries for `top_k=5,
+over_fetch=3`); cost is sub-millisecond and dominated by query
+embedding + vector search. The Sprint 12 in-process embed cache
+and Sprint 19 persistent cache are unaffected — neither key
+includes the search_rank setting.
+
+### Migration notes
+
+- No code changes required to upgrade. The default `"natural"`
+  preserves v1.11.x behavior bit-for-bit.
+- To try the new tier ranking: `set CC_SEARCH_RANK=source-first`
+  (or `export` on POSIX). Test, then leave it or remove it.
+- If you ARE using `CC_SYMBOL_RANK=natural` (the opt-out for
+  `find_references`'s tier sort, Sprint 10 T9), `CC_SEARCH_RANK`
+  defaults `natural` so you're already on the symmetric setting.
+
+### What this release does NOT do
+
+- No flip to source-first default. See "Why default-off" above —
+  needs an eval fixture that exercises the tier-promotion case
+  cleanly.
+- No tier customisation. The 4-tier classification (source / tests
+  / docs / other) is hard-coded. Repos that want a different
+  ranking — e.g. promoting `examples/` to tier 0 — would need a new
+  config knob; deferred until there's user demand.
+- No change to `find_references` ordering. Sprint 10 T9 already
+  shipped that; this release only extracts the shared helper.
+
+---
+
 ## v1.11.0 — 2026-05-15
 
 Sprint 19 — **persistent query-embedding cache**. The Sprint 12
